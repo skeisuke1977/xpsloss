@@ -1,0 +1,4 @@
+# Keep LF everywhere: input SHA-256 values recorded in docs depend on exact bytes.
+* text=auto eol=lf
+*.pdf binary
+*.png binary
