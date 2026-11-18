@@ -65,6 +65,38 @@ class CLITests(unittest.TestCase):
             data = np.loadtxt(output / "elf.csv", delimiter=",", skiprows=1)
             self.assertEqual(data.shape, (160, 2))
 
+    def test_dielectric_end_to_end_and_numerical_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "gapped.json"
+            obj = json.loads(EXAMPLE.read_text())
+            obj["material"]["gap_eV"] = 14.25
+            path.write_text(json.dumps(obj), encoding="utf-8")
+            output = root / "dielectric"
+            r = self.call("dielectric", path, "--q-inv-A", 0.4, "--out", output)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            manifest = json.loads((output / "run.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["model_id"], "causal_oscillator_elf_v1")
+            self.assertEqual(manifest["input_sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+            self.assertEqual(manifest["diagnostics"]["q_inv_A"], 0.4)
+            self.assertEqual(manifest["diagnostics"]["high_energy_tail"], "untruncated_oscillator_model")
+            self.assertTrue(manifest["warnings"])
+            parse_config(manifest["config"])
+            data = np.loadtxt(output / "dielectric.csv", delimiter=",", skiprows=1)
+            self.assertEqual(data.shape, (160, 6))
+            self.assertTrue(np.all(np.isfinite(data)))
+            np.testing.assert_allclose((data[:, 1] + 1j * data[:, 2]) * (data[:, 3] + 1j * data[:, 4]), -1)
+            self.assertTrue(np.all(data[data[:, 0] < 14.25, 2] == 0))
+            self.assertGreater(data[-1, 2], 0)
+
+            obj["integration"]["limit"] = 1
+            path.write_text(json.dumps(obj), encoding="utf-8")
+            untouched = root / "failed"
+            r = self.call("dielectric", path, "--out", untouched)
+            self.assertEqual(r.returncode, 2)
+            self.assertEqual(json.loads(r.stderr)["status"], "not_converged")
+            self.assertFalse(untouched.exists())
+
     def test_unknown_and_invalid_config_rejected(self):
         base = json.loads(EXAMPLE.read_text())
         mutations = [

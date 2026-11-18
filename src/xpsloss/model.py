@@ -23,7 +23,7 @@ MODEL_ID = "bulk_drude_lindhard_v0"
 UNSUPPORTED_PHYSICS = (
     "surface_losses", "core_hole", "intrinsic_extrinsic_interference",
     "depth_averaging", "elastic_scattering", "multiple_inelastic_scattering",
-    "primary_spectrum_convolution", "full_imfp", "dielectric_real_part",
+    "primary_spectrum_convolution", "full_imfp",
 )
 
 
@@ -71,6 +71,19 @@ class Material:
         object.__setattr__(self, "oscillators", tuple(self.oscillators))
 
 
+def _loss_coordinates(loss_eV, q_inv_A):
+    t, q = np.broadcast_arrays(np.asarray(loss_eV, dtype=float), np.asarray(q_inv_A, dtype=float))
+    if not np.all(np.isfinite(t)) or not np.all(np.isfinite(q)):
+        raise ValueError("loss and q must be finite")
+    if np.any(t < 0) or np.any(q < 0):
+        raise ValueError("loss and q must be nonnegative")
+    return t, q
+
+
+def _oscillator_energy(oscillator, q):
+    return oscillator.energy_eV + oscillator.dispersion * HBAR2_OVER_2ME_EV_A2 * q**2
+
+
 def loss_function(material: Material, loss_eV, q_inv_A=0.0):
     """Return dimensionless Im[-1/epsilon(q,T)] with NumPy broadcasting.
 
@@ -78,16 +91,12 @@ def loss_function(material: Material, loss_eV, q_inv_A=0.0):
     This function does not reconstruct the real part of epsilon or enforce
     optical sum rules. Values at T=0 are set to zero.
     """
-    t, q = np.broadcast_arrays(np.asarray(loss_eV, dtype=float), np.asarray(q_inv_A, dtype=float))
-    if not np.all(np.isfinite(t)) or not np.all(np.isfinite(q)):
-        raise ValueError("loss and q must be finite")
-    if np.any(t < 0) or np.any(q < 0):
-        raise ValueError("loss and q must be nonnegative")
+    t, q = _loss_coordinates(loss_eV, q_inv_A)
     result = np.zeros(t.shape, dtype=float)
     try:
         with np.errstate(over="raise", invalid="raise", divide="raise"):
             for osc in material.oscillators:
-                resonance = osc.energy_eV + osc.dispersion * HBAR2_OVER_2ME_EV_A2 * q**2
+                resonance = _oscillator_energy(osc, q)
                 denominator = (resonance**2 - t**2)**2 + (osc.width_eV * t)**2
                 result += osc.strength_eV2 * osc.width_eV * t / denominator
     except FloatingPointError as exc:
