@@ -1,0 +1,18 @@
+Data for oscillators that describe an ELF function of Si 
+(F. Yubero, S. Tougaard, E. Elizalde, J.M. Sanz, Surf. Interface Anal. 1993, 20, 719.)
+data are in rows: one row for each oscillator
+comment lines up to first line with @ then data in lines with the following meaning
+
+Excitation parameters ac, bc to model core excitations (see Penn, J. Elec. Spectr., 9(1976)29).
+
+Energy gap (eV)
+Refractive Index
+energy position (eV), intensity (eV^2), width (eV), alpha
+
+@
+ 1.2          -3.7 
+ 1.12
+ 3.6
+ 10            6.08458       5             0.5 
+ 14            30.4229       5             0.5 
+ 16.8          212.9603      3.8           0.5 

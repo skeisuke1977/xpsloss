@@ -2,3 +2,5 @@
 * text=auto eol=lf
 *.pdf binary
 *.png binary
+# Third-party raw source files: keep exact bytes (CRLF, encoding) for hash checks.
+benchmarks/sources/** -text

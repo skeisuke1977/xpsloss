@@ -14,3 +14,5 @@ runs/
 docs/chatgpt_conversation_*.md
 # Rendered page images of copyrighted papers (local working material).
 work/
+# Per-agent git worktrees (local only).
+.worktrees/
