@@ -1,0 +1,13 @@
+{
+  "model": "bulk_drude_lindhard_v0",
+  "material": {
+    "name": "synthetic_single_oscillator_not_real_material",
+    "gap_eV": 0.0,
+    "oscillators": [
+      {"energy_eV": 15.0, "strength_eV2": 180.0, "width_eV": 2.0, "dispersion": 0.5}
+    ]
+  },
+  "electron_energy_eV": 1000.0,
+  "loss_grid_eV": {"min": 0.5, "max": 80.0, "step": 0.5},
+  "integration": {"epsabs": 1e-9, "epsrel": 1e-7, "limit": 200}
+}

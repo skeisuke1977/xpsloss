@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+runs/
+.pytest_cache/
+
+# Publisher PDFs and other third-party documents are referenced by
+# paper-library key, never committed (see NOTICES.md).
+*.pdf
+# Raw chat export kept locally; not part of the public repository.
+docs/chatgpt_conversation_*.md
+# Rendered page images of copyrighted papers (local working material).
+work/
