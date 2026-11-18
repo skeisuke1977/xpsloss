@@ -1,0 +1,39 @@
+{
+  "model": "bulk_drude_lindhard_v0",
+  "material": {
+    "name": "Si",
+    "gap_eV": 1.12,
+    "oscillators": [
+      {
+        "energy_eV": 10.0,
+        "strength_eV2": 6.08458,
+        "width_eV": 5.0,
+        "dispersion": 0.5
+      },
+      {
+        "energy_eV": 14.0,
+        "strength_eV2": 30.4229,
+        "width_eV": 5.0,
+        "dispersion": 0.5
+      },
+      {
+        "energy_eV": 16.8,
+        "strength_eV2": 212.9603,
+        "width_eV": 3.8,
+        "dispersion": 0.5
+      }
+    ]
+  },
+  "electron_energy_eV": 1000,
+  "loss_grid_eV": {
+    "min": 1,
+    "max": 100,
+    "step": 1
+  },
+  "provenance": {
+    "source_id": "zenodo:6024064",
+    "reference_input": "benchmarks/inputs/si_elfdb_v1.0.json",
+    "raw_file_sha256": "109330f657a62a50ca43e1077fe74b20810cb5477b1dd1122b202de84c17de3d",
+    "run_conditions_source": "Repository demonstration settings for the bulk calculation."
+  }
+}

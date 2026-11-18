@@ -1,0 +1,27 @@
+{
+  "model": "bulk_drude_lindhard_v0",
+  "material": {
+    "name": "Al",
+    "gap_eV": 0.0,
+    "oscillators": [
+      {
+        "energy_eV": 15.6,
+        "strength_eV2": 243.3598,
+        "width_eV": 1.5,
+        "dispersion": 1.0
+      }
+    ]
+  },
+  "electron_energy_eV": 1000,
+  "loss_grid_eV": {
+    "min": 1,
+    "max": 100,
+    "step": 1
+  },
+  "provenance": {
+    "source_id": "zenodo:6024064",
+    "reference_input": "benchmarks/inputs/al_elfdb_v1.0.json",
+    "raw_file_sha256": "1a59cc61a562f53e3bda0eec0c29df3d0a84b601fdc0aecee454be62db738f48",
+    "run_conditions_source": "Repository demonstration settings for the bulk calculation."
+  }
+}
