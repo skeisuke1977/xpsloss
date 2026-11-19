@@ -1,6 +1,7 @@
 """Noninteractive CLI. stdout is JSON; errors are JSON on stderr."""
 
 import argparse
+from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -13,6 +14,10 @@ import scipy
 
 from . import __version__
 from .config import load_config
+from .dielectric import (
+    DIELECTRIC_MODEL_ID, DielectricConvergenceError, DielectricGapEdgeError,
+    dielectric_diagnostics, dielectric_response,
+)
 from .model import (BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, MODEL_ID,
                     UNSUPPORTED_PHYSICS, bulk_diimfp, finite_number, loss_function)
 
@@ -26,7 +31,9 @@ def capabilities():
     return {
         "package": "xpsloss-starter", "version": __version__, "model_id": MODEL_ID,
         "status": "experimental_starter",
-        "supported": ["strict_json_validation", "drude_lindhard_elf", "bulk_diimfp"],
+        "supported": ["strict_json_validation", "drude_lindhard_elf", "bulk_diimfp",
+                      "causal_dielectric_response"],
+        "dielectric_model_id": DIELECTRIC_MODEL_ID,
         "unsupported_physics": list(UNSUPPORTED_PHYSICS),
         "queels_xps_equivalence": False,
         "material_validation": "No real material benchmark is bundled or claimed.",
@@ -45,11 +52,11 @@ def build_parser():
     cap.add_argument("--json", action="store_true", help="output is always JSON")
     val = sub.add_parser("validate")
     val.add_argument("config", type=Path)
-    for name in ("bulk", "elf"):
+    for name in ("bulk", "elf", "dielectric"):
         child = sub.add_parser(name)
         child.add_argument("config", type=Path)
         child.add_argument("--out", type=Path, required=True, help="new output directory; never overwritten")
-        if name == "elf":
+        if name in ("elf", "dielectric"):
             child.add_argument("--q-inv-A", dest="q_inv_A", type=float, default=0.0,
                                help="wavevector in inverse angstrom; default 0 (optical limit)")
     return p
@@ -68,6 +75,8 @@ def run(args):
         raise FileExistsError(f"output path already exists: {args.out}")
     start = time.perf_counter()
     grid = config.grid()
+    model_id = MODEL_ID
+    warnings = []
     if args.command == "bulk":
         values = np.array([bulk_diimfp(config.material, config.electron_energy_eV, float(t),
                            epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit) for t in grid])
@@ -78,7 +87,7 @@ def run(args):
                  "quadrature_error_per_A_eV": "angstrom^-1 eV^-1"}
         diagnostics = {"max_absolute_quadrature_error_per_A_eV": float(values[:, 1].max()),
                        "quadrature_error_interpretation": "Numerical estimate only; not physical uncertainty."}
-    else:
+    elif args.command == "elf":
         q = finite_number(args.q_inv_A, "q_inv_A")
         if q < 0:
             raise ValueError("q_inv_A must be nonnegative")
@@ -88,6 +97,41 @@ def run(args):
         units = {"loss_eV": "eV", "elf_dimensionless": "dimensionless", "q_inv_A": "angstrom^-1"}
         diagnostics = {"q_inv_A": q, "optical_limit": q == 0,
                        "sum_rule_enforced": False, "real_dielectric_part_computed": False}
+    else:
+        model_id = DIELECTRIC_MODEL_ID
+        q = finite_number(args.q_inv_A, "q_inv_A")
+        response = dielectric_response(
+            config.material, grid, q, epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
+        )
+        physics = dielectric_diagnostics(
+            config.material, q, epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
+        )
+        inverse, epsilon = response.negative_inverse_epsilon, response.epsilon
+        table = np.column_stack((grid, inverse.real, inverse.imag, epsilon.real, epsilon.imag,
+                                 response.real_quadrature_error))
+        columns = ("loss_eV", "negative_inverse_epsilon_real", "negative_inverse_epsilon_imag",
+                   "epsilon_real", "epsilon_imag", "negative_inverse_epsilon_real_quadrature_error")
+        header, output_name = ",".join(columns), "dielectric.csv"
+        units = dict.fromkeys(columns, "dimensionless")
+        units.update(loss_eV="eV", q_inv_A="angstrom^-1")
+        nearest_edge = None
+        if config.material.gap_eV > 0:
+            nearest_edge = float(np.min(abs(grid - config.material.gap_eV)))
+        diagnostics = {
+            **asdict(physics),
+            "q_inv_A": q, "optical_limit": q == 0, "sum_rule_enforced": False,
+            "electron_energy_used": False,
+            "gap_edge_policy": "reject_grid",
+            "nearest_gap_edge_distance_eV": nearest_edge,
+            "fourier_time_dependence": "exp(-i*omega*t)",
+            "high_energy_limit_negative_inverse_epsilon": -1.0,
+            "high_energy_tail": "untruncated_oscillator_model",
+            "real_part_method": "kramers_kronig_hard_gap" if config.material.gap_eV else "analytic",
+            "max_absolute_real_quadrature_error": float(response.real_quadrature_error.max()),
+            "quadrature_error_interpretation": "Estimate for Re[-1/epsilon] only.",
+        }
+        if config.material.gap_eV > 0 and any(osc.strength_eV2 for osc in config.material.oscillators):
+            warnings.append("The hard gap gives a logarithmic edge singularity and can produce a real-axis pole in epsilon.")
     # Computation succeeds before creating output. A run.json marks a completed run.
     args.out.mkdir(parents=True, exist_ok=False)
     np.savetxt(args.out / output_name, table, delimiter=",", header=header,
@@ -97,7 +141,7 @@ def run(args):
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "elapsed_seconds": time.perf_counter() - start,
         "input_sha256": config.input_sha256, "input_file": str(args.config.resolve()),
-        "package_version": __version__, "model_id": MODEL_ID,
+        "package_version": __version__, "model_id": model_id,
         "runtime": {"python": platform.python_version(), "numpy": np.__version__, "scipy": scipy.__version__},
         "config": config.public_dict(), "point_count": len(grid), "units": units,
         "constants": {"bohr_radius_A": BOHR_RADIUS_A, "hbar2_over_2me_eV_A2": HBAR2_OVER_2ME_EV_A2},
@@ -108,8 +152,12 @@ def run(args):
                        "https://doi.org/10.1002/sia.7095",
                        "https://www.quases.com/products/queels-xps/"],
     }
+    if args.command == "dielectric":
+        manifest["input_config_model_id"] = manifest["config"]["model"]
+        manifest["warnings"] = warnings
+        manifest["references"].append("https://doi.org/10.1209/0295-5075/90/10003")
     (args.out / "run.json").write_text(json.dumps(manifest, ensure_ascii=False, allow_nan=False, indent=2) + "\n", encoding="utf-8")
-    emit({"status": "complete", "model_id": MODEL_ID, "output_dir": str(args.out.resolve()),
+    emit({"status": "complete", "model_id": model_id, "output_dir": str(args.out.resolve()),
           "files": [output_name, "run.json"], "point_count": len(grid),
           "queels_xps_equivalence": False})
     return 0
@@ -118,6 +166,16 @@ def run(args):
 def main(argv=None):
     try:
         return run(build_parser().parse_args(argv))
+    except DielectricGapEdgeError as exc:
+        emit({
+            "status": "error", "error_type": type(exc).__name__, "message": str(exc),
+            "gap_eV": exc.gap_eV, "gap_edge_exclusion_eV": exc.exclusion_eV,
+            "offending_loss_eV": exc.offending_loss_eV, "remedy": exc.remedy,
+        }, sys.stderr)
+        return 2
+    except DielectricConvergenceError as exc:
+        emit({"status": "not_converged", "error_type": type(exc).__name__, "message": str(exc)}, sys.stderr)
+        return 2
     except (ValueError, OSError, OverflowError, RuntimeError) as exc:
         emit({"status": "error", "error_type": type(exc).__name__, "message": str(exc)}, sys.stderr)
         return 2
