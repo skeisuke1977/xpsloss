@@ -69,6 +69,9 @@ python3 -m venv .venv
 
 - `docs/VALIDATION.md`: この配布物で実行した検証と未検証事項。
 - `docs/EQUATIONS.md`: 数式、単位、検証の根拠。
+- `docs/M1_EQUATION_MAP.md`: 1997年原著の式(13)–(17)の転記、記号と単位、項ごとの実装予定、未確定の点。
+- `docs/M2_FIRST_CASE.md`: M2の最初のケース（Al、1000 eV、法線出射）、参照ソフトとの比較の許容幅（比較の前に固定）。
+- `docs/REVIEW_CHECKLISTS.md`: 実装前・実装後・参照比較のレビュー項目。
 - `docs/DIELECTRIC_DESIGN.md`: 複素誘電応答の方式比較、符号・幅の規約、ギャップ端と極の扱い。
 - `docs/BENCHMARK_INPUTS.md`: 固定入力の出典、利用条件、光学和則の監査。
 - `docs/PROJECT_PLAN.md`: 完全モデルとQuanty接続へ進むための設計。
