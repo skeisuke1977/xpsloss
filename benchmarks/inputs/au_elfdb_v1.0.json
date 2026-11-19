@@ -1,0 +1,122 @@
+{
+  "record_id": "au_elfdb_v1.0",
+  "source": {
+    "id": "zenodo:6024064",
+    "citation": "N. Pauly, F. Yubero, S. Tougaard, ELF dielectric functions for various materials, Zenodo, Version 1.0 (2022-02-09).",
+    "doi": "10.5281/zenodo.6024064",
+    "url": "https://zenodo.org/records/6024064",
+    "version": "1.0",
+    "location": {
+      "file": "benchmarks/sources/zenodo6024064_v1.0/ELF_Au.txt",
+      "label_line": 1,
+      "marker_line": 12,
+      "data_lines_inclusive": [
+        13,
+        24
+      ],
+      "original_reference_lines_inclusive": [
+        2,
+        2
+      ]
+    },
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "retrieved_on": "2026-11-19",
+    "raw_file_sha256": "b818407d93cb48508a0d9d0aa315341876eaa0e9f846b3b01646366083569adc",
+    "original_reference": "N. Pauly, F. Yubero, S. Tougaard, Applied Surface Science 383, 317 (2016)."
+  },
+  "strength_basis": "absolute_eV2",
+  "material": {
+    "name": "Au",
+    "gap_eV": 0.0,
+    "ac": 2.0,
+    "bc": -3.4,
+    "refractive_index": 999.0,
+    "oscillators": [
+      {
+        "energy_eV": 2.89,
+        "strength_eV2": 0.08586859,
+        "width_eV": 0.81,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 3.75,
+        "strength_eV2": 0.2766877,
+        "width_eV": 4.0,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 6.78,
+        "strength_eV2": 5.133033,
+        "width_eV": 4.3,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 10.8,
+        "strength_eV2": 21.50531,
+        "width_eV": 7.6,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 15.8,
+        "strength_eV2": 41.46498,
+        "width_eV": 8.5,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 23.8,
+        "strength_eV2": 81.2603,
+        "width_eV": 6.6,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 31.2,
+        "strength_eV2": 59.46877,
+        "width_eV": 6.0,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 42.1,
+        "strength_eV2": 513.6659,
+        "width_eV": 33.9,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 62.6,
+        "strength_eV2": 53.07633,
+        "width_eV": 10.0,
+        "dispersion": 0.02
+      }
+    ]
+  },
+  "source_run_conditions": {
+    "electron_energy_eV": null,
+    "emission_angle": null,
+    "depth_A": null,
+    "loss_grid_eV": null,
+    "lower_loss_limit_eV": null,
+    "normalization": null
+  },
+  "bulk_usage": {
+    "run_config": "au_elfdb_v1.0.bulk.json",
+    "uses": [
+      "gap_eV",
+      "oscillators.energy_eV",
+      "oscillators.strength_eV2",
+      "oscillators.width_eV",
+      "oscillators.dispersion"
+    ],
+    "ignores": [
+      "ac",
+      "bc",
+      "refractive_index"
+    ],
+    "scope": "Homogeneous bulk DIIMFP example only. It does not reproduce or compare against QUEELS-XPS."
+  },
+  "notes": [
+    "Preserves the source strengths in eV^2 without rescaling. Width is the oscillator damping parameter in eV and dispersion is dimensionless.",
+    "The source file contains material parameters. It specifies no calculation conditions or normalization procedure.",
+    "The numeric values agree with ELF.txt. The JSON decimal notation may differ from the original text.",
+    "The file gives refractive index 999 without defining it. The empty manual form also shows 999 and ac = 0.001, bc = -2 (v2.1, p. 25, Fig. 8). The optical sum-rule audit uses 999 as the literal n in 1 - 1/n^2."
+  ]
+}

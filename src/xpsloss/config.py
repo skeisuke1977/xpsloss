@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 
 import numpy as np
 
@@ -23,6 +24,37 @@ def keys(obj, required, optional=(), *, label):
 
 
 @dataclass(frozen=True)
+class Provenance:
+    """Declared metadata. Parsing does not open references or verify source hashes."""
+
+    source_id: str
+    reference_input: str
+    run_conditions_source: str
+    strength_basis: str
+    raw_file_sha256: str | None = None
+    scope_note: str | None = None
+
+
+def _parse_provenance(obj):
+    text_fields = ("source_id", "reference_input", "run_conditions_source")
+    keys(obj, (*text_fields, "strength_basis"), ("raw_file_sha256", "scope_note"),
+         label="provenance")
+    basis = obj["strength_basis"]
+    if not isinstance(basis, str) or basis != "absolute_eV2":
+        raise ValueError("provenance.strength_basis must be 'absolute_eV2' for a run config")
+    for key in (*text_fields, "scope_note"):
+        if key not in obj:
+            continue
+        if not isinstance(obj[key], str) or not obj[key].strip():
+            raise ValueError(f"provenance.{key} must be a nonempty string")
+    if "raw_file_sha256" in obj:
+        digest = obj["raw_file_sha256"]
+        if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+            raise ValueError("provenance.raw_file_sha256 must be a lowercase SHA-256 hex digest")
+    return Provenance(**obj)
+
+
+@dataclass(frozen=True)
 class Config:
     material: Material
     electron_energy_eV: float
@@ -34,12 +66,13 @@ class Config:
     epsrel: float
     limit: int
     input_sha256: str
+    provenance: Provenance | None = None
 
     def grid(self):
         return np.linspace(self.loss_min_eV, self.loss_max_eV, self.point_count)
 
     def public_dict(self):
-        return {
+        result = {
             "model": MODEL_ID,
             "material": asdict(self.material),
             "electron_energy_eV": self.electron_energy_eV,
@@ -47,11 +80,16 @@ class Config:
                              "step": self.loss_step_eV},
             "integration": {"epsabs": self.epsabs, "epsrel": self.epsrel, "limit": self.limit},
         }
+        if self.provenance is not None:
+            result["provenance"] = {
+                key: value for key, value in asdict(self.provenance).items() if value is not None
+            }
+        return result
 
 
 def parse_config(obj, input_sha256=""):
     keys(obj, ["material", "electron_energy_eV", "loss_grid_eV"],
-         ["model", "integration"], label="config")
+         ["model", "integration", "provenance"], label="config")
     if obj.get("model", MODEL_ID) != MODEL_ID:
         raise ValueError(f"unsupported model; only {MODEL_ID!r} is implemented")
     mat = obj["material"]
@@ -84,7 +122,8 @@ def parse_config(obj, input_sha256=""):
         raise ValueError("integration epsabs and epsrel must be positive")
     if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
         raise ValueError("integration.limit must be a positive integer")
-    return Config(material, energy, lo, hi, step, count + 1, ea, er, limit, input_sha256)
+    provenance = _parse_provenance(obj["provenance"]) if "provenance" in obj else None
+    return Config(material, energy, lo, hi, step, count + 1, ea, er, limit, input_sha256, provenance)
 
 
 def _unique_object(pairs):

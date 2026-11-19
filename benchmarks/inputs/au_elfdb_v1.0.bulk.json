@@ -1,0 +1,77 @@
+{
+  "model": "bulk_drude_lindhard_v0",
+  "material": {
+    "name": "Au",
+    "gap_eV": 0.0,
+    "oscillators": [
+      {
+        "energy_eV": 2.89,
+        "strength_eV2": 0.08586859,
+        "width_eV": 0.81,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 3.75,
+        "strength_eV2": 0.2766877,
+        "width_eV": 4.0,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 6.78,
+        "strength_eV2": 5.133033,
+        "width_eV": 4.3,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 10.8,
+        "strength_eV2": 21.50531,
+        "width_eV": 7.6,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 15.8,
+        "strength_eV2": 41.46498,
+        "width_eV": 8.5,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 23.8,
+        "strength_eV2": 81.2603,
+        "width_eV": 6.6,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 31.2,
+        "strength_eV2": 59.46877,
+        "width_eV": 6.0,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 42.1,
+        "strength_eV2": 513.6659,
+        "width_eV": 33.9,
+        "dispersion": 1.0
+      },
+      {
+        "energy_eV": 62.6,
+        "strength_eV2": 53.07633,
+        "width_eV": 10.0,
+        "dispersion": 0.02
+      }
+    ]
+  },
+  "electron_energy_eV": 1000,
+  "loss_grid_eV": {
+    "min": 1,
+    "max": 100,
+    "step": 1
+  },
+  "provenance": {
+    "source_id": "zenodo:6024064",
+    "reference_input": "benchmarks/inputs/au_elfdb_v1.0.json",
+    "strength_basis": "absolute_eV2",
+    "raw_file_sha256": "b818407d93cb48508a0d9d0aa315341876eaa0e9f846b3b01646366083569adc",
+    "run_conditions_source": "Repository demonstration settings for the bulk calculation.",
+    "scope_note": "Homogeneous bulk DIIMFP only. This calculation ignores ac, bc, and refractive index n. It is not a QUEELS-XPS comparison."
+  }
+}

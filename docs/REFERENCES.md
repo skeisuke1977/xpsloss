@@ -22,9 +22,11 @@ https://doi.org/10.1103/PhysRevB.56.1612
 
 ## R3. マニュアル Version 2.1
 
+S. Tougaard, F. Yubero, “QUEELS-XPS: Quantitative Analysis of Electron Energy Loss in XPS Spectra”, User's Guide, Version 2.1。論文庫キー `Tougaard2011` の年はp.2の著作権表示（2001–2011）の末年に基づく。刊行日の明記はない。
+
 https://www.quases.com/data/documents/Ver=202.1=20Manual=20QUEELS-XPS-simulation.pdf
 
-理論の概要、入力・出力、Si例、GUI操作、フォーマット、モデルの制限。特にpp.10-14、20-22、31を参照。
+理論の概要、入力・出力、Si例、GUI操作、フォーマット、モデルの制限。Si入力はp.26表1、計算条件はp.27 §8.1.2、角度の基準はp.7図1およびp.20 §4.3。論文庫のPDFは[R9]から取得した。
 
 ## R4. QUEELS全体の方法論
 
@@ -52,7 +54,7 @@ F. Yubero, S. Tougaard, “Quantification of plasmon excitations in core-level p
 
 https://doi.org/10.1103/PhysRevB.71.045414
 
-Al 2sの角度依存を、表面・バルク損失の定量的な参照にする。
+論文庫キー `Yubero2005`。Al 2sの角度依存を、表面・バルク損失の定量的な参照にする。p.045414-3に記載されたAl振動子は[R8]のAl入力と異なる。
 
 ## R7. NiOと非局所遮蔽
 
@@ -66,13 +68,13 @@ https://doi.org/10.1016/j.susc.2015.09.012
 
 ## R8. 材料のELFデータ集
 
-N. Pauly, F. Yubero, S. Tougaard, “ELF dielectric functions for various materials”, Version 1.0 (2022).
+N. Pauly, F. Yubero, S. Tougaard, “ELF dielectric functions for various materials”, Zenodo, Version 1.0 (2022-02-09), CC-BY-4.0.
 
 https://doi.org/10.5281/zenodo.6024064
 
 https://zenodo.org/records/6024064
 
-Si/Au等の入力と出典。ELF.txtには多材料が含まれるが、今回の確認ではCoOは未収録。データの採用時はソフト本体と区別して利用条件を確認する。
+`benchmarks/sources/zenodo6024064_v1.0/` に `ELF_Si.txt`、`ELF_Au.txt`、`ELF.txt` の原本を収録（2026-11-19取得）。`ELF.txt` のAlと単独ファイルのSi・Auを固定入力として採用した。`ELF.txt` にCoOの収録はない。帰属表示と原典内の行番号は[固定入力と出典](BENCHMARK_INPUTS.md)に示す。
 
 ## R9. 2026年の配布資料
 
@@ -84,6 +86,8 @@ https://zenodo.org/records/23414559
 
 インストールZIP、Version 2.1のmanual、注意書き、関連論文を掲載。登録のv2とソフト本体の新版を同一視しない。
 
+論文庫の `Tougaard2011`、`Yubero2005`、`Yubero2012`、`Tougaard2004`、`Pauly2010` のPDFはこの登録から取得した。本リポジトリはPDFを再配布しない。
+
 ## R10. 初期ソフト紹介
 
 S. Tougaard, F. Yubero, “Software package to calculate the effects of the core hole and surface excitations on XPS and AES”, Surface and Interface Analysis 44, 1114-1118 (2012).
@@ -91,3 +95,21 @@ S. Tougaard, F. Yubero, “Software package to calculate the effects of the core
 https://doi.org/10.1002/sia.4855
 
 干渉を含む一段階のモデルと、ソフトの適用範囲を説明。
+
+## R11. 内殻光電子の損失構造と角度
+
+F. Yubero, S. Tougaard, “Dielectric description of the angular dependence of the loss structure in core level photoemission”, Journal of Electron Spectroscopy and Related Phenomena 185, 552–558 (2012)。
+
+論文庫キー `Yubero2012`。https://doi.org/10.1016/j.elspec.2012.11.011
+
+## R12. QUEELSによる表面効果の計算
+
+S. Tougaard, F. Yubero, “QUEELS software package for calculation of surface effects in electron spectra”, Surface and Interface Analysis 36, 824–827 (2004)。
+
+論文庫キー `Tougaard2004`。https://doi.org/10.1002/sia.1774
+
+## R13. XPSの表面・内殻正孔効果
+
+N. Pauly, S. Tougaard, “Surface and core hole effects in X-ray photoelectron spectroscopy”, Surface Science 604, 1193–1196 (2010)。
+
+論文庫キー `Pauly2010`。https://doi.org/10.1016/j.susc.2010.04.001

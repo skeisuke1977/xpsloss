@@ -1,0 +1,77 @@
+{
+  "record_id": "al_elfdb_v1.0",
+  "source": {
+    "id": "zenodo:6024064",
+    "citation": "N. Pauly, F. Yubero, S. Tougaard, ELF dielectric functions for various materials, Zenodo, Version 1.0 (2022-02-09).",
+    "doi": "10.5281/zenodo.6024064",
+    "url": "https://zenodo.org/records/6024064",
+    "version": "1.0",
+    "location": {
+      "file": "benchmarks/sources/zenodo6024064_v1.0/ELF.txt",
+      "label_line": 52,
+      "marker_line": 53,
+      "data_lines_inclusive": [
+        54,
+        57
+      ],
+      "original_reference_lines_inclusive": [
+        573,
+        574
+      ],
+      "original_reference_ids": [
+        4
+      ]
+    },
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "retrieved_on": "2026-11-19",
+    "raw_file_sha256": "1a59cc61a562f53e3bda0eec0c29df3d0a84b601fdc0aecee454be62db738f48",
+    "original_reference": "F. Yubero, S. Tougaard, Physical Review B 46, 2486 (1992)."
+  },
+  "strength_basis": "absolute_eV2",
+  "material": {
+    "name": "Al",
+    "gap_eV": 0.0,
+    "ac": 1.6,
+    "bc": -3.6,
+    "refractive_index": 999.0,
+    "oscillators": [
+      {
+        "energy_eV": 15.6,
+        "strength_eV2": 243.3598,
+        "width_eV": 1.5,
+        "dispersion": 1.0
+      }
+    ]
+  },
+  "source_run_conditions": {
+    "electron_energy_eV": null,
+    "emission_angle": null,
+    "depth_A": null,
+    "loss_grid_eV": null,
+    "lower_loss_limit_eV": null,
+    "normalization": null
+  },
+  "bulk_usage": {
+    "run_config": "al_elfdb_v1.0.bulk.json",
+    "uses": [
+      "gap_eV",
+      "oscillators.energy_eV",
+      "oscillators.strength_eV2",
+      "oscillators.width_eV",
+      "oscillators.dispersion"
+    ],
+    "ignores": [
+      "ac",
+      "bc",
+      "refractive_index"
+    ],
+    "scope": "Homogeneous bulk DIIMFP example only. It does not reproduce or compare against QUEELS-XPS."
+  },
+  "notes": [
+    "Preserves the source strengths in eV^2 without rescaling. Width is the oscillator damping parameter in eV and dispersion is dimensionless.",
+    "The source file contains material parameters. It specifies no calculation conditions or normalization procedure.",
+    "The file gives refractive index 999 without defining it. The empty manual form also shows 999 and ac = 0.001, bc = -2 (v2.1, p. 25, Fig. 8). The optical sum-rule audit uses 999 as the literal n in 1 - 1/n^2.",
+    "Yubero2005 uses different Al oscillator energy and strength. See docs/BENCHMARK_INPUTS.md."
+  ]
+}
