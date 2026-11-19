@@ -1,17 +1,24 @@
 import math
+from fractions import Fraction
+from pathlib import Path
 import unittest
 
 import numpy as np
 from scipy.integrate import quad
+from scipy.optimize import brentq
 
 from xpsloss import (
     Material, Oscillator, dielectric_response, loss_function, negative_inverse_dielectric_function,
 )
 from xpsloss.dielectric import (
+    DielectricConvergenceError, DielectricGapEdgeError, dielectric_diagnostics,
     negative_inverse_dielectric_closed_form, optical_elf_first_moment, optical_sum_rule_lhs,
     optical_sum_rule_residual, tabulated_elf_kk,
 )
 from xpsloss.model import HBAR2_OVER_2ME_EV_A2
+
+
+SOURCE = Path(__file__).resolve().parents[1] / "benchmarks/sources/zenodo6024064_v1.0"
 
 
 def retained_kk(material, energy, q):
@@ -35,6 +42,39 @@ def retained_kk(material, energy, q):
                          epsabs=1e-12, epsrel=1e-12)[0]
     tail = quad(ordinary, upper, math.inf, epsabs=1e-12, epsrel=1e-12)[0]
     return -1 + (integral + tail) / math.pi
+
+
+def tabulated_kk_quadrature(nodes, values, energy, low, high):
+    """Independently integrate the linear interpolant and its chosen tail."""
+    upper = nodes[-1]
+    terminal = values[-1]
+    if low == "linear_to_origin":
+        nodes, values = np.r_[0.0, nodes], np.r_[0.0, values]
+    lower = nodes[0]
+    cutoff = max(2 * upper, 2 * energy) if high == "power_law_3" else upper
+
+    def elf(u):
+        if u <= upper:
+            return np.interp(u, nodes, values)
+        return terminal * (upper / u)**3
+
+    points = nodes[(lower < nodes) & (nodes < cutoff)].tolist()
+    if lower < energy < cutoff:
+        # Subtract on the entire finite interval, so a sample knot can be the PV point.
+        level = elf(energy)
+        points.append(energy)
+        cauchy_log = level * math.log((cutoff - energy) / (energy - lower))
+    else:
+        level, cauchy_log = 0.0, 0.0
+
+    def regular(u):
+        return (elf(u) - level) / (u - energy) + elf(u) / (u + energy)
+
+    integral = quad(regular, lower, cutoff, points=sorted(set(points)), epsabs=1e-12, epsrel=1e-12)[0]
+    if cutoff > upper:
+        integral += quad(lambda u: 2 * u * elf(u) / ((u - energy) * (u + energy)),
+                         cutoff, math.inf, epsabs=1e-12, epsrel=1e-12)[0]
+    return -1 + (integral + cauchy_log) / math.pi
 
 
 class DielectricTests(unittest.TestCase):
@@ -107,6 +147,45 @@ class DielectricTests(unittest.TestCase):
         self.assertAlmostEqual(result.negative_inverse_epsilon.real, -1, places=9)
         self.assertAlmostEqual(result.epsilon.real, 1, places=9)
 
+    def test_hard_gap_excludes_adjacent_floats_in_all_apis(self):
+        gap = 3.3
+        mat = Material("synthetic", gap, (Oscillator(12, 50, 3),))
+        offenders = [math.nextafter(gap, 0), gap, math.nextafter(gap, math.inf)]
+        for evaluator in (negative_inverse_dielectric_function, negative_inverse_dielectric_closed_form,
+                          dielectric_response):
+            with self.subTest(evaluator=evaluator), self.assertRaises(DielectricGapEdgeError) as context:
+                evaluator(mat, offenders)
+            self.assertEqual(context.exception.offending_loss_eV, offenders)
+            self.assertEqual(context.exception.exclusion_eV, 1e-12 * gap)
+        results = negative_inverse_dielectric_function(mat, [gap - 1e-9, gap + 1e-9])
+        self.assertTrue(np.isfinite(results).all())
+
+    def test_sub_gap_pole_diagnostic_matches_direct_quadrature_root(self):
+        gap = 8
+        mat = Material("synthetic", gap, (Oscillator(10, 50, 2, 0.5),))
+        q = 0.4
+        expected = brentq(lambda energy: retained_kk(mat, energy, q), 0, gap - 0.001)
+        diagnostics = dielectric_diagnostics(mat, q)
+        self.assertEqual(diagnostics.static_status, "stable")
+        self.assertEqual(diagnostics.sub_gap_pole_status, "located")
+        self.assertAlmostEqual(diagnostics.sub_gap_pole_eV, expected, delta=1e-9)
+        near_edge = Material("synthetic", 3.3, (Oscillator(100, 1, 1),))
+        unresolved = dielectric_diagnostics(near_edge)
+        self.assertEqual(unresolved.sub_gap_pole_status, "unresolved_at_gap_edge")
+        self.assertIsNone(unresolved.sub_gap_pole_eV)
+
+    def test_narrow_on_resonance_closed_form_reports_ill_conditioning(self):
+        for gap, width in ((5, 1e-3), (9.9, 1e-4)):
+            with self.subTest(gap=gap, width=width):
+                mat = Material("synthetic", gap, (Oscillator(10, 50, width),))
+                removed, _ = quad(lambda u: u**2 / ((u**2 - 100) * ((100 - u**2)**2 + (width*u)**2)),
+                                  0, gap, epsabs=1e-15, epsrel=1e-12)
+                expected = -1 - (2 / math.pi) * 50 * width * removed
+                self.assertAlmostEqual(negative_inverse_dielectric_function(mat, 10).real,
+                                       expected, delta=1e-10)
+                with self.assertRaisesRegex(DielectricConvergenceError, "ill-conditioned"):
+                    negative_inverse_dielectric_closed_form(mat, 10)
+
     def test_vacuum_static_pole_and_unstable_epsilon(self):
         vacuum = Material("synthetic", 8, (Oscillator(10, 0, 1),))
         response = dielectric_response(vacuum, 8)
@@ -141,11 +220,53 @@ class DielectricTests(unittest.TestCase):
                     self.assertAlmostEqual(static.epsilon.real / (center**2 / restoring_force), 1,
                                            places=9)
 
+    def test_marginal_static_metals_are_independent_of_last_bit(self):
+        cases = (((10, 30), (20, 280)), ((3, 2.7), (7, 34.3)), ((15.6, 243.36),))
+        for pairs in cases:
+            with self.subTest(pairs=pairs):
+                self.assertEqual(sum(Fraction(str(a)) / Fraction(str(e))**2 for e, a in pairs), 1)
+                mat = Material("synthetic_drude", 0, tuple(Oscillator(e, a, 1, 0.5) for e, a in pairs))
+                response = dielectric_response(mat, [0.1, 5], q_inv_A=0)
+                self.assertTrue(np.all(response.epsilon.imag > 0))
+                self.assertEqual(dielectric_diagnostics(mat).static_status, "marginal")
+                with self.assertRaisesRegex(ValueError, "pole at zero energy"):
+                    dielectric_response(mat, [0, 5], q_inv_A=0)
+                # A finite-q static point is allowed on a broadcast grid with marginal q=0 at T>0.
+                dielectric_response(mat, [0, 5], q_inv_A=[0.5, 0])
+
+    def test_zenodo_al_and_au_retained_as_rounded_metal_inputs(self):
+        al_lines = (SOURCE / "ELF.txt").read_text(encoding="latin-1").splitlines()
+        al_row = al_lines[al_lines.index("Al [4]") + 5]
+        au_lines = (SOURCE / "ELF_Au.txt").read_text(encoding="latin-1").splitlines()
+        au_rows = au_lines[au_lines.index("@") + 4:]
+        for name, lines in (("Al", [al_row]), ("Au", au_rows)):
+            with self.subTest(material=name):
+                rows = [line.split() for line in lines if line.strip()]
+                inverse_static = 1 - sum(Fraction(row[1]) / Fraction(row[0])**2 for row in rows)
+                self.assertGreater(inverse_static, 0)
+                mat = Material(name, 0, tuple(Oscillator(*map(float, row)) for row in rows))
+                energies = np.array([0, 0.1, 1, 15.6])
+                expected = 1 - sum(float(a) / (float(e)**2 - energies**2 - 1j * float(w) * energies)
+                                   for e, a, w, _ in rows)
+                expected[0] = float(inverse_static)
+                result = dielectric_response(mat, energies)
+                np.testing.assert_allclose(result.epsilon, 1 / expected, rtol=1e-8, atol=0)
+                self.assertLess(1e-8, float(inverse_static))
+                self.assertEqual(dielectric_diagnostics(mat).static_status, "stable")
+
     def test_optical_sum_rules_gapless_closed_forms(self):
         mat = Material("synthetic", 0, (Oscillator(10, 20, 0.01), Oscillator(5, 5, 30, 0.8)))
         lhs = 20 / 10**2 + 5 / 5**2
-        self.assertAlmostEqual(optical_sum_rule_lhs(mat), lhs)
-        self.assertAlmostEqual(optical_elf_first_moment(mat), 25 * math.pi / 2)
+        def integrate(f):
+            near = quad(f, 0, 100, points=[5, 10], epsabs=1e-11, epsrel=1e-11)[0]
+            return near + quad(f, 100, math.inf, epsabs=1e-11, epsrel=1e-11)[0]
+
+        static = 2 / math.pi * integrate(lambda u: loss_function(mat, u) / u)
+        first = integrate(lambda u: u * loss_function(mat, u))
+        self.assertAlmostEqual(static, lhs, places=10)
+        self.assertAlmostEqual(first, 25 * math.pi / 2, places=9)
+        self.assertAlmostEqual(optical_sum_rule_lhs(mat), static, places=10)
+        self.assertAlmostEqual(optical_elf_first_moment(mat), first, places=9)
         self.assertAlmostEqual(optical_sum_rule_residual(mat, 0.5), lhs - 0.5)
         with self.assertRaises(ValueError):
             optical_sum_rule_residual(mat, math.inf)
@@ -156,6 +277,8 @@ class DielectricTests(unittest.TestCase):
         static, _ = quad(lambda u: loss_function(mat, u) / u, gap, math.inf, epsabs=1e-12)
         first, _ = quad(lambda u: u * loss_function(mat, u), gap, math.inf, epsabs=1e-12)
         self.assertAlmostEqual(optical_sum_rule_lhs(mat), 2 * static / math.pi, places=10)
+        self.assertAlmostEqual(1 + negative_inverse_dielectric_function(mat, 0).real,
+                               2 * static / math.pi, places=10)
         self.assertAlmostEqual(optical_elf_first_moment(mat), first, places=9)
 
     def test_tabulated_linear_hard_cut_and_low_energy_choices(self):
@@ -193,6 +316,27 @@ class DielectricTests(unittest.TestCase):
         self.assertEqual(result.tail_coefficient_eV3, 1)
         self.assertEqual(result.terminal_log_slope, 1)
         self.assertEqual(result.high_energy, "power_law_3")
+        self.assertIn("differs from -3", result.warnings[0])
+        np.testing.assert_array_equal(result.real_quadrature_error, np.zeros(len(queries)))
+        fitted = tabulated_elf_kk([2, 4], [1, 0.125], 0, low_energy="zero",
+                                  high_energy="power_law_3")
+        self.assertAlmostEqual(fitted.terminal_log_slope, -3)
+        self.assertEqual(fitted.warnings, ())
+
+    def test_tabulated_exact_segments_agree_with_quadrature(self):
+        nodes = np.array([0.3, 0.8, 1.2, 2.5, 5.0, 7.0])
+        values = np.array([0.1, 0.7, 1.5, 0.5, 0.09, 0.05])
+        for low in ("zero", "linear_to_origin"):
+            for high in ("hard_cut", "power_law_3"):
+                with self.subTest(low=low, high=high):
+                    queries = [0, 0.15, 0.31, 0.8, 0.95, 2.5, 6.99, 7.01, 9, 1000]
+                    if high == "power_law_3":
+                        queries.append(7)
+                    expected = [tabulated_kk_quadrature(nodes, values, t, low, high) for t in queries]
+                    actual = tabulated_elf_kk(nodes, values, queries, low_energy=low, high_energy=high)
+                    np.testing.assert_allclose(actual.real_negative_inverse_epsilon, expected,
+                                               rtol=0, atol=2e-12)
+                    self.assertEqual(actual.method, "analytic_piecewise_linear_kk")
 
     def test_tabulated_invalid_inputs(self):
         for energies, elf in (([0, 1], [1, 1]), ([0, 0], [0, 1]), ([0, 1], [0, -1]),

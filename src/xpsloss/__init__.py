@@ -1,4 +1,4 @@
-"""Independent dielectric response and bulk energy-loss calculations."""
+"""Independent dielectric response and bulk losses, not a full QUEELS-XPS implementation."""
 
 __version__ = "0.0.1"
 

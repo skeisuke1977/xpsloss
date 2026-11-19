@@ -1,6 +1,7 @@
 """Noninteractive CLI. stdout is JSON; errors are JSON on stderr."""
 
 import argparse
+from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -13,7 +14,10 @@ import scipy
 
 from . import __version__
 from .config import load_config
-from .dielectric import DIELECTRIC_MODEL_ID, DielectricConvergenceError, dielectric_response
+from .dielectric import (
+    DIELECTRIC_MODEL_ID, DielectricConvergenceError, DielectricGapEdgeError,
+    dielectric_diagnostics, dielectric_response,
+)
 from .model import (BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, MODEL_ID,
                     UNSUPPORTED_PHYSICS, bulk_diimfp, finite_number, loss_function)
 
@@ -99,6 +103,9 @@ def run(args):
         response = dielectric_response(
             config.material, grid, q, epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
         )
+        physics = dielectric_diagnostics(
+            config.material, q, epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
+        )
         inverse, epsilon = response.negative_inverse_epsilon, response.epsilon
         table = np.column_stack((grid, inverse.real, inverse.imag, epsilon.real, epsilon.imag,
                                  response.real_quadrature_error))
@@ -107,8 +114,15 @@ def run(args):
         header, output_name = ",".join(columns), "dielectric.csv"
         units = dict.fromkeys(columns, "dimensionless")
         units.update(loss_eV="eV", q_inv_A="angstrom^-1")
+        nearest_edge = None
+        if config.material.gap_eV > 0:
+            nearest_edge = float(np.min(abs(grid - config.material.gap_eV)))
         diagnostics = {
+            **asdict(physics),
             "q_inv_A": q, "optical_limit": q == 0, "sum_rule_enforced": False,
+            "electron_energy_used": False,
+            "gap_edge_policy": "reject_grid",
+            "nearest_gap_edge_distance_eV": nearest_edge,
             "fourier_time_dependence": "exp(-i*omega*t)",
             "high_energy_limit_negative_inverse_epsilon": -1.0,
             "high_energy_tail": "untruncated_oscillator_model",
@@ -139,6 +153,7 @@ def run(args):
                        "https://www.quases.com/products/queels-xps/"],
     }
     if args.command == "dielectric":
+        manifest["input_config_model_id"] = manifest["config"]["model"]
         manifest["warnings"] = warnings
         manifest["references"].append("https://doi.org/10.1209/0295-5075/90/10003")
     (args.out / "run.json").write_text(json.dumps(manifest, ensure_ascii=False, allow_nan=False, indent=2) + "\n", encoding="utf-8")
@@ -151,6 +166,13 @@ def run(args):
 def main(argv=None):
     try:
         return run(build_parser().parse_args(argv))
+    except DielectricGapEdgeError as exc:
+        emit({
+            "status": "error", "error_type": type(exc).__name__, "message": str(exc),
+            "gap_eV": exc.gap_eV, "gap_edge_exclusion_eV": exc.exclusion_eV,
+            "offending_loss_eV": exc.offending_loss_eV, "remedy": exc.remedy,
+        }, sys.stderr)
+        return 2
     except DielectricConvergenceError as exc:
         emit({"status": "not_converged", "error_type": type(exc).__name__, "message": str(exc)}, sys.stderr)
         return 2
