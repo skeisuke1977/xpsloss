@@ -3,7 +3,7 @@
 公開理論に基づく、XPSの誘電損失計算の独立実装に向けた着手版です。
 作成日: 2026-11-19。
 
-**現時点で動くのは、振動子で表した損失関数と、均質・等方な無限媒質のバルク非弾性散乱です。QUEELS-XPSの完全再現版ではありません。**
+**現時点で動くのは、振動子で表した損失関数、その因果的な複素誘電応答、均質・等方な無限媒質のバルク非弾性散乱です。表面・正孔・干渉は未実装で、QUEELS-XPSの完全再現版ではありません。**
 
 このパッケージはQUEELS/QUASESの公式製品ではなく、その実行ファイル・DLL・ソースコードを利用していません。公開されている数式から新規に実装しています。
 
@@ -16,7 +16,10 @@
 | 運動量分散を含むバルクDIIMFP | 実装済み |
 | CSV、JSONによる出力、計算条件の記録 | 実装済み |
 | 解析解・和則・収束との照合 | テストあり |
-| 複素誘電関数の因果的な再構成 | 未実装 |
+| 振動子ELFからの因果的な複素誘電応答（ギャップ時はKKで実部を再構成） | 実装済み・テストあり・別担当がレビュー |
+| 表形式ELFからのKK再構成（参照・診断用） | 実装済み・テストあり・別担当がレビュー |
+| 光学和則・一次モーメントの診断（入力は再規格化しない） | 実装済み・テストあり |
+| 文献由来の固定入力（ELFデータ集のSi・Au・Al、manualのSi）と来歴の記録 | 同梱。値の物理的妥当性は未検証 |
 | 表面、真空中の損失、静止正孔、干渉 | 未実装 |
 | 深さ平均と自己無撞着な平均自由行程 | 未実装 |
 | 多重散乱、スペクトル畳み込み、装置関数 | 未実装 |
@@ -35,9 +38,12 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m xpsloss capabilities --json
 .\.venv\Scripts\python.exe -m xpsloss validate examples/synthetic_bulk.json
 .\.venv\Scripts\python.exe -m xpsloss elf examples/synthetic_bulk.json --out runs/elf-demo
+.\.venv\Scripts\python.exe -m xpsloss dielectric examples/synthetic_bulk.json --q-inv-A 0.5 --out runs/dielectric-demo
 .\.venv\Scripts\python.exe -m xpsloss bulk examples/synthetic_bulk.json --out runs/bulk-demo
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+文献由来の固定入力と実行例は [benchmarks/README.md](benchmarks/README.md)、出典・帰属表示・和則の検算は [docs/BENCHMARK_INPUTS.md](docs/BENCHMARK_INPUTS.md)、複素誘電応答の設計と規約は [docs/DIELECTRIC_DESIGN.md](docs/DIELECTRIC_DESIGN.md) にあります。
 
 仮想環境のactivateは不要です。通常のインストールには依存パッケージ取得のため通信が必要ですが、計算処理そのものは外部APIを使いません。依存関係を事前に導入すればオフラインで計算できます。
 
@@ -51,7 +57,7 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-**例題は合成材料です。Al、CoO、Siなどの実測・文献データとして利用しないでください。** 既存の出力ディレクトリには上書きしません。再計算するときは新しい出力名を指定します。
+**`examples/` の例題は合成材料です。Al、CoO、Siなどの実測・文献データとして利用しないでください。** 文献由来の入力は `benchmarks/inputs/` にだけ置き、出典ごとに分けています。既存の出力ディレクトリには上書きしません。再計算するときは新しい出力名を指定します。
 
 ## AIエージェントとの共同開発
 
@@ -63,8 +69,10 @@ python3 -m venv .venv
 
 - `docs/VALIDATION.md`: この配布物で実行した検証と未検証事項。
 - `docs/EQUATIONS.md`: 数式、単位、検証の根拠。
+- `docs/DIELECTRIC_DESIGN.md`: 複素誘電応答の方式比較、符号・幅の規約、ギャップ端と極の扱い。
+- `docs/BENCHMARK_INPUTS.md`: 固定入力の出典、利用条件、光学和則の監査。
 - `docs/PROJECT_PLAN.md`: 完全モデルとQuanty接続へ進むための設計。
 - `docs/REFERENCES.md`: 一次資料と用途。
-- `NOTICES.md`: 独立実装、参照資料、公開時の整理。
+- `NOTICES.md`: 独立実装、同梱データの帰属表示、公開時の整理。
 
-WindowsとmacOSでの実行結果は、この初版ではまだ確認していません。検証済みの実行環境は `docs/VALIDATION.md` を参照してください。
+Windows 11（Python 3.12）とLinux（Python 3.12、M0のみ）で確認済みです。macOSは未確認です。詳細は `docs/VALIDATION.md` を参照してください。

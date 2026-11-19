@@ -113,3 +113,13 @@ S. Tougaard, F. Yubero, “QUEELS software package for calculation of surface ef
 N. Pauly, S. Tougaard, “Surface and core hole effects in X-ray photoelectron spectroscopy”, Surface Science 604, 1193–1196 (2010)。
 
 論文庫キー `Pauly2010`。https://doi.org/10.1016/j.susc.2010.04.001
+
+## R14. 逆誘電関数のクラマース・クローニッヒ関係
+
+V. B. Bobrov, S. A. Trigger, G. J. F. van Heijst, P. P. J. M. Schram, “Kramers–Kronig relations for the dielectric function and the static conductivity of Coulomb systems”, EPL 90, 10003 (2010).
+
+https://doi.org/10.1209/0295-5075/90/10003
+
+著者公開版: https://arxiv.org/abs/1003.4724
+
+[EQUATIONS.md](EQUATIONS.md) E4と [DIELECTRIC_DESIGN.md](DIELECTRIC_DESIGN.md) が、逆誘電関数の分散関係と周波数対称性の根拠として著者公開版 p. 2 の式(1),(2),(4),(5),(7)を引用する。論文庫には未収録で、式番号は実装担当の参照に基づき、独立レビューでは照合していない。E4aの符号・係数・高周波極限そのものは、独立レビューで導出し直して確認した（[VALIDATION.md](VALIDATION.md)）。
