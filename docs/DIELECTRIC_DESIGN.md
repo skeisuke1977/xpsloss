@@ -82,7 +82,8 @@ Zenodo 6024064 v1.0 の `ELF.txt` の `Al [4]` は \(E_g=0\)、\(n=999\)、単�
 
 \[
 \begin{aligned}
-\delta_g&=\min\!\left(E_g/2,\ \max(32\,\operatorname{ulp}(E_g),10^{-12}E_g)\right),\\
+\delta_g&=\max\!\left(\operatorname{ulp}(0),\
+             \min\!\left(E_g/2,\ \max(32\,\operatorname{ulp}(E_g),10^{-12}E_g)\right)\right),\\
 \tau_0&=\sigma_0+8(N+1)\varepsilon_{\rm mach}\bigl(1+|1+\operatorname{Re}F(q,0)|\bigr).
 \end{aligned}
 \tag{D7}
@@ -90,7 +91,9 @@ Zenodo 6024064 v1.0 の `ELF.txt` の `Al [4]` は \(E_g=0\)、\(n=999\)、単�
 
 \(\operatorname{ulp}\) は浮動小数点の隣接間隔、\(\varepsilon_{\rm mach}=2^{-52}\) は倍精度の機械イプシロン、\(N\) は非ゼロ強度の振動子数、\(\sigma_0\) は実部の静的積分誤差の推定値。ギャップなしでは \(\sigma_0=0\)。\(\tau_0\) の丸め誤差項は、規格化定数 1 と静的 KK 寄与 \(F(q,0)+1\) の大きさと項数に比例させる。
 
-\(|T-E_g|\le\delta_g\) なら API は点評価を拒否する。端の幅は数値用であり、1 ulp 程度の格子の丸めで結果が切り替わるのを避ける。CLI は格子全体を検査して出力前に拒否し、JSON に該当点、除外幅、格子をずらす手順を記す。成功時は `run.json` に除外幅と最も近い評価点からの距離を残す。ゼロ強度の真空応答では除外を適用しない。
+正の \(T\) で \(|T-E_g|\le\delta_g\) なら API は点評価を拒否する。端の幅は数値用であり、1 ulp 程度の格子の丸めで結果が切り替わるのを避ける。\(\operatorname{ulp}(0)\) は eV 表記で表現できる最小の正数であり、\(E_g/2\) がゼロに丸められる場合にも正の除外幅を保つ。静的点 \(T=0\) にはこの除外を適用しない。CLI は格子全体を検査して出力前に拒否し、JSON に該当点、除外幅、格子をずらす手順を記す。成功時は `run.json` に除外幅と最も近い評価点からの距離を残す。ギャップなしとゼロ強度の応答では除外規則を記録しない。
+
+点を評価できても、端の近傍で最も近い行の応答値は、格子点とギャップ端のずれに強く左右される。`dielectric_diagnostics(..., loss_eV=...)` は \(\delta_g<d=|T-E_g|\le 10^{-3}E_g\) の各点について、損失エネルギー、距離、\(\operatorname{Re}F\) への対数項の推定 \([L_0(q,E_g)/\pi]\log(E_g/d)\) を返す。この帯域では無次元の対数が \(\log(1000)\) 以上となるため、格子依存性を知らせる目安にした。対数項の基準距離は \(E_g\) で、推定値は実部全体や誤差を表さない。CLI は点ごとの診断と同じ数値を `run.json` の `warnings` にも記す。
 
 \(|F(q,0)|\le\tau_0\) は `marginal` とする。正の \(T\) で \(\epsilon\) を評価し、\(T=0\) では静的な極として報告する。\(F\) 自体の出力はゼロに丸めない。\(F(q,0)>\tau_0\) では \(\epsilon\) を拒否する。解析上、正の \(F(q,0)\) は上半平面に \(F=0\) があることを意味する。実装上の許容幅は、最後の丸め桁や積分誤差から極の有無を断定するのを避けるために使う。
 
@@ -204,7 +207,7 @@ for upper in (24, 48, 96):
 | E4d と極 | \(F=-1/\epsilon\) の定義と E4a の複素延長。Bobrov ら著者公開版 PDF p. 2 式 (1)、(2)、(5)、(7) を参照 | \(F,\epsilon\) は無次元 | `dielectric_response`。真空、受動性、静的な Drude 極、上半平面の極 |
 | D4 | Tougaard ら (2022) PDF p. 5 式 (11) の符号を E4a の静的極限から確定。第一モーメントは E4a と E4b の高エネルギー展開 | \(S_0,R_0\) は無次元、\(M_1\) は eV² | `optical_sum_rule_lhs`、`optical_sum_rule_residual`、`optical_elf_first_moment`。ギャップゼロの閉形式とギャップありの直接積分 |
 | D5、D6、D8 | Bobrov ら著者公開版 PDF p. 2 式 (7) と E4a の正エネルギー核を、線形補間と固定指数の尾へ適用 | \(a,b,x_i,T\) は eV、\(m_i\) は eV\(^{-1}\)、尾部係数は eV³、\(\Delta\operatorname{Re}F\) は無次元 | `tabulated_elf_kk`。不等間隔の数値主値積分、連続接続、尾部警告と感度表 |
-| D7 | 実装上の数値判定基準。倍精度の格子と符号判定に適用 | \(\delta_g\) は eV、\(\tau_0\) は無次元 | `dielectric_response` と `dielectric_diagnostics`。丸めの異なる Drude 入力、Al・Au、ギャップ端上の格子、独立な零点探索 |
+| D7 | 実装上の数値判定基準。倍精度の格子と符号判定に適用。警告の対数項は E4a の端の漸近形 | \(\delta_g\) は eV、\(\tau_0\) と対数項は無次元 | `dielectric_response` と `dielectric_diagnostics`。丸めの異なる Drude 入力、Al・Au、ギャップ端上およびその近傍の格子、最小の正のギャップ、独立な零点探索 |
 
 [manual]: https://zenodo.org/records/23414559
 [tougaard]: https://doi.org/10.1002/sia.7095

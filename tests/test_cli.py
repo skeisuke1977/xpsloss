@@ -146,6 +146,40 @@ class CLITests(unittest.TestCase):
                     self.assertIn("Shift the loss grid", error["remedy"])
                     self.assertFalse(output.exists())
 
+    def test_dielectric_warns_on_both_shifted_grids(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "gapped.json"
+            obj = json.loads(EXAMPLE.read_text())
+            obj["material"]["gap_eV"] = 3.3
+            for offset, expected_real in ((1e-9, -12.2), (1e-4, 10.7)):
+                with self.subTest(offset=offset):
+                    obj["loss_grid_eV"] = {"min": 0.1 + offset, "max": 10 + offset, "step": 0.1}
+                    path.write_text(json.dumps(obj), encoding="utf-8")
+                    output = root / str(offset)
+                    r = self.call("dielectric", path, "--out", output)
+                    self.assertEqual(r.returncode, 0, r.stderr)
+                    manifest = json.loads((output / "run.json").read_text(encoding="utf-8"))
+                    point, = manifest["diagnostics"]["near_gap_edge_points"]
+                    self.assertAlmostEqual(point["distance_eV"], offset, delta=1e-14)
+                    self.assertGreater(point["edge_log_contribution"], 0)
+                    warning, = [item for item in manifest["warnings"] if "grid offset" in item]
+                    self.assertIn(f"loss_eV={point['loss_eV']:.17g}", warning)
+                    self.assertIn(f"distance_eV={point['distance_eV']:.17g}", warning)
+                    self.assertIn(f"edge_log_contribution={point['edge_log_contribution']:.9g}", warning)
+                    data = np.loadtxt(output / "dielectric.csv", delimiter=",", skiprows=1)
+                    edge_row = np.argmin(abs(data[:, 0] - 3.3))
+                    self.assertAlmostEqual(data[edge_row, 3], expected_real, delta=0.1)
+
+    def test_dielectric_gapless_omits_gap_edge_policy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "gapless"
+            r = self.call("dielectric", EXAMPLE, "--out", output)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            manifest = json.loads((output / "run.json").read_text(encoding="utf-8"))
+            self.assertNotIn("gap_edge_policy", manifest["diagnostics"])
+            self.assertEqual(manifest["warnings"], [])
+
     def test_unknown_and_invalid_config_rejected(self):
         base = json.loads(EXAMPLE.read_text())
         mutations = [

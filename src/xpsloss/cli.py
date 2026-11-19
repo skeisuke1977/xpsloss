@@ -104,7 +104,8 @@ def run(args):
             config.material, grid, q, epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
         )
         physics = dielectric_diagnostics(
-            config.material, q, epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
+            config.material, q, loss_eV=grid,
+            epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
         )
         inverse, epsilon = response.negative_inverse_epsilon, response.epsilon
         table = np.column_stack((grid, inverse.real, inverse.imag, epsilon.real, epsilon.imag,
@@ -121,7 +122,6 @@ def run(args):
             **asdict(physics),
             "q_inv_A": q, "optical_limit": q == 0, "sum_rule_enforced": False,
             "electron_energy_used": False,
-            "gap_edge_policy": "reject_grid",
             "nearest_gap_edge_distance_eV": nearest_edge,
             "fourier_time_dependence": "exp(-i*omega*t)",
             "high_energy_limit_negative_inverse_epsilon": -1.0,
@@ -130,8 +130,10 @@ def run(args):
             "max_absolute_real_quadrature_error": float(response.real_quadrature_error.max()),
             "quadrature_error_interpretation": "Estimate for Re[-1/epsilon] only.",
         }
-        if config.material.gap_eV > 0 and any(osc.strength_eV2 for osc in config.material.oscillators):
+        if physics.gap_edge_exclusion_eV:
+            diagnostics["gap_edge_policy"] = "reject_grid"
             warnings.append("The hard gap gives a logarithmic edge singularity and can produce a real-axis pole in epsilon.")
+        warnings.extend(physics.warnings)
     # Computation succeeds before creating output. A run.json marks a completed run.
     args.out.mkdir(parents=True, exist_ok=False)
     np.savetxt(args.out / output_name, table, delimiter=",", header=header,

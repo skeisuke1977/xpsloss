@@ -1,7 +1,7 @@
 """Causal reconstruction of the oscillator ELF, with the exp(-i omega t) convention."""
 
 import cmath
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 
 import numpy as np
@@ -13,6 +13,7 @@ from .model import Material, _loss_coordinates, _oscillator_energy, finite_numbe
 
 DIELECTRIC_MODEL_ID = "causal_oscillator_elf_v1"
 FLOAT_EPSILON = np.finfo(float).eps
+GAP_EDGE_WARNING_FRACTION = 1e-3
 
 
 class DielectricConvergenceError(RuntimeError):
@@ -41,6 +42,15 @@ class DielectricResponse:
 
 
 @dataclass(frozen=True)
+class GapEdgePoint:
+    """A sampled loss in the warning band outside the gap exclusion."""
+
+    loss_eV: float
+    distance_eV: float
+    edge_log_contribution: float
+
+
+@dataclass(frozen=True)
 class DielectricDiagnostics:
     """Static classification and the real-axis pole diagnostic at one q."""
 
@@ -50,6 +60,17 @@ class DielectricDiagnostics:
     gap_edge_exclusion_eV: float
     sub_gap_pole_eV: float | None
     sub_gap_pole_status: str
+    gap_edge_warning_band_eV: float = 0.0
+    near_gap_edge_points: tuple[GapEdgePoint, ...] = ()
+
+    @property
+    def warnings(self):
+        return tuple(
+            f"Near the hard gap edge, Re(F) depends logarithmically on the grid offset "
+            f"(loss_eV={point.loss_eV:.17g}, distance_eV={point.distance_eV:.17g}, "
+            f"edge_log_contribution={point.edge_log_contribution:.9g})."
+            for point in self.near_gap_edge_points
+        )
 
 
 @dataclass(frozen=True)
@@ -217,15 +238,16 @@ def _gap_edge_exclusion_eV(material):
     gap = material.gap_eV
     if gap == 0 or all(o.strength_eV2 == 0 for o in material.oscillators):
         return 0.0
-    return min(gap / 2, max(32 * math.ulp(gap), 1e-12 * gap))
+    return max(math.ulp(0.0), min(gap / 2, max(32 * math.ulp(gap), 1e-12 * gap)))
 
 
 def _check_gap_edge(material, energies):
     gap = material.gap_eV
-    if gap == 0 or all(o.strength_eV2 == 0 for o in material.oscillators):
-        return
     exclusion = _gap_edge_exclusion_eV(material)
-    offending = energies[abs(energies - gap) <= exclusion]
+    if exclusion == 0:
+        return
+    # The minimum positive gap can itself be one ulp from the regular static point.
+    offending = energies[(energies > 0) & (abs(energies - gap) <= exclusion)]
     if offending.size:
         raise DielectricGapEdgeError(gap, exclusion, np.unique(offending))
 
@@ -301,37 +323,63 @@ def dielectric_response(
     return DielectricResponse(response, epsilon, error)
 
 
-def dielectric_diagnostics(
-    material: Material, q_inv_A=0.0, *, epsabs=1e-9, epsrel=1e-7, limit=200,
-):
-    """Classify static F and locate a sub-gap epsilon pole at one wavevector."""
-    _, q, epsabs, epsrel = _response_inputs(0, q_inv_A, epsabs, epsrel, limit)
-    if q.ndim:
-        raise ValueError("dielectric diagnostics require a single q_inv_A value")
-    static, tolerance = _static_response(material, q, epsabs, epsrel, limit)
-    static, tolerance = float(static), float(tolerance)
-    exclusion = _gap_edge_exclusion_eV(material)
-    if abs(static) <= tolerance:
-        return DielectricDiagnostics(static, tolerance, "marginal", exclusion, None, "marginal_static")
-    if static > tolerance:
-        return DielectricDiagnostics(static, tolerance, "unstable", exclusion, None, "absent")
-    if exclusion == 0:
-        return DielectricDiagnostics(static, tolerance, "stable", exclusion, None, "absent")
+def _near_gap_edge_points(material, q, energies, exclusion, band):
+    gap = material.gap_eV
+    distances = abs(energies - gap)
+    near = (distances > exclusion) & (distances <= band)
+    if not np.any(near):
+        return ()
+    coefficient = loss_function(replace(material, gap_eV=0.0), gap, q) / math.pi
+    log_gap = math.log(gap)
+    return tuple(
+        GapEdgePoint(float(energy), float(distance), coefficient * (log_gap - math.log(distance)))
+        for energy, distance in zip(energies[near], distances[near])
+    )
 
+
+def _sub_gap_pole(material, q, exclusion, settings):
     def sub_gap_real(energy):
-        value, _ = _inverse_response(material, np.asarray(energy), q, epsabs, epsrel, limit)
+        value, _ = _inverse_response(material, np.asarray(energy), q, *settings)
         return float(value.real)
 
     gap = material.gap_eV
     upper = math.nextafter(gap, 0.0)
-    if sub_gap_real(upper) < 0:
+    if upper == 0 or sub_gap_real(upper) < 0:
         # A zero is guaranteed by the logarithmic divergence, but the interval
         # between the nearest float below the gap and the gap cannot be resolved.
-        return DielectricDiagnostics(static, tolerance, "stable", exclusion, None,
-                                     "unresolved_at_gap_edge")
+        return None, "unresolved_at_gap_edge"
     pole = brentq(sub_gap_real, 0, upper, xtol=math.ulp(gap), rtol=4 * FLOAT_EPSILON)
     pole_status = "within_gap_edge_exclusion" if gap - pole <= exclusion else "located"
-    return DielectricDiagnostics(static, tolerance, "stable", exclusion, pole, pole_status)
+    return pole, pole_status
+
+
+def dielectric_diagnostics(
+    material: Material, q_inv_A=0.0, *, loss_eV=(), epsabs=1e-9, epsrel=1e-7, limit=200,
+):
+    """Classify static F, locate a sub-gap pole and flag optional near-edge samples."""
+    _, q, epsabs, epsrel = _response_inputs(0, q_inv_A, epsabs, epsrel, limit)
+    if q.ndim:
+        raise ValueError("dielectric diagnostics require a single q_inv_A value")
+    if np.iscomplexobj(loss_eV):
+        raise ValueError("loss must be real")
+    energies, _ = _loss_coordinates(loss_eV, 0)
+    exclusion = _gap_edge_exclusion_eV(material)
+    band = GAP_EDGE_WARNING_FRACTION * material.gap_eV if exclusion else 0.0
+    near_edge_points = _near_gap_edge_points(material, q, energies, exclusion, band)
+    settings = (epsabs, epsrel, limit)
+    static, tolerance = _static_response(material, q, *settings)
+    static, tolerance = float(static), float(tolerance)
+    pole, pole_status = None, "absent"
+    if abs(static) <= tolerance:
+        static_status, pole_status = "marginal", "marginal_static"
+    elif static > tolerance:
+        static_status = "unstable"
+    else:
+        static_status = "stable"
+        if exclusion:
+            pole, pole_status = _sub_gap_pole(material, q, exclusion, settings)
+    return DielectricDiagnostics(static, tolerance, static_status, exclusion, pole, pole_status,
+                                 band, near_edge_points)
 
 
 def _edge_log(energy, edge):
