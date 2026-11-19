@@ -30,3 +30,14 @@ al, = source.materials
 ```
 
 `read_elf` は数値を `Decimal` として保持し、実行時の浮動小数点精度で有限か確認します。ISO-8859-1とBOM付きUTF-8を読み取り、LF・CRLF・CRを行区切りとして扱います。文献一覧がある場合は、読み取る材料の文献番号が一覧にあるか検証します。材料名を指定すると、その区画を検証し、ファイル全体のSHA-256を返します。材料名を省略すると全区画を検証します。原本 `ELF.txt` のPPY区画で `@` が欠落しているため、全件読込では415行目のエラーが返ります。
+
+## 参照ソフトとの比較（M2-1）
+
+`compare_queels_fixed_depth.py` は、利用者が手元で計算した QUEELS-XPS の出力を読み、[M2_FIRST_CASE.md](../docs/M2_FIRST_CASE.md) §4.2 で事前に固定した基準で M2-1 の結果と比べます。出力するのは差の指標だけです。参照ソフトの出力は同梱せず、公開もしません（[NOTICES.md](../NOTICES.md)）。
+
+```powershell
+$env:PYTHONPATH = 'src'
+python benchmarks/compare_queels_fixed_depth.py --reference-dir <QUEELS-XPSの出力フォルダー> --out work/comparisons/m2_1_al_1000_0.json
+```
+
+2026-11-20 の比較の結果は、分散のあるAlで不合格でした。原因の特定は [QUEELS_DISPERSION_TEST.md](../docs/QUEELS_DISPERSION_TEST.md) にあります。

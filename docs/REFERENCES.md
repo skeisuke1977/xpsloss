@@ -123,3 +123,19 @@ https://doi.org/10.1209/0295-5075/90/10003
 著者公開版: https://arxiv.org/abs/1003.4724
 
 [EQUATIONS.md](EQUATIONS.md) E4と [DIELECTRIC_DESIGN.md](DIELECTRIC_DESIGN.md) が、逆誘電関数の分散関係と周波数対称性の根拠として著者公開版 p. 2 の式(1),(2),(4),(5),(7)を引用する。論文庫には未収録で、式番号は実装担当の参照に基づき、独立レビューでは照合していない。E4aの符号・係数・高周波極限そのものは、独立レビューで導出し直して確認した（[VALIDATION.md](VALIDATION.md)）。
+
+## R15. REELSモデルとε(k∥)近似
+
+F. Yubero, J. M. Sanz, B. Ramskov, S. Tougaard, “Model for quantitative analysis of reflection-electron-energy-loss spectra: Angular dependence”, Physical Review B 53, 9719–9727 (1996)。
+
+論文庫キー `Yubero1996b`。https://doi.org/10.1103/PhysRevB.53.9719
+
+R2（1997年原著）の参考文献5。ε(k,ω) = ε(k∥,ω) の近似とその理由（p. 9721）、振動子ELFと分散の式(30)、(31)、実部の式(32)を確認した。式(32)の分子が分散入りの ħ²ω0ik² であることは原画像で確かめた。QUEELS-XPS v2.1 の出力はこの分子と一致しない（[QUEELS_DISPERSION_TEST.md](QUEELS_DISPERSION_TEST.md)）。
+
+## R16. REELSモデルの実験による検証
+
+F. Yubero, D. Fujita, B. Ramskov, S. Tougaard, “Experimental test of model for angular and energy dependence of reflection-electron-energy-loss spectra”, Physical Review B 53, 9728–9732 (1996)。
+
+論文庫キー `Yubero1996`。https://doi.org/10.1103/PhysRevB.53.9728
+
+R2の参考文献6。論文庫に収録した。M2-1では使っていない。
