@@ -16,3 +16,6 @@ docs/chatgpt_conversation_*.md
 work/
 # Per-agent git worktrees (local only).
 .worktrees/
+# QUEELS-XPS outputs are never published (NOTICES.md), wherever they are copied.
+K_XPS_*.m
+Keff_av_*.dat
