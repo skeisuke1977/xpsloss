@@ -36,7 +36,9 @@ def capabilities():
         "dielectric_model_id": DIELECTRIC_MODEL_ID,
         "unsupported_physics": list(UNSUPPORTED_PHYSICS),
         "queels_xps_equivalence": False,
-        "material_validation": "No real material benchmark is bundled or claimed.",
+        "material_validation": (
+            "Literature ELF inputs (Si, Au, Al; benchmarks/inputs) are bundled with provenance, "
+            "but no agreement with QUEELS-XPS output or experiment is claimed."),
     }
 
 
