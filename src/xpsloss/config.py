@@ -25,16 +25,26 @@ def keys(obj, required, optional=(), *, label):
 
 @dataclass(frozen=True)
 class Provenance:
+    """Declared metadata. Parsing does not open references or verify source hashes."""
+
     source_id: str
     reference_input: str
     run_conditions_source: str
+    strength_basis: str
     raw_file_sha256: str | None = None
+    scope_note: str | None = None
 
 
 def _parse_provenance(obj):
-    required = ("source_id", "reference_input", "run_conditions_source")
-    keys(obj, required, ("raw_file_sha256",), label="provenance")
-    for key in required:
+    text_fields = ("source_id", "reference_input", "run_conditions_source")
+    keys(obj, (*text_fields, "strength_basis"), ("raw_file_sha256", "scope_note"),
+         label="provenance")
+    basis = obj["strength_basis"]
+    if not isinstance(basis, str) or basis != "absolute_eV2":
+        raise ValueError("provenance.strength_basis must be 'absolute_eV2' for a run config")
+    for key in (*text_fields, "scope_note"):
+        if key not in obj:
+            continue
         if not isinstance(obj[key], str) or not obj[key].strip():
             raise ValueError(f"provenance.{key} must be a nonempty string")
     if "raw_file_sha256" in obj:

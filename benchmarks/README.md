@@ -18,7 +18,7 @@ python -m xpsloss bulk benchmarks/inputs/al_elfdb_v1.0.bulk.json --out runs/al-e
 
 `*.bulk.json` は、任意の動作確認条件として初期運動エネルギー1000 eV、損失格子1–100 eV（1 eV刻み）を指定します。バルクモデルは屈折率と内殻励起補正の `ac`、`bc` を使いません。QUEELS-XPSの数値出力との比較は別途行います。
 
-実行結果の `run.json` の `config.provenance` に、`source_id`、`reference_input`、`run_conditions_source`、任意の `raw_file_sha256` が記録されます。`provenance` を指定する場合は最初の3項目が空でない文字列で、ハッシュを添える場合は小文字の16進数64桁です。原本との照合はテストで行います。
+実行結果の `run.json` の `config.provenance` には `source_id`、`reference_input`、`run_conditions_source`、`strength_basis` が記録されます。任意の `scope_note` と `raw_file_sha256` も保存されます。実行設定に来歴を付ける場合、強度区分は `absolute_eV2` が必須です。設定の解析では申告された値の区分、型と書式を検証します。参照先ファイルを開かないため、別ディレクトリに移した設定も読み込めます。同梱の入力記録と原本のハッシュの照合はテストで行います。
 
 ## 原本を読み取る
 
@@ -29,4 +29,4 @@ source = read_elf("benchmarks/sources/zenodo6024064_v1.0/ELF.txt", material="Al"
 al, = source.materials
 ```
 
-`read_elf` は数値を `Decimal` として保持します。材料名を指定すると、その区画を検証し、ファイル全体のSHA-256を返します。材料名を省略すると全区画を検証します。原本 `ELF.txt` のPPY区画で `@` が欠落しているため、全件読込では415行目のエラーが返ります。
+`read_elf` は数値を `Decimal` として保持し、実行時の浮動小数点精度で有限か確認します。ISO-8859-1とBOM付きUTF-8を読み取り、LF・CRLF・CRを行区切りとして扱います。文献一覧がある場合は、読み取る材料の文献番号が一覧にあるか検証します。材料名を指定すると、その区画を検証し、ファイル全体のSHA-256を返します。材料名を省略すると全区画を検証します。原本 `ELF.txt` のPPY区画で `@` が欠落しているため、全件読込では415行目のエラーが返ります。

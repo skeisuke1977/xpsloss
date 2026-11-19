@@ -71,7 +71,7 @@
   "notes": [
     "Preserves the source strengths in eV^2 without rescaling. Width is the oscillator damping parameter in eV and dispersion is dimensionless.",
     "The source file contains material parameters. It specifies no calculation conditions or normalization procedure.",
-    "The file labels refractive index as 999 without defining the value. The optical sum-rule audit uses the metallic limit as an interpretation.",
+    "The file gives refractive index 999 without defining it. The empty manual form also shows 999 and ac = 0.001, bc = -2 (v2.1, p. 25, Fig. 8). The optical sum-rule audit uses 999 as the literal n in 1 - 1/n^2.",
     "Yubero2005 uses different Al oscillator energy and strength. See docs/BENCHMARK_INPUTS.md."
   ]
 }

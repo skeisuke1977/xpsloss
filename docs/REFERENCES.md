@@ -22,7 +22,7 @@ https://doi.org/10.1103/PhysRevB.56.1612
 
 ## R3. マニュアル Version 2.1
 
-S. Tougaard, F. Yubero, “QUEELS-XPS: Quantitative Analysis of Electron Energy Loss in XPS Spectra”, User's Guide, Version 2.1 (2011)。論文庫キー `Tougaard2011`。
+S. Tougaard, F. Yubero, “QUEELS-XPS: Quantitative Analysis of Electron Energy Loss in XPS Spectra”, User's Guide, Version 2.1。論文庫キー `Tougaard2011` の年はp.2の著作権表示（2001–2011）の末年に基づく。刊行日の明記はない。
 
 https://www.quases.com/data/documents/Ver=202.1=20Manual=20QUEELS-XPS-simulation.pdf
 

@@ -69,7 +69,9 @@
   "provenance": {
     "source_id": "zenodo:6024064",
     "reference_input": "benchmarks/inputs/au_elfdb_v1.0.json",
+    "strength_basis": "absolute_eV2",
     "raw_file_sha256": "b818407d93cb48508a0d9d0aa315341876eaa0e9f846b3b01646366083569adc",
-    "run_conditions_source": "Repository demonstration settings for the bulk calculation."
+    "run_conditions_source": "Repository demonstration settings for the bulk calculation.",
+    "scope_note": "Homogeneous bulk DIIMFP only. This calculation ignores ac, bc, and refractive index n. It is not a QUEELS-XPS comparison."
   }
 }
