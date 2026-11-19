@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 
 
+_LINE_BREAK = re.compile(r"\r\n|\r|\n")
 _SINGLE_HEADER = re.compile(r"Data for oscillators that describe an ELF function of (.+)")
 _MATERIAL_LABEL = re.compile(r"([^@\[\]]+?)\s*\[([0-9]+(?:\s*,\s*[0-9]+)*)\]")
 _REFERENCE = re.compile(r"\[([0-9]+)\]")
@@ -132,7 +133,10 @@ def parse_elf(raw: bytes, *, material: str | None = None) -> ELFSource:
     Decimal values retain source precision, including any sentinel values.
     """
     rows = [(line, content.strip())
-            for line, content in enumerate(_decode(raw).splitlines(), 1)
+            # Split on CR/LF only: str.splitlines() also breaks at VT, FF,
+            # FS/GS/RS and U+0085 (byte 0x85 in ISO-8859-1), which would shift
+            # the line numbers recorded as provenance.
+            for line, content in enumerate(_LINE_BREAK.split(_decode(raw)), 1)
             if content.strip()]
     marker = next((i for i, (_, row) in enumerate(rows) if row == "@"), len(rows))
     preamble = rows[:marker]
