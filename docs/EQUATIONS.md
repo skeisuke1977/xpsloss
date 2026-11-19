@@ -112,8 +112,10 @@ E4a を上半平面に延長すると、\(\operatorname{Im}F(q,z)\) は \(\opera
 | E4b | `negative_inverse_dielectric_function` | ギャップなしの単一 Lorentz 振動子、有限 \(q\)、高エネルギー極限 |
 | E4d | `dielectric_response` | 解析式との一致、真空極限、実軸と上半平面の極、ELF の符号 |
 
-## まだ実装していない式
+## E5. 固定深さ・法線出射での XPS 有効断面積
 
-[R2]式(13)-(16)のK_M1、K_M2、K_M3、K_Vと、式(17)の積分範囲は、原PDFの数式画像を照合してから実装する。今回のELFとバルク式から、これらが実装済みであるとは判断しない。
+`simonsen1997_fixed_depth_v0` は、ギャップのない材料で、表面法線からの出射角 \(\theta=0\)、生成深さ \(a>0\)、損失 \(0<T=\hbar\omega<E_0\) を扱う。非相対論の \(\hbar v=2\sqrt{HE_0}\) を使うと、\(\Omega_0=\omega_\perp=T/(\hbar v)\) となる。正の損失では式(14)–(16)の \(\delta(\omega_\perp)\) の寄与はゼロで、正孔因子には \(i/\omega_\perp\) が残る。[Simonsen ら (1997) 式(13)–(17)](https://doi.org/10.1103/PhysRevB.56.1612)
 
-次段階の対応表には、フーリエ変換の符号、主値・デルタ項、波数の定義、近似した積分範囲、深さ、角度、固体内経路長を含める。将来モデルの数値出力は、バルクモデルと異なるmodel_idを使う。
+`xps_fixed_depth.effective_cross_section_fixed_depth` は、式(17)の上下限を `_parallel_limits` で求め、`_term_integrands` で 13a、13b、14、15-T1/T2/T3、16-e/h を \(\ln k_\parallel\) 上で積分する。E4b の評価点は `epsilon_momentum` で明示する。`k_parallel` は \(q=k_\parallel\)、`k_total` は \(q=\sqrt{k_\parallel^2+\Omega_0^2}\) である。分散がある場合、13a が法線で E2 に一致するのは後者である。[式の対応表 §4.2、Q1](M1_EQUATION_MAP.md)
+
+媒質・正孔・真空の各項はすべて固体内経路長 \(x=a\) 当たりの eV⁻¹ Å⁻¹ で返す。13a の積分 \(k_\parallel\,dk_\parallel/(\Omega_0^2+k_\parallel^2)\) は無次元である。残りの項でも面積次元の核と \(k_\parallel\,dk_\parallel\) の積は無次元で、追加の前因子 \(1/(2x\omega_\perp)\) も無次元となる。単位は共通の \(1/(\pi a_0 E_0)\) で決まる。単位電荷の正孔差分 `hole` は 14、15-T2、16-h の符号付き和で、`total = no_hole + hole_charge * hole` とする。検査条件は [M2 内部検査 I1–I8](M2_FIRST_CASE.md#41-内部の検査参照ソフトなしで自動テストにする) にある。

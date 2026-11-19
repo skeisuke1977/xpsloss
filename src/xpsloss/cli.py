@@ -18,8 +18,12 @@ from .dielectric import (
     DIELECTRIC_MODEL_ID, DielectricConvergenceError, DielectricGapEdgeError,
     dielectric_diagnostics, dielectric_response,
 )
-from .model import (BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, MODEL_ID,
+from .model import (BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, MODEL_ID, FIXED_DEPTH_UNSUPPORTED_PHYSICS,
                     UNSUPPORTED_PHYSICS, bulk_diimfp, finite_number, loss_function)
+from .xps_fixed_depth import (
+    EPSILON_MOMENTA, FIXED_DEPTH_MODEL_ID, TERM_NAMES, FixedDepthConvergenceError,
+    effective_cross_section_fixed_depth,
+)
 
 
 class JSONParser(argparse.ArgumentParser):
@@ -32,9 +36,29 @@ def capabilities():
         "package": "xpsloss-starter", "version": __version__, "model_id": MODEL_ID,
         "status": "experimental_starter",
         "supported": ["strict_json_validation", "drude_lindhard_elf", "bulk_diimfp",
-                      "causal_dielectric_response"],
+                      "causal_dielectric_response", "xps_fixed_depth"],
         "dielectric_model_id": DIELECTRIC_MODEL_ID,
         "unsupported_physics": list(UNSUPPORTED_PHYSICS),
+        "unsupported_physics_model_id": MODEL_ID,
+        "xps_fixed_depth": {
+            "model_id": FIXED_DEPTH_MODEL_ID,
+            "scope": "fixed depth, normal emission from a gapless material",
+            "supported": ["surface_losses", "vacuum_losses", "core_hole", "electron_hole_interference"],
+            "unsupported_physics": list(FIXED_DEPTH_UNSUPPORTED_PHYSICS),
+            "implements": "published Eqs. (13)-(17) of Simonsen, Yubero & Tougaard (1997) with the causal "
+                          "Drude-Lindhard response; epsilon momentum chosen explicitly",
+            "verification": {
+                "internal_tests": "I1-I8 of docs/M2_FIRST_CASE.md",
+                "independent_reviews": "equation review A and implementation review B (separate agents)",
+                "published_figures": "Figs. 3, 5 and 8 of the 1997 paper reproduced within digitizing error "
+                                     "(reviewer's independent code)",
+                "queels_xps_v2_1": (
+                    "Agrees for dispersionless ELFs. For dispersive ELFs QUEELS-XPS v2.1 output matches an "
+                    "undispersed numerator in Re(1/eps), not the published Eq. (32) of Yubero et al. (1996); "
+                    "see docs/QUEELS_DISPERSION_TEST.md. Not reproduced by this model."),
+                "experiment": "not compared",
+            },
+        },
         "queels_xps_equivalence": False,
         "material_validation": (
             "Literature ELF inputs (Si, Au, Al; benchmarks/inputs) are bundled with provenance, "
@@ -54,13 +78,19 @@ def build_parser():
     cap.add_argument("--json", action="store_true", help="output is always JSON")
     val = sub.add_parser("validate")
     val.add_argument("config", type=Path)
-    for name in ("bulk", "elf", "dielectric"):
+    for name in ("bulk", "elf", "dielectric", "xps-fixed-depth"):
         child = sub.add_parser(name)
         child.add_argument("config", type=Path)
         child.add_argument("--out", type=Path, required=True, help="new output directory; never overwritten")
         if name in ("elf", "dielectric"):
             child.add_argument("--q-inv-A", dest="q_inv_A", type=float, default=0.0,
                                help="wavevector in inverse angstrom; default 0 (optical limit)")
+        if name == "xps-fixed-depth":
+            child.add_argument("--depth-A", required=True, type=float, help="creation depth in angstrom")
+            child.add_argument("--epsilon-momentum", required=True, choices=EPSILON_MOMENTA)
+            child.add_argument("--hole-charge", type=float, default=1.0, help="charge in units of +e")
+            child.add_argument("--theta-deg", type=float, default=0.0,
+                               help="angle from the surface normal (only 0 degrees)")
     return p
 
 
@@ -99,6 +129,36 @@ def run(args):
         units = {"loss_eV": "eV", "elf_dimensionless": "dimensionless", "q_inv_A": "angstrom^-1"}
         diagnostics = {"q_inv_A": q, "optical_limit": q == 0,
                        "sum_rule_enforced": False, "real_dielectric_part_computed": False}
+    elif args.command == "xps-fixed-depth":
+        model_id = FIXED_DEPTH_MODEL_ID
+        result = effective_cross_section_fixed_depth(
+            config.material, config.electron_energy_eV, grid, args.depth_A, theta_deg=args.theta_deg,
+            hole_charge=args.hole_charge, epsilon_momentum=args.epsilon_momentum,
+            epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
+        )
+        columns = ("loss_eV", "total", "no_hole", "hole", *TERM_NAMES, "quadrature_error")
+        table = np.column_stack([getattr(result, name) for name in columns])
+        header, output_name = ",".join(columns), "xps_fixed_depth.csv"
+        units = dict.fromkeys(columns, "angstrom^-1 eV^-1")
+        units.update(loss_eV="eV", depth_A="angstrom", path_length_A="angstrom",
+                     theta_deg="degree from surface normal", hole_charge="elementary charge")
+        diagnostics = {
+            "depth_A": result.depth_A, "path_length_A": result.path_length_A,
+            "theta_deg": result.theta_deg, "hole_charge": result.hole_charge,
+            "epsilon_momentum": result.epsilon_momentum, "velocity": "nonrelativistic",
+            "delta_terms": "pi*delta(omega_perp) parts of Eqs. (14)-(16) contribute nothing for loss > 0 "
+                           "and are omitted; only loss > 0 is accepted",
+            "normalization": "per unit path length in the solid, including vacuum terms",
+            "component_definitions": {
+                "no_hole": "term_13a + term_13b + term_15_T1 + term_15_T3 + term_16_e",
+                "hole": "term_14 + term_15_T2 + term_16_h (unit positive charge, includes interference)",
+                "total": "no_hole + hole_charge * hole",
+            },
+            "quadrature": "adaptive 16/32-point Gauss-Legendre panels in log(k_parallel)",
+            "max_absolute_quadrature_error": float(result.quadrature_error.max()),
+            "quadrature_error_interpretation": "Sum of estimated panel and term errors, "
+                "with hole terms weighted by max(1, abs(hole_charge)).",
+        }
     else:
         model_id = DIELECTRIC_MODEL_ID
         q = finite_number(args.q_inv_A, "q_inv_A")
@@ -156,10 +216,14 @@ def run(args):
                        "https://doi.org/10.1002/sia.7095",
                        "https://www.quases.com/products/queels-xps/"],
     }
-    if args.command == "dielectric":
+    if args.command in ("dielectric", "xps-fixed-depth"):
         manifest["input_config_model_id"] = manifest["config"]["model"]
         manifest["warnings"] = warnings
+    if args.command == "dielectric":
         manifest["references"].append("https://doi.org/10.1209/0295-5075/90/10003")
+    elif args.command == "xps-fixed-depth":
+        manifest["unsupported_physics"] = list(FIXED_DEPTH_UNSUPPORTED_PHYSICS)
+        manifest["references"].append("https://doi.org/10.1103/PhysRevB.56.1612")
     (args.out / "run.json").write_text(json.dumps(manifest, ensure_ascii=False, allow_nan=False, indent=2) + "\n", encoding="utf-8")
     emit({"status": "complete", "model_id": model_id, "output_dir": str(args.out.resolve()),
           "files": [output_name, "run.json"], "point_count": len(grid),
@@ -177,7 +241,7 @@ def main(argv=None):
             "offending_loss_eV": exc.offending_loss_eV, "remedy": exc.remedy,
         }, sys.stderr)
         return 2
-    except DielectricConvergenceError as exc:
+    except (DielectricConvergenceError, FixedDepthConvergenceError) as exc:
         emit({"status": "not_converged", "error_type": type(exc).__name__, "message": str(exc)}, sys.stderr)
         return 2
     except (ValueError, OSError, OverflowError, RuntimeError) as exc:
