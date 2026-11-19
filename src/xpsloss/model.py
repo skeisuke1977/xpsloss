@@ -20,10 +20,15 @@ from scipy.integrate import IntegrationWarning, quad
 BOHR_RADIUS_A = 0.529177210903
 HBAR2_OVER_2ME_EV_A2 = 3.80998212
 MODEL_ID = "bulk_drude_lindhard_v0"
+# Model-specific scopes. Existing bulk runs retain their original exclusions.
 UNSUPPORTED_PHYSICS = (
     "surface_losses", "core_hole", "intrinsic_extrinsic_interference",
     "depth_averaging", "elastic_scattering", "multiple_inelastic_scattering",
     "primary_spectrum_convolution", "full_imfp",
+)
+FIXED_DEPTH_UNSUPPORTED_PHYSICS = (
+    "oblique_emission", "gapped_materials", "depth_averaging", "elastic_scattering",
+    "multiple_inelastic_scattering", "primary_spectrum_convolution", "full_imfp",
 )
 
 
