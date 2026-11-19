@@ -160,6 +160,31 @@ class DielectricTests(unittest.TestCase):
         results = negative_inverse_dielectric_function(mat, [gap - 1e-9, gap + 1e-9])
         self.assertTrue(np.isfinite(results).all())
 
+    def test_near_gap_warning_reports_grid_dependent_log_term(self):
+        gap = 3.3
+        mat = Material("synthetic", gap, (Oscillator(15, 180, 2, 0.5),))
+        losses = [gap - 1e-4, gap + 1e-9, gap + 1e-4, gap + 0.01]
+        result = dielectric_diagnostics(mat, loss_eV=losses)
+        self.assertAlmostEqual(result.gap_edge_warning_band_eV, 0.0033)
+        self.assertEqual([point.loss_eV for point in result.near_gap_edge_points], losses[:3])
+        elf_at_edge = 180 * 2 * gap / ((15**2 - gap**2)**2 + (2 * gap)**2)
+        for point in result.near_gap_edge_points:
+            distance = abs(point.loss_eV - gap)
+            self.assertEqual(point.distance_eV, distance)
+            self.assertAlmostEqual(point.edge_log_contribution, elf_at_edge / math.pi * math.log(gap / distance))
+        self.assertEqual(len(result.warnings), 3)
+        self.assertIn("grid offset", result.warnings[1])
+
+    def test_smallest_positive_gap_keeps_a_nonzero_exclusion(self):
+        gap = math.ulp(0.0)
+        mat = Material("synthetic", gap, (Oscillator(15, 180, 2, 0.5),))
+        result = dielectric_diagnostics(mat)
+        self.assertEqual(result.gap_edge_exclusion_eV, gap)
+        self.assertEqual(result.sub_gap_pole_status, "unresolved_at_gap_edge")
+        self.assertAlmostEqual(dielectric_response(mat, 0).epsilon.real, 5)
+        with self.assertRaises(DielectricGapEdgeError):
+            dielectric_response(mat, [gap, math.nextafter(gap, math.inf)])
+
     def test_sub_gap_pole_diagnostic_matches_direct_quadrature_root(self):
         gap = 8
         mat = Material("synthetic", gap, (Oscillator(10, 50, 2, 0.5),))
