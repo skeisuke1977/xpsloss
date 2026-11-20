@@ -4,3 +4,4 @@
 *.png binary
 # Third-party raw source files: keep exact bytes (CRLF, encoding) for hash checks.
 benchmarks/sources/** -text
+benchmarks/queels_prereg/predictions_a10.txt -text

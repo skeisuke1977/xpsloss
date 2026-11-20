@@ -85,8 +85,9 @@ def capabilities():
                                        "There has been no human peer review.",
                 "published_figures": "A separate reviewer agent attempted to reproduce Figs. 3, 5 and 8 "
                                      "using independent code with the 1997 paper's Eq. (20) dielectric "
-                                     "function, outside this package's oscillator model. Per-point results "
-                                     "are to be added to docs/VALIDATION.md before release.",
+                                     "function, outside this package's oscillator model. Of 84 comparison points, 37 are within reading uncertainty, "
+                                     "10 are outside and 37 depend on width assumptions. See "
+                                     "benchmarks/paper_figures/RESULTS.md for both momentum choices.",
                 "queels_xps_v2_1": (
                     "At 1000 eV and normal emission, differences for the tested dispersionless synthetic Al "
                     "input were 0.1-0.4% of peak total. Both momentum choices failed the preregistered "

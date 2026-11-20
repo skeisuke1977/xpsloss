@@ -5,4 +5,7 @@ recursive-include examples *.json
 include benchmarks/README.md benchmarks/compare_queels_fixed_depth.py
 recursive-include benchmarks/inputs *elfdb*.json
 recursive-include benchmarks/sources *.txt
+recursive-include benchmarks/queels_prereg *.py *.md *.txt
+recursive-include benchmarks/paper_figures *.py *.md *.csv
+recursive-include benchmarks/numerics *.py
 recursive-include tests *.py

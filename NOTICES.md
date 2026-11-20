@@ -4,13 +4,14 @@ Keisuke Sato は xpsloss のコードを MIT、自作文書を CC BY 4.0 で提�
 
 | 区分 | 対象 | ライセンス |
 | --- | --- | --- |
-| コード・実行例・ビルド設定 | `src/**`、`tests/**`、`benchmarks/*.py`、`examples/**`、`pyproject.toml`、`MANIFEST.in`、文書中の自作コード例 | MIT |
-| 自作文書 | ルートの Markdown ファイル、`docs/**`、`benchmarks/README.md`、`CITATION.cff` の自作部分 | CC BY 4.0。コード例は上記の MIT に従う |
+| コード・実行例・ビルド設定 | `src/**`、`tests/**`、`benchmarks/**/*.py`、`examples/**`、`pyproject.toml`、`MANIFEST.in`、文書中の自作コード例 | MIT |
+| 自作文書と自作の計算結果 | ルートの Markdown ファイル、`docs/**`、`benchmarks/**/*.md`、`benchmarks/queels_prereg/predictions_a10.txt`、`benchmarks/paper_figures/comparison.csv` の計算値、`CITATION.cff` の自作部分 | CC BY 4.0。コード例は上記の MIT に従う |
+| 原著の図から読み取った値 | `benchmarks/paper_figures/readings.csv` の読取り値と、`comparison.csv`・`RESULTS.md` に再掲した読取り値 | 下の「文書中の引用」のとおり、出典を示した引用として扱い、本プロジェクトの CC BY 4.0 の対象外とする |
 | 第三者データ | `benchmarks/sources/**`、`benchmarks/inputs/*elfdb*` | Pauly、Yubero、Tougaard による CC BY 4.0 |
 
 ## 文書中の引用
 
-文書には A. Cohen Simonsen, F. Yubero, S. Tougaard, Phys. Rev. B **56**, 1612 (1997) の式(1)、(13)–(17)を検証用に組み直した転記や、QUEELS-XPS v2.1 User's Guide の短い語句と頁・図表への参照がある。引用部分の権利は各権利者に帰属し、出典を示して引用した第三者の素材は本プロジェクトの CC BY 4.0 の対象外である。[式の対応表 §4.1](docs/M1_EQUATION_MAP.md)・[幅の規約と出典](docs/DIELECTRIC_DESIGN.md)
+文書には A. Cohen Simonsen, F. Yubero, S. Tougaard, Phys. Rev. B **56**, 1612 (1997) の式(1)、(13)–(17)を検証用に組み直した転記と、図3・5・8（Table I の幅を含む）から読み取った少数の値、QUEELS-XPS v2.1 User's Guide の短い語句と頁・図表への参照がある。図の画像、切り抜き、重ね描きは同梱しない。引用部分の権利は各権利者に帰属し、出典を示して引用した第三者の素材は本プロジェクトの CC BY 4.0 の対象外である。[式の対応表 §4.1](docs/M1_EQUATION_MAP.md)・[幅の規約と出典](docs/DIELECTRIC_DESIGN.md)
 
 ## 同梱データ
 

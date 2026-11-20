@@ -1,0 +1,15 @@
+Alg075: a = 10.0 A, columns T e h, eV^-1 A^-1
+   11.0 eV  candidate  3.6267e-03  6.5595e-03 -2.9328e-03   published  5.2019e-03  8.7117e-03 -3.5098e-03
+   16.0 eV  candidate  1.6517e-02  3.2637e-04  1.6191e-02   published  1.6670e-02  5.6258e-03  1.1045e-02
+   30.0 eV  candidate  6.8570e-04 -1.4350e-03  2.1207e-03   published  6.9605e-04  1.5602e-04  5.4004e-04
+   60.0 eV  candidate  7.2590e-05 -2.9729e-04  3.6988e-04   published  7.3743e-05  3.3741e-05  4.0002e-05
+Ala025: a = 10.0 A, columns T e h, eV^-1 A^-1
+   11.0 eV  candidate  5.3897e-03  6.7469e-03 -1.3572e-03   published  5.9461e-03  7.5918e-03 -1.6457e-03
+   16.0 eV  candidate  2.4520e-02  4.2035e-03  2.0317e-02   published  2.4598e-02  6.5702e-03  1.8028e-02
+   30.0 eV  candidate  1.1667e-03 -6.3184e-04  1.7986e-03   published  1.1718e-03  1.5494e-04  1.0169e-03
+   60.0 eV  candidate  1.0738e-04 -1.3182e-04  2.3921e-04   published  1.0795e-04  3.3042e-05  7.4905e-05
+Al2osc: a = 10.0 A, columns T e h, eV^-1 A^-1
+   11.0 eV  candidate  4.3777e-03  2.9869e-03  1.3908e-03   published  4.4915e-03  3.2793e-03  1.2123e-03
+   16.0 eV  candidate  1.0411e-02  2.4523e-03  7.9586e-03   published  1.0662e-02  3.8098e-03  6.8522e-03
+   30.0 eV  candidate  4.7955e-03 -3.7011e-04  5.1656e-03   published  4.7989e-03  2.4053e-05  4.7748e-03
+   60.0 eV  candidate  6.3746e-05 -8.2228e-05  1.4597e-04   published  6.4255e-05  4.2601e-07  6.3829e-05

@@ -41,3 +41,13 @@ python benchmarks/compare_queels_fixed_depth.py --reference-dir <QUEELS-XPSの�
 ```
 
 2026-11-20 の比較では、分散のあるAlで両方の運動量指定が不合格でした。合成入力3件で行った追試には、候補式が参照出力と一致した条件と許容幅を記録しています。[事前登録試験と結果](../docs/QUEELS_DISPERSION_TEST.md)
+
+追試の予測コード（参照ソフトの値を除いた派生版）、凍結した予測、評価用のスクリプトは `queels_prereg/` にあります。予測の再現と、手元の QUEELS-XPS の出力による再評価の手順を記しています。[事前登録試験の再実行](queels_prereg/README.md)
+
+## 原著の図との比較
+
+`paper_figures/` には、原著の図3・5・8を式(20)の誘電関数で計算するコード、図から読み取った値、比較点ごとの結果があります。本パッケージの振動子モデルとは別の計算です。[比較点ごとの結果](paper_figures/RESULTS.md)・[計算と読取りの方法](paper_figures/README.md)
+
+## 数値の参照値の生成
+
+`numerics/` には、段階4aの回帰試験の参照値を多倍長で生成するスクリプトがあります。実行には mpmath が必要で、通常のテストでは使いません。

@@ -101,5 +101,6 @@ class FixedDepthApplicabilityTests(unittest.TestCase):
         self.assertIn("applicability.checked_envelope", verification["checked_envelope"])
         figures = verification["published_figures"]
         self.assertIn("attempted to reproduce", figures)
-        self.assertIn("are to be added to docs/VALIDATION.md before release", figures)
-        self.assertNotIn("within figure-reading uncertainty", figures)
+        self.assertIn("Of 84 comparison points, 37 are within reading uncertainty, "
+                      "10 are outside and 37 depend on width assumptions", figures)
+        self.assertIn("benchmarks/paper_figures/RESULTS.md", figures)
