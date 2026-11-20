@@ -11,7 +11,7 @@ Keisuke Sato は xpsloss のコードを MIT、自作文書を CC BY 4.0 で提�
 
 ## 文書中の引用
 
-文書には A. Cohen Simonsen, F. Yubero, S. Tougaard, Phys. Rev. B **56**, 1612 (1997) の式(1)、(13)–(17)を検証用に組み直した転記と、図3・5・8（Table I の幅を含む）から読み取った少数の値、QUEELS-XPS v2.1 User's Guide の短い語句と頁・図表への参照がある。図の画像、切り抜き、重ね描きは同梱しない。引用部分の権利は各権利者に帰属し、出典を示して引用した第三者の素材は本プロジェクトの CC BY 4.0 の対象外である。[式の対応表 §4.1](docs/M1_EQUATION_MAP.md)・[幅の規約と出典](docs/DIELECTRIC_DESIGN.md)
+文書には A. Cohen Simonsen, F. Yubero, S. Tougaard, Phys. Rev. B **56**, 1612 (1997) の式(1)、(13)–(17)を検証用に組み直した転記と、図3・5・8から読み取った少数の値と、Table I の線幅5組の転記（`benchmarks/paper_figures/generate.py` と関連文書）、QUEELS-XPS v2.1 User's Guide の短い語句と頁・図表への参照がある。図の画像、切り抜き、重ね描きは同梱しない。引用部分の権利は各権利者に帰属し、出典を示して引用した第三者の素材は本プロジェクトの CC BY 4.0 の対象外である。[式の対応表 §4.1](docs/M1_EQUATION_MAP.md)・[幅の規約と出典](docs/DIELECTRIC_DESIGN.md)
 
 ## 同梱データ
 
