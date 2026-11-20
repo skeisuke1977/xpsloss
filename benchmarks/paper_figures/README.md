@@ -2,7 +2,7 @@
 
 対象は A. Cohen Simonsen, F. Yubero & S. Tougaard, “Quantitative model of electron energy loss in XPS”, *Phys. Rev. B* **56**, 1612–1619 (1997)。図3（p. 1616）、図5(a,b)（p. 1617）、図8（p. 1618）の比較点を収録した。線幅の出典は p. 1615 の Table I。[原著](https://doi.org/10.1103/PhysRevB.56.1612)
 
-ソース配布のルートで Python、NumPy、SciPy を使って実行する。省略時の出力先はこのフォルダーである。
+ソース配布のルートで Python、NumPy、SciPy を使って実行する。`--out` にはディレクトリを指定する。中の `comparison.csv` と `RESULTS.md` は上書きする。引数を省くと同梱の2ファイルを書き直す。照合だけなら `--check` を使う。
 
 ```sh
 python benchmarks/paper_figures/generate.py --out reproduced
@@ -10,7 +10,7 @@ python benchmarks/paper_figures/generate.py --check
 python -m unittest discover -s tests -p test_paper_figures.py
 ```
 
-[readings.csv](readings.csv) が読取りの入力、[comparison.csv](comparison.csv) と [RESULTS.md](RESULTS.md) が生成物である。`--check` は一時ディレクトリで両方を再生成し、配布版とバイト単位で照合する。終了0は両方一致、1は不一致を示す。Windows PowerShell 5.1 の `>` は UTF-16 に変換するため、保存には `--out` を使う。全表の生成には通常環境で約48秒かかるため、定例試験では代表点を再計算し、全体のバイト照合はこのコマンドで行う。
+[readings.csv](readings.csv) が読取りの入力、[comparison.csv](comparison.csv) と [RESULTS.md](RESULTS.md) が生成物である。`--check` は一時ディレクトリで両方を再生成し、配布版とバイト単位で照合する。終了0は両方一致、1は不一致を示す。`--check` の標準出力には2ファイルそれぞれの一致・不一致が表示される。全表の生成には通常環境で約48秒かかるため、定例試験では代表点を再計算し、全体のバイト照合はこのコマンドで行う。
 
 図・パネル・E₀・深さ・成分・量・損失エネルギーで一つの比較点を特定する。ピーク高さと位置は別の点として数える。高さと損失固定値の単位は eV⁻¹ Å⁻¹、ピーク位置は eV。各運動量の `*_grid` は精密化前の格子ピーク、`*_margin` は |計算値 − 読取り値| − 読取り誤差で、正なら誤差外である。
 

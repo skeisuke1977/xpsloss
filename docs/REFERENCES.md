@@ -20,6 +20,8 @@ https://doi.org/10.1103/PhysRevB.56.1612
 
 バルクの式(1)、半無限媒質と正孔を含む式(13)-(17)、深さ平均・スペクトルへの接続が重要。数式抽出には崩れがあるため、本体の実装前に原PDF画像との照合が必要。
 
+（2026-11-20 追記）式(1)–(20)の原ページ画像を2担当が独立に転記した。式(13)–(17)の対応表と、法線出射の式レビューAは M1_EQUATION_MAP.md に記録した。
+
 ## R3. マニュアル Version 2.1
 
 S. Tougaard, F. Yubero, “QUEELS-XPS: Quantitative Analysis of Electron Energy Loss in XPS Spectra”, User's Guide, Version 2.1。論文庫キー `Tougaard2011` の年はp.2の著作権表示（2001–2011）の末年に基づく。刊行日の明記はない。
@@ -130,7 +132,7 @@ F. Yubero, J. M. Sanz, B. Ramskov, S. Tougaard, “Model for quantitative analys
 
 論文庫キー `Yubero1996b`。https://doi.org/10.1103/PhysRevB.53.9719
 
-R2（1997年原著）の参考文献5。ε(k,ω) = ε(k∥,ω) の近似とその理由（p. 9721）、振動子ELFと分散の式(30)、(31)、実部の式(32)を確認した。式(32)の分子が分散入りの ħ²ω0ik² であることは原画像で確かめた。QUEELS-XPS v2.1 の出力はこの分子と一致しない（[QUEELS_DISPERSION_TEST.md](QUEELS_DISPERSION_TEST.md)）。
+R2（1997年原著）の参考文献5。ε(k,ω) = ε(k∥,ω) の近似とその理由（p. 9721）、振動子ELFと分散の式(30)、(31)、実部の式(32)を確認した。式(32)の分子が分散入りの ħ²ω0ik² であることは原画像で確かめた。合成3入力の追試では、式(32)を使う計算は各入力で少なくとも1成分が許容幅を超えた。分散前のエネルギーを実部の分子に使う候補式は、試験した条件で全3成分が許容幅に入った。内部実装は未確認である。 [追試結果](QUEELS_DISPERSION_TEST.md)
 
 ## R16. REELSモデルの実験による検証
 

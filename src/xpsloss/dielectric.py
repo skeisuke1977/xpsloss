@@ -189,7 +189,9 @@ def _removed_kk_band(energy, gap, resonance, strength, width, settings):
 
 
 def _retained_kk_band(energy, gap, resonance, strength, width, settings):
-    """Integrate [gap, infinity) in x=gap/u when the resonance is below the gap."""
+    """Integrate the retained band in x = gap/u for a sub-gap center or an
+    overdamped line with a low relaxation scale.
+    """
     r, w, s = resonance / gap, width / gap, energy / gap
     relative_spacing = (gap - resonance) / gap
     prefactor = (2 / math.pi) * (strength / gap / gap) * w

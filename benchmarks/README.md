@@ -16,7 +16,7 @@ python -m xpsloss validate benchmarks/inputs/al_elfdb_v1.0.bulk.json
 python -m xpsloss bulk benchmarks/inputs/al_elfdb_v1.0.bulk.json --out runs/al-elfdb-bulk
 ```
 
-`*.bulk.json` は、任意の動作確認条件として初期運動エネルギー1000 eV、損失格子1–100 eV（1 eV刻み）を指定します。バルクモデルは屈折率と内殻励起補正の `ac`、`bc` を使いません。QUEELS-XPSの数値出力との比較は別途行います。
+`*.bulk.json` は、任意の動作確認条件として初期運動エネルギー1000 eV、損失格子1–100 eV（1 eV刻み）を指定します。バルクモデルは屈折率と内殻励起補正の `ac`、`bc` を使いません。固定深さのAlで行ったQUEELS-XPS v2.1との比較条件と結果は、下の「参照ソフトとの比較」に記します。
 
 実行結果の `run.json` の `config.provenance` には `source_id`、`reference_input`、`run_conditions_source`、`strength_basis` が記録されます。任意の `scope_note` と `raw_file_sha256` も保存されます。実行設定に来歴を付ける場合、強度区分は `absolute_eV2` が必須です。設定の解析では申告された値の区分、型と書式を検証します。参照先ファイルを開かないため、別ディレクトリに移した設定も読み込めます。同梱の入力記録と原本のハッシュの照合はテストで行います。
 
@@ -33,12 +33,16 @@ al, = source.materials
 
 ## 参照ソフトとの比較（M2-1）
 
-`compare_queels_fixed_depth.py` は、利用者が手元で計算した QUEELS-XPS の出力を読み、[M2_FIRST_CASE.md](../docs/M2_FIRST_CASE.md) §4.2 で事前に固定した基準で M2-1 の結果と比べます。出力するのは差の指標だけです。参照ソフトの出力は同梱せず、公開もしません（[NOTICES.md](../NOTICES.md)）。
+`compare_queels_fixed_depth.py` は、利用者が手元で計算した QUEELS-XPS の出力を読み、[M2_FIRST_CASE.md](../docs/M2_FIRST_CASE.md) §4.2 で事前に固定した基準で M2-1 の結果と比べます。JSON には差の指標、合否、比較条件、参照ファイルの SHA-256 が入ります。参照ソフトの出力は同梱せず、公開もしません（[NOTICES.md](../NOTICES.md)）。
+
+6つの参照ファイルを同じフォルダーに置き、そのパスを環境変数 `QUEELS_EXPORT_DIR` に設定します。ファイル名は `K_XPS_{成分}_Al_1000_0_q1_n{点数}.m` です。成分は `T`、`e`、`h`、点数は `1000` と `2000` です。
 
 ```powershell
 $env:PYTHONPATH = 'src'
-python benchmarks/compare_queels_fixed_depth.py --reference-dir <QUEELS-XPSの出力フォルダー> --out comparison.json
+python benchmarks/compare_queels_fixed_depth.py --reference-dir "$env:QUEELS_EXPORT_DIR" --out comparison.json
 ```
+
+`--out` には新しいファイル名を指定します。比較が完了すると終了コードは0です。各運動量指定の合否は JSON の `choices` にある `pass` で確認します。
 
 2026-11-20 の比較では、分散のあるAlで両方の運動量指定が不合格でした。合成入力3件で行った追試には、候補式が参照出力と一致した条件と許容幅を記録しています。[事前登録試験と結果](../docs/QUEELS_DISPERSION_TEST.md)
 

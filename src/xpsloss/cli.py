@@ -1,4 +1,6 @@
-"""Noninteractive CLI. stdout is JSON; errors are JSON on stderr."""
+"""Noninteractive CLI. Commands return JSON on stdout and report errors as JSON on stderr.
+Help and version output are plain text.
+"""
 
 import argparse
 from dataclasses import asdict
@@ -64,13 +66,16 @@ def capabilities():
         "unsupported_physics_model_id": MODEL_ID,
         "xps_fixed_depth": {
             "model_id": FIXED_DEPTH_MODEL_ID,
-            "scope": "fixed depth, normal emission from a gapless material",
+            "scope": "positive fixed depth, 0 degrees from the surface normal, gapless material",
             "supported": ["surface_losses", "vacuum_losses", "core_hole", "electron_hole_interference"],
             "unsupported_physics": list(FIXED_DEPTH_UNSUPPORTED_PHYSICS),
             "implements": "Based on Eqs. (13)-(17) of Simonsen, Yubero & Tougaard (1997) with the causal "
                           "Drude-Lindhard response; epsilon momentum chosen explicitly",
             "verification": {
-                "internal_tests": "I1-I8 of docs/M2_FIRST_CASE.md",
+                "internal_tests": (
+                    "I1-I8 are documented in docs/M2_FIRST_CASE.md. "
+                    "I5 includes code review and the reference charge-linearity check."
+                ),
                 "epsilon_momentum": {
                     "k_parallel": "Independent numerical route I3 checked all finite-depth terms for "
                                   "dispersionless and dispersive inputs.",
@@ -119,7 +124,7 @@ def build_parser():
     p.add_argument("--version", action="version", version=__version__)
     sub = p.add_subparsers(dest="command", required=True, parser_class=JSONParser)
     cap = sub.add_parser("capabilities")
-    cap.add_argument("--json", action="store_true", help="output is always JSON")
+    cap.add_argument("--json", action="store_true", help="Print the capabilities as JSON (default).")
     val = sub.add_parser("validate")
     val.add_argument("config")
     for name in ("bulk", "elf", "dielectric", "xps-fixed-depth"):
@@ -130,7 +135,7 @@ def build_parser():
             child.add_argument("--q-inv-A", dest="q_inv_A", type=float, default=0.0,
                                help="wavevector in inverse angstrom; default 0 (optical limit)")
         if name == "xps-fixed-depth":
-            child.add_argument("--depth-A", required=True, type=float, help="creation depth in angstrom")
+            child.add_argument("--depth-A", required=True, type=float, help="positive creation depth in angstrom")
             child.add_argument("--epsilon-momentum", required=True, choices=EPSILON_MOMENTA)
             child.add_argument("--hole-charge", type=float, default=1.0, help="charge in units of +e")
             child.add_argument("--theta-deg", type=float, default=0.0,

@@ -2,8 +2,8 @@
 
 Run python benchmarks/numerics/generate_references_4a_followup2.py. Combine the
 two oscillators over one common complex denominator at 80 decimal digits. For
-a 1 eV gap subtract the removed band's direct KK integral. Inputs are the
-binary64 coordinates of the indicated zero-based fu1_cancel_pair.py trials.
+a 1 eV gap subtract the removed band's direct KK integral. The generator reconstructs the
+binary64 inputs for zero-based trials 2, 3, 50 and 151 using random seed 1.
 """
 import math
 import random

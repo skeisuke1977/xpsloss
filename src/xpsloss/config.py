@@ -91,7 +91,10 @@ def parse_config(obj, input_sha256=""):
     keys(obj, ["material", "electron_energy_eV", "loss_grid_eV"],
          ["model", "integration", "provenance"], label="config")
     if obj.get("model", MODEL_ID) != MODEL_ID:
-        raise ValueError(f"unsupported model; only {MODEL_ID!r} is implemented")
+        raise ValueError(
+            f"Unsupported input configuration model. Expected {MODEL_ID!r}. "
+            "The CLI subcommand selects the calculation model."
+        )
     mat = obj["material"]
     keys(mat, ["name", "gap_eV", "oscillators"], label="material")
     if not isinstance(mat["oscillators"], list) or not mat["oscillators"]:

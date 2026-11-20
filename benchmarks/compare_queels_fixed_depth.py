@@ -3,7 +3,8 @@
 The acceptance rule is the one fixed in docs/M2_FIRST_CASE.md section 4.2 before any
 comparison. This script contains no reference data: it reads the user's own QUEELS-XPS
 output files from a directory given on the command line (they are not distributed,
-see NOTICES.md) and writes difference metrics only.
+see NOTICES.md). The JSON report contains comparison metrics, verdicts, run conditions
+and reference-file hashes. It omits the reference value tables.
 
 Usage (repository root, PYTHONPATH=src):
     python benchmarks/compare_queels_fixed_depth.py --reference-dir DIR --out RESULT.json
