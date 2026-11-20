@@ -133,6 +133,19 @@ class FixedDepthPhysicsTests(unittest.TestCase):
             for name in COMPONENTS:
                 np.testing.assert_allclose(getattr(a, name), getattr(b, name), rtol=1e-8, atol=1e-12)
 
+    def test_small_cartesian_surface_coefficients(self):
+        # Independent epsilon-polynomial references in generate_references_4f.py.
+        # Re C nearly vanishes at S=1.5; Im R is small near a large bulk pole.
+        for t, width, index, part, ref in (
+                (math.sqrt(105.), 3e-7, 2, "real", 3.01615238848569e-14),
+                (math.nextafter(15., 0.), 3e-18, 1, "imag", 5.000000000000005e-19)):
+            with self.subTest(loss=t, width=width):
+                mat = Material("synthetic", 0, (Oscillator(15, 180, width),))
+                values, estimates = fixed._coefficients(mat, t, np.array([0.]), 1e-9)
+                error = abs(getattr(values[index][0], part) - ref)
+                self.assertLessEqual(error, 1e-9 * abs(ref))
+                self.assertLessEqual(error, estimates[index][int(part == "imag")][0] + math.ulp(ref))
+
     def test_refining_adjacent_panels_preserves_their_shared_boundary(self):
         # Split close to the bulk peak, forcing adaptive refinements on both
         # sides of the same endpoint. Eq. (1) is an independent integral in q.

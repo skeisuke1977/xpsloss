@@ -126,6 +126,21 @@ class DielectricTests(unittest.TestCase):
         result = negative_inverse_dielectric_function(mat, energies)
         np.testing.assert_allclose(result.real, reference, rtol=0, atol=1e-13)
 
+    def test_closed_form_cancellation_far_below_retained_band(self):
+        # Direct 80-digit retained-band references, generate_references_4f.py.
+        for gap, width, ref in ((100., 2., -0.9563953489728481), (1e6, 2., -0.957558681830804),
+                                (1e7, 30., -0.3633802276341375), (1e7, 100., 1.1220659077703434)):
+            with self.subTest(gap=gap, width=width):
+                mat = Material("synthetic", gap, (Oscillator(15, gap**3 / 10, width),))
+                try:
+                    value = negative_inverse_dielectric_closed_form(mat, 0)
+                except DielectricConvergenceError:
+                    if gap == 100.:
+                        raise
+                else:
+                    self.assertAlmostEqual(value.real, ref, delta=max(1e-9, 1e-7 * abs(ref)))
+                    self.assertEqual(value.imag, 0)
+
     def test_overdamped_oscillator_recovers_static_normalization(self):
         mat = Material("synthetic", 1, (Oscillator(2, 10, 1e9),))
         reference = retained_kk(mat, 0, 0)

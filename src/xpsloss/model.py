@@ -9,6 +9,7 @@ The finite-q oscillator dispersion is a model assumption, not measured data.
 
 from dataclasses import dataclass
 from decimal import Decimal, localcontext
+from fractions import Fraction
 import math
 
 import numpy as np
@@ -130,7 +131,23 @@ def _oscillator_energy(oscillator, q):
     return oscillator.energy_eV + oscillator.dispersion * HBAR2_OVER_2ME_EV_A2 * q**2
 
 
-def _oscillator_response(osc, t, q, *, for_real_sum=False):
+def _exact_oscillator_sum(material, loss, q):
+    """Real and imaginary S at the supplied binary64 coordinates, before rounding."""
+    t = Fraction(float(loss))
+    recoil = Fraction(HBAR2_OVER_2ME_EV_A2) * Fraction(float(q))**2
+    real = imag = Fraction(0)
+    for osc in material.oscillators:
+        if osc.strength_eV2:
+            center = Fraction(osc.energy_eV) + Fraction(osc.dispersion) * recoil
+            delta = (center - t) * (center + t)
+            damping = Fraction(osc.width_eV) * t
+            weight = Fraction(osc.strength_eV2) / (delta**2 + damping**2)
+            real += weight * delta
+            imag += weight * damping
+    return real, imag
+
+
+def _oscillator_response(osc, t, q, *, for_real_sum=False, with_detuning_error=False):
     """E4b, using the same factored detuning for both parts of the reciprocal."""
     with np.errstate(over="ignore", divide="ignore", invalid="ignore", under="ignore"):
         shift = osc.dispersion * HBAR2_OVER_2ME_EV_A2 * q**2 if osc.dispersion else 0.0
@@ -156,9 +173,17 @@ def _oscillator_response(osc, t, q, *, for_real_sum=False):
         delta = distance * ((osc.energy_eV + shift) + t)
         damping = osc.width_eV * t
         response = osc.strength_eV2 / (delta - 1j * damping)
+        if with_detuning_error and osc.dispersion:
+            # Only the cancelled part of (W-T)+shift needs an extra
+            # allowance. Decimal-reconstructed distances are rounded once.
+            cancelled = np.minimum(shift, np.maximum(t - osc.energy_eV, 0.0))
+            delta_error = (RECIPROCAL_ROUNDOFF * cancelled) * ((osc.energy_eV + shift) + t)
+            relative = np.where(uncertain, 0.0, delta_error / np.hypot(delta, damping))
     bad = ~(np.isfinite(delta) & np.isfinite(damping) & np.isfinite(response))
     if np.any(bad):
         raise NumericalConvergenceError(f"oscillator response outside numerical range at {_first_loss(t, bad)}")
+    if with_detuning_error:
+        return response, relative if osc.dispersion else 0.0
     return response
 
 
@@ -251,7 +276,16 @@ def _bulk_line(osc, e, t, epsabs, epsrel, limit):
         return 0.5 * elf(shift - peak, shift)
 
     def log_panel(left, right):
-        if left < right:
+        if left == lo and right == hi and e - t < BULK_EDGE_FRACTION * e:
+            # log(s_hi/s_lo) = 4 asinh(sqrt((E-T)/T)). Keep this span
+            # independent of rounding of alpha and of the two endpoints.
+            span = 4 * math.asinh(math.sqrt(e - t) / math.sqrt(t))
+            def from_lower(u):
+                shift = lo * math.exp(u)
+                return 0.5 * elf(shift - peak, shift)
+
+            parts.append((from_lower, 0.0, span))
+        elif left < right:
             parts.append((log_integrand, math.log(left), math.log(right)))
 
     left, right = max(lo, peak / NEARBY_FACTOR), min(hi, NEARBY_FACTOR * peak)

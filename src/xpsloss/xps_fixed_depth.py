@@ -10,7 +10,7 @@ from scipy.special import roots_legendre
 from .dielectric import dielectric_response
 from .model import (
     BOHR_RADIUS_A, DEFAULT_REL, FLANK_RATIO, FLOAT_EPSILON, HBAR2_OVER_2ME_EV_A2, NEARBY_FACTOR,
-    Material, NumericalConvergenceError, _PanelLimitError, _accuracy, _first_loss, _loss_point,
+    Material, NumericalConvergenceError, _PanelLimitError, _accuracy, _exact_oscillator_sum, _first_loss, _loss_point,
     _oscillator_response, finite_number,
 )
 
@@ -20,7 +20,7 @@ PANEL_ROUNDOFF = 32 * FLOAT_EPSILON  # Floor on the embedded 32-node quadrature 
 LOG_K_PANEL_SPAN = 1  # Bound the ratio of k endpoints to e before adaptive refinement.
 MOMENTUM_ULPS = 4  # exp(log k), squaring and the offset in k_parallel².
 FIXED_ABS = 1e-12  # Default absolute quadrature error in inverse angstrom per eV.
-FIXED_REL = 1e-9  # Default adaptive quadrature target relative to the total cross section.
+FIXED_REL = 1e-9  # Relative target for each returned cross section.
 
 FIXED_DEPTH_MODEL_ID = "simonsen1997_fixed_depth_v0"
 EPSILON_MOMENTA = ("k_parallel", "k_total")
@@ -69,30 +69,68 @@ def _parallel_limits(energy, loss):
             plus * np.sqrt(plus * (3*s - r)) / scale)
 
 
-def _oscillator_sum(material, loss, q):
+def _oscillator_sum(material, loss, q, *, with_error=False):
     """E4b: compute S = 1 − 1/ε directly, retaining weak responses near ε = 1."""
     response = np.zeros_like(q, dtype=complex)
-    magnitude = np.zeros_like(q, dtype=float)
+    real_error = np.zeros_like(q, dtype=float)
+    imag_error = np.zeros_like(q, dtype=float)
+    rounding = REFLECTION_ROUNDOFF * len(material.oscillators)
+    t = np.broadcast_to(loss, q.shape)
     for osc in material.oscillators:
         if osc.strength_eV2:
-            term = _oscillator_response(osc, np.broadcast_to(loss, q.shape), q)
+            term, detuning_error = _oscillator_response(osc, t, q, with_detuning_error=True)
             response += term
-            magnitude += abs(term)
-    # A dispersionless surface pole can be unresolved even when every
-    # momentum panel is broad. Test cancellation in the full denominator.
-    roundoff = (REFLECTION_ROUNDOFF * len(material.oscillators)) * (2 + magnitude)
-    if np.any(roundoff > DEFAULT_REL * abs(2 - response)):
-        raise FixedDepthConvergenceError(
-            f"fixed-depth surface oscillator sum, loss_eV={loss:g}: unresolved reflection denominator")
-    return response
+            # For a perturbed detuning, |dS| <= |S| |dD/D| to first
+            # order, whereas Im S is proportional to 1/|D|^2. The line
+            # evaluator reconstructs D before its relative error reaches 1e-10.
+            real_error += rounding * abs(term.real) + 2 * detuning_error * abs(term)
+            imag_error += (rounding + 3 * detuning_error) * term.imag
+    return (response, real_error, imag_error) if with_error else response
 
 
-def _term_integrands(k, material, loss, energy, depth, omega, q_offset):
+def _coefficients(material, loss, q, epsrel):
+    """Return S, R and C and absolute errors of their Cartesian components."""
+    s, sr, si = _oscillator_sum(material, loss, q, with_error=True)
+    rounding = REFLECTION_ROUNDOFF * len(material.oscillators)
+    d = abs(2 - s)
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        r = s / (2 - s)
+        # Im R = 2 Im S / |2-S|^2, including at a large bulk response.
+        r.imag = (s.imag / d) * (2 / d)
+        c = 2 * s - r
+        relative = (sr + si) / d
+        # R = 2/(2-S) - 1. Bound the input perturbation and rounding
+        # of the real projection of the complex division separately.
+        rr = (2 / d) * relative / (1 - relative) + rounding * abs(r)
+        ri = ((2 / d) * (si / d) + abs(r.imag) * relative * (2 + relative)) / (1 - relative)**2
+        ri += rounding * abs(r.imag)
+        cr = 2*sr + rr + rounding*abs(c.real)
+        ci = 2*si + ri + rounding*abs(c.imag)
+        uncertain = ~(relative < 1)
+        target = epsrel / 8
+        for value, error in ((s.real, sr), (s.imag, si), (r.real, rr), (r.imag, ri), (c.real, cr), (c.imag, ci)):
+            uncertain |= ~(error <= target * abs(value))
+    if np.any(uncertain):
+        # The gapless coefficients are rational in the binary64 inputs.
+        # Round once per component, including the final subtraction in C.
+        for row in np.argwhere(uncertain):
+            i = tuple(row)
+            x, y = _exact_oscillator_sum(material, loss, q[i])
+            norm = (2-x)**2 + y**2
+            if not norm:
+                raise FixedDepthConvergenceError(f"surface pole at loss_eV={loss:g}")
+            rx, ry = (x*(2-x) - y**2)/norm, 2*y/norm
+            s[i], r[i], c[i] = complex(x, y), complex(rx, ry), complex(2*x-rx, 2*y-ry)
+        for value, er, ei in ((s, sr, si), (r, rr, ri), (c, cr, ci)):
+            er[uncertain] = FLOAT_EPSILON * abs(value.real[uncertain])
+            ei[uncertain] = FLOAT_EPSILON * abs(value.imag[uncertain])
+    return (s, r, c), ((sr, si), (rr, ri), (cr, ci))
+
+
+def _term_integrands(k, coefficients, energy, depth, omega):
     """Eight real densities in d ln(k_parallel), in the order of M1 §4.2."""
-    response = _oscillator_sum(material, loss, np.hypot(k, q_offset))
-    bulk = -response                            # 1/ε − 1
-    reflection = response / (2 - response)      # (ε − 1)/(ε + 1)
-    surface = 2 * response - reflection         # (ε − 1)(ε + 2)/[ε(ε + 1)]
+    (response, reflection, surface), (ds, dr, dc) = coefficients
+    bulk = -response
 
     denom = omega**2 + k**2
     plus = (omega + 1j*k) / denom
@@ -109,14 +147,34 @@ def _term_integrands(k, material, loss, energy, depth, omega, q_offset):
     term_13a = measure * response.imag / denom
     # The A and B terms of 13b form a conjugate pair. C supplies |1-u|².
     term_13b = pref * (2 * bulk.imag * (plus**2 * diff).imag + bulk.real * norm)
-    term_14 = pref * (bulk * (plus*diff + minus*mixed)).real / omega
+    weight_14 = plus*diff + minus*mixed
+    term_14 = pref * (bulk * weight_14).real / omega
     term_15_T1 = pref * surface.real * norm
     term_15_T2 = pref * (surface * minus * mixed).real / omega
     term_15_T3 = pref * (reflection * minus**2 * diff.conj()).real
     term_16_e = -pref * (reflection * plus * (2j*k/denom - plus*u)).real
     term_16_h = -pref * (reflection * plus * u).real / omega
-    return np.stack((term_13a, term_13b, term_14, term_15_T1, term_15_T2,
-                     term_15_T3, term_16_e, term_16_h), axis=-1)
+    terms = np.stack((term_13a, term_13b, term_14, term_15_T1, term_15_T2,
+                      term_15_T3, term_16_e, term_16_h), axis=-1)
+
+    def projected(weight, coefficient, uncertainty):
+        # A small real projection can result from two large products.
+        return (abs(weight.real)*uncertainty[0] + abs(weight.imag)*uncertainty[1]
+                + PANEL_ROUNDOFF * abs(weight) * abs(coefficient))
+
+    errors = np.stack((
+        measure * ds[1] / denom,
+        pref * (2 * (ds[1] * abs((plus**2 * diff).imag)
+                     + PANEL_ROUNDOFF * abs(bulk.imag) * abs(diff) / denom)
+                + (ds[0] + PANEL_ROUNDOFF * abs(bulk.real)) * norm),
+        pref * projected(weight_14, bulk, ds) / omega,
+        pref * dc[0] * norm,
+        pref * projected(minus*mixed, surface, dc) / omega,
+        pref * projected(minus**2 * diff.conj(), reflection, dr),
+        pref * projected(plus * (2j*k/denom - plus*u), reflection, dr),
+        pref * projected(plus*u, reflection, dr) / omega,
+    ), axis=-1)
+    return terms, errors
 
 
 def _line_positions(material, loss, q_offset, upper_squared):
@@ -206,20 +264,21 @@ def _log_breakpoints(material, loss, lower, upper, q_offset):
     return np.unique(points)
 
 
-def _panel_integrals(edges_left, edges_right, integrand, error_weights):
+def _panel_integrals(edges_left, edges_right, integrand):
     mid = (edges_left + edges_right) / 2
     half = (edges_right - edges_left) / 2
 
     def integrate(rule):
         nodes, weights = rule
-        values = integrand(np.exp(mid[:, None] + half[:, None] * nodes))
-        weighted = (half[:, None] * weights)[..., None] * values
-        return weighted.sum(axis=1), abs(weighted).sum(axis=1)
+        values, errors = integrand(np.exp(mid[:, None] + half[:, None] * nodes))
+        weights = (half[:, None] * weights)[..., None]
+        weighted = weights * values
+        return weighted.sum(axis=1), abs(weighted).sum(axis=1), (weights * errors).sum(axis=1)
 
-    low, _ = integrate(_LOW_RULE)
-    high, magnitude = integrate(_HIGH_RULE)
-    uncertainty = np.maximum(abs(high - low), PANEL_ROUNDOFF * magnitude)
-    return high, uncertainty @ error_weights
+    low, _, _ = integrate(_LOW_RULE)
+    high, magnitude, arithmetic = integrate(_HIGH_RULE)
+    uncertainty = arithmetic + np.maximum(abs(high - low), PANEL_ROUNDOFF * magnitude)
+    return high, uncertainty
 
 
 def _integrate_loss(material, loss, energy, depth, omega, q_offset, lower, upper,
@@ -230,36 +289,51 @@ def _integrate_loss(material, loss, energy, depth, omega, q_offset, lower, upper
     if len(left) > limit:
         raise _PanelLimitError(f"integration limit too small for {len(left)} initial oscillator panels")
 
+    constant = None
+    if not any(o.dispersion and o.strength_eV2 for o in material.oscillators):
+        constant = _coefficients(material, loss, np.zeros(1), epsrel)
+
     def integrand(k):
-        return _term_integrands(k, material, loss, energy, depth, omega, q_offset)
+        coefficients = constant or _coefficients(material, loss, np.hypot(k, q_offset), epsrel)
+        return _term_integrands(k, coefficients, energy, depth, omega)
 
     # The same estimate covers individual terms, both unit-charge components
     # and their user-weighted sum, even when signed contributions cancel.
     error_weights = np.ones(len(TERM_NAMES))
     hole_terms = [2, 4, 7]
     error_weights[hole_terms] = max(1, abs(charge))
-    values, errors = _panel_integrals(left, right, integrand, error_weights)
+    electron_terms = [0, 1, 3, 5, 6]
+    values, errors = _panel_integrals(left, right, integrand)
     while True:
         terms = values.sum(axis=0)
-        error = errors.sum()
-        no_hole = terms[[0, 1, 3, 5, 6]].sum()
-        total = no_hole + charge * terms[hole_terms].sum()
-        if error <= _accuracy(total, epsabs, epsrel):
+        term_error = errors.sum(axis=0)
+        error = term_error @ error_weights
+        no_hole = terms[electron_terms].sum()
+        hole = terms[hole_terms].sum()
+        total = no_hole + charge * hole
+        term_budget = _accuracy(terms, epsabs, epsrel)
+        electron_budget, hole_budget, total_budget = _accuracy(np.array([no_hole, hole, total]), epsabs, epsrel)
+        if (np.all(term_error <= term_budget) and term_error[electron_terms].sum() <= electron_budget
+                and term_error[hole_terms].sum() <= hole_budget and error <= total_budget):
             return terms, error
         if len(left) >= limit:
             raise FixedDepthConvergenceError(
                 f"fixed-depth oscillator sum quadrature failed to converge at loss_eV={loss:g} "
                 f"with {limit} panels (estimated error {error:.3g})")
-        i = errors.argmax()
+        # Refine where the largest fraction of a requested budget is spent.
+        priority = np.max(errors / term_budget, axis=1)
+        priority = np.maximum(priority, errors[:, electron_terms].sum(axis=1) / electron_budget)
+        priority = np.maximum(priority, errors[:, hole_terms].sum(axis=1) / hole_budget)
+        i = np.maximum(priority, (errors @ error_weights) / total_budget).argmax()
         midpoint = (left[i] + right[i]) / 2
         children_left = np.array([left[i], midpoint])
         children_right = np.array([midpoint, right[i]])
-        child_values, child_errors = _panel_integrals(children_left, children_right, integrand, error_weights)
+        child_values, child_errors = _panel_integrals(children_left, children_right, integrand)
         right[i], values[i], errors[i] = midpoint, child_values[0], child_errors[0]
         left = np.append(left, midpoint)
         right = np.append(right, children_right[1])
         values = np.vstack((values, child_values[1]))
-        errors = np.append(errors, child_errors[1])
+        errors = np.vstack((errors, child_errors[1]))
 
 
 def _finite_real(value, label):
@@ -275,8 +349,9 @@ def effective_cross_section_fixed_depth(
     """Fixed-depth K for a scalar or 1-D loss grid, returned as 1-D arrays.
 
     θ is measured from the surface normal. All hole terms refer to unit charge.
-    epsabs is in eV^-1 Å^-1, epsrel is relative to total, and limit caps panels
-    per loss. The quadrature estimate excludes material and model uncertainties.
+    epsabs is in inverse angstrom per eV, epsrel applies to each term and
+    component, and limit caps panels per loss. quadrature_error includes
+    coefficient rounding and excludes material and model uncertainties.
     Every nonzero line must be resolved on the momentum grid. Strength alone
     cannot bound its peak or its effect on the coupled surface denominator.
     """

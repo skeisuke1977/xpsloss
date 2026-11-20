@@ -2,6 +2,7 @@
 
 import cmath
 from dataclasses import dataclass, replace
+from fractions import Fraction
 import math
 
 import numpy as np
@@ -10,7 +11,7 @@ from scipy.optimize import brentq
 
 from .model import (COORDINATE_ULPS, DEFAULT_ABS, DEFAULT_REL, FLANK_RATIO, FLOAT_EPSILON, NEARBY_FACTOR,
                     RECIPROCAL_ROUNDOFF, SUM_ROUNDOFF, Material, NumericalConvergenceError,
-                    _PanelLimitError, _accuracy, _first_loss, _loss_coordinates, _loss_point, _oscillator_energy,
+                    _PanelLimitError, _accuracy, _exact_oscillator_sum, _first_loss, _loss_coordinates, _loss_point, _oscillator_energy,
                     _oscillator_response, finite_number, loss_function)
 
 
@@ -274,7 +275,7 @@ def _gapped_real(lines, energy, gap, epsabs, epsrel, limit, location):
         abs_goal, rel_goal = next_goal, 0.0
 
 
-def _inverse_response(material, energies, q, epsabs, epsrel, limit):
+def _inverse_response(material, energies, q, epsabs, epsrel, limit, *, for_epsilon=False):
     real = np.full(energies.shape, -1.0)
     error = np.zeros(energies.shape)
     imag = np.zeros(energies.shape)
@@ -305,7 +306,11 @@ def _inverse_response(material, energies, q, epsabs, epsrel, limit):
         result = real + 1j * np.where(energies > gap, imag, 0.0)
     bad = ~np.isfinite(result)
     if not gap:
-        bad |= SUM_ROUNDOFF * active * magnitude > _accuracy(real, epsabs, epsrel)
+        rounding = SUM_ROUNDOFF * active * magnitude
+        if for_epsilon:
+            error = rounding
+        else:
+            bad |= rounding > _accuracy(real, epsabs, epsrel)
     if np.any(bad):
         raise DielectricConvergenceError(f"dielectric oscillator sum failed to converge at {_first_loss(energies, bad)}")
     return result, error
@@ -387,14 +392,47 @@ def dielectric_response(
     marginal = (abs(static) <= tolerance)[q_indices].reshape(t.shape)
     if np.any((t == 0) & marginal):
         raise ValueError("epsilon has a pole at zero energy for a marginal static response")
-    response, error = _inverse_response(material, t, q, epsabs, epsrel, limit)
-    if np.any(response == 0):
+    response, error = _inverse_response(material, t, q, epsabs, epsrel, limit, for_epsilon=True)
+    if material.gap_eV and np.any(response == 0):
         raise ValueError("epsilon has a pole where -1/epsilon vanishes")
-    unresolved = abs(response) <= error
-    if np.any(unresolved):
-        raise DielectricConvergenceError(f"epsilon unresolved near a zero of -1/epsilon at {_first_loss(t, unresolved)}")
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-        epsilon = -1 / response
+        epsilon = np.asarray(-1 / response)
+        radius = abs(response)
+        imag_error = RECIPROCAL_ROUNDOFF * len(material.oscillators) * abs(response.imag)
+        # epsilon_j = +/-F_j / |F|^2. Bound perturbations of the numerator
+        # and the common squared norm separately for each returned component.
+        relative = np.hypot(error, imag_error) / radius
+        norm_error = relative * (2 + relative)
+        unresolved = (norm_error >= 1) | ~np.isfinite(epsilon)
+        for part, numerator_error in ((epsilon.real, error), (epsilon.imag, imag_error)):
+            estimate = ((numerator_error / radius) / radius + abs(part) * norm_error) / (1 - norm_error)
+            estimate += FLOAT_EPSILON * abs(part)
+            unresolved |= ~(estimate <= _accuracy(part, epsabs, epsrel))
+        unresolved |= error > _accuracy(response.real, epsabs, epsrel)
+        unresolved |= imag_error > _accuracy(response.imag, epsabs, epsrel)
+    if np.any(unresolved):
+        if material.gap_eV:
+            raise DielectricConvergenceError(f"epsilon component unresolved near a zero of -1/epsilon at {_first_loss(t, unresolved)}")
+        response = np.array(response, copy=True)
+        for row in np.argwhere(unresolved):
+            i = tuple(row)
+            real, imag = _exact_oscillator_sum(material, t[i], q[i])
+            real -= 1
+            norm = real**2 + imag**2
+            if not norm:
+                raise ValueError("epsilon has a pole where -1/epsilon vanishes")
+            eps_real, eps_imag = -real / norm, imag / norm
+            try:
+                response[i] = complex(real, imag)
+                epsilon[i] = complex(eps_real, eps_imag)
+            except OverflowError as exc:
+                raise DielectricConvergenceError(f"epsilon outside numerical range at {_loss_point(t, i)}") from exc
+            for rounded, exact in ((response[i].real, real), (response[i].imag, imag),
+                                   (epsilon[i].real, eps_real), (epsilon[i].imag, eps_imag)):
+                if abs(Fraction(float(rounded)) - exact) > max(Fraction(epsabs), Fraction(epsrel) * abs(exact)):
+                    raise DielectricConvergenceError(f"epsilon rounding exceeds tolerance at {_loss_point(t, i)}")
+    if not material.gap_eV:
+        error = np.zeros(t.shape)  # Analytic F has no KK quadrature error.
     bad = ~np.isfinite(epsilon)
     if np.any(bad):
         raise DielectricConvergenceError(f"epsilon oscillator sum outside numerical range at {_first_loss(t, bad)}")
@@ -480,7 +518,11 @@ def _closed_kk_band(t, gap, center, strength, width):
         far = gap + h
         angle = 0.5 * (math.atan2(half_width, near) + math.atan2(half_width, far))
         # atan(z) = [log(1+iz) - log(1-iz)]/(2i).
-        log_ratio = math.log(math.hypot(far, half_width) / math.hypot(near, half_width))
+        near_norm = math.hypot(near, half_width)
+        if gap > 2 * center:
+            log_ratio = 0.5 * math.log1p(4 * (gap / near_norm) * (h / near_norm))
+        else:
+            log_ratio = math.log(math.hypot(far, half_width) / near_norm)
         j_p = complex(angle, 0.5 * log_ratio) / p
         j_b = j_p.conjugate()
     else:
@@ -492,18 +534,24 @@ def _closed_kk_band(t, gap, center, strength, width):
         h = gap / (gap**2 + center**2)
         atan_ratio = cmath.atan(h * difference) / difference if difference else h
         j_divided = (j_b - atan_ratio) / (p * width)
+        divided_scale = (abs(j_b) + abs(atan_ratio)) / (abs(p) * width)
     else:
         j_divided = (j_b - j_p) / (width * difference)
+        divided_scale = (abs(j_b) + abs(j_p)) / (width * abs(difference))
 
     denominator = ((center - t) * (center + t))**2 + (width * t)**2
     scale = (2 / math.pi) * strength * width / denominator
-    regular = (center**4 + (t * p)**2) * j_divided
+    coefficient = center**4 + (t * p)**2
+    regular = coefficient * j_divided
     log_term = (t / 2) * _edge_log(t, gap)
     pole = log_term - t**2 * j_b
     value = scale * (regular + pole).real
     roundoff_scale = scale * (abs(regular) + log_term + t**2 * abs(j_b))
     resonance_condition = max(1.0, center**2 / math.sqrt(denominator))
     roundoff = RECIPROCAL_ROUNDOFF * resonance_condition * roundoff_scale
+    # The divided difference already carries its inverse pole separation.
+    # Propagate its own subtraction error with the actual outer coefficient.
+    roundoff += RECIPROCAL_ROUNDOFF * scale * abs(coefficient) * divided_scale
     if not math.isfinite(roundoff) or roundoff > _accuracy(value, CLOSED_ABS, CLOSED_REL):
         raise DielectricConvergenceError("closed-form KK is ill-conditioned; use numerical KK")
     return value, roundoff
