@@ -9,7 +9,8 @@ from scipy.special import roots_legendre
 
 from .dielectric import dielectric_response
 from .model import (
-    BOHR_RADIUS_A, DEFAULT_REL, FLANK_RATIO, FLOAT_EPSILON, HBAR2_OVER_2ME_EV_A2, NEARBY_FACTOR,
+    BOHR_RADIUS_A, DEFAULT_REL, DETUNING_REL, FLANK_RATIO, FLOAT_EPSILON, HBAR2_OVER_2ME_EV_A2, NEARBY_FACTOR,
+    RECIPROCAL_ROUNDOFF,
     Material, NumericalConvergenceError, _PanelLimitError, _accuracy, _exact_oscillator_sum, _first_loss, _loss_point,
     _oscillator_response, finite_number,
 )
@@ -28,6 +29,11 @@ TERM_NAMES = ("term_13a", "term_13b", "term_14", "term_15_T1", "term_15_T2",
               "term_15_T3", "term_16_e", "term_16_h")
 _LOW_RULE = roots_legendre(16)
 _HIGH_RULE = roots_legendre(32)
+_NODES = np.concatenate((_LOW_RULE[0], _HIGH_RULE[0]))
+_ELECTRON = [0, 1, 3, 5, 6]
+_HOLE = [2, 4, 7]
+LOSS_BATCH = 8  # Share array evaluations of the initial rule across nearby loss points.
+_MIN_NORMAL = np.finfo(float).tiny
 
 
 class FixedDepthConvergenceError(NumericalConvergenceError):
@@ -88,9 +94,73 @@ def _oscillator_sum(material, loss, q, *, with_error=False):
     return (response, real_error, imag_error) if with_error else response
 
 
-def _coefficients(material, loss, q, epsrel):
+def _bounded_sum(material, loss, q):
+    """Fast E4b with a uniform bound on the detuning error over these panels."""
+    lo, hi = float(np.min(loss)), float(np.max(loss))
+    qmax = float(np.max(q))
+    q2 = q*q
+    response = np.zeros(q.shape, dtype=complex)
+    magnitude = np.zeros(q.shape)
+    largest = 0.0
+    for osc in material.oscillators:
+        if not osc.strength_eV2:
+            continue
+        w, width = osc.energy_eV, osc.width_eV
+        slope = osc.dispersion * HBAR2_OVER_2ME_EV_A2
+        # p=T-W>0, shift<=2p: (W+T+shift)<=3T and |D|>=width*T.
+        # For shift>2p use |D|>=(shift-p)*(W+T+shift). For T<=W
+        # the detuning has no subtraction of the dispersion from p.
+        relative = (RECIPROCAL_ROUNDOFF * max(1., 3*(hi-w)/width)
+                    if slope and hi > w else 0.0)
+        center_max = w + slope * qmax * qmax
+        scale = max(center_max*center_max, hi*hi, width*hi)
+        upper = 2 * scale * scale
+        lower = (width * lo) * (width * lo)
+        # Certify the range of the squared denominator and its reciprocal
+        # before using real arithmetic instead of scaled complex division.
+        if (relative >= DETUNING_REL or lower < _MIN_NORMAL or not math.isfinite(upper)
+                or osc.strength_eV2 / upper < _MIN_NORMAL
+                or not math.isfinite(osc.strength_eV2 / lower)):
+            return _oscillator_sum(material, loss, q, with_error=True)
+        shift = slope * q2
+        delta = ((w - loss) + shift) * ((w + shift) + loss)
+        damping = width * loss
+        weight = osc.strength_eV2 / (delta*delta + damping*damping)
+        real = weight * delta
+        response.real += real
+        response.imag += weight * damping
+        magnitude += abs(real)
+        largest = max(largest, relative)
+    rounding = REFLECTION_ROUNDOFF * len(material.oscillators)
+    # Sum of magnitudes is bounded by sum |Re S_i| + Im S (positive damping).
+    sr = rounding * magnitude + (2*largest) * (magnitude + response.imag)
+    si = (rounding + 3*largest) * response.imag
+    return response, sr, si
+
+
+def _exact_points(material, loss, q, points, coefficients):
+    """Replace the selected Cartesian coefficients and their rounding bounds."""
+    (s, r, c), errors = coefficients
+    losses = np.broadcast_to(loss, q.shape)
+    for row in np.argwhere(points):
+        i = tuple(row)
+        x, y = _exact_oscillator_sum(material, losses[i], q[i])
+        norm = (2-x)**2 + y**2
+        if not norm:
+            raise FixedDepthConvergenceError(f"surface pole at loss_eV={losses[i]:g}")
+        rx, ry = (x*(2-x) - y**2)/norm, 2*y/norm
+        s[i], r[i], c[i] = complex(x, y), complex(rx, ry), complex(2*x-rx, 2*y-ry)
+    for value, (er, ei) in zip((s, r, c), errors):
+        er[points] = FLOAT_EPSILON * abs(value.real[points])
+        ei[points] = FLOAT_EPSILON * abs(value.imag[points])
+
+
+def _coefficients(material, loss, q, epsrel=None, *, bounded=False):
     """Return S, R and C and absolute errors of their Cartesian components."""
-    s, sr, si = _oscillator_sum(material, loss, q, with_error=True)
+    if bounded:
+        s, sr, si = _bounded_sum(material, loss, q)
+    else:
+        s, sr, si = _oscillator_sum(material, loss, q, with_error=True)
     rounding = REFLECTION_ROUNDOFF * len(material.oscillators)
     d = abs(2 - s)
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
@@ -106,28 +176,20 @@ def _coefficients(material, loss, q, epsrel):
         ri += rounding * abs(r.imag)
         cr = 2*sr + rr + rounding*abs(c.real)
         ci = 2*si + ri + rounding*abs(c.imag)
-        uncertain = ~(relative < 1)
-        target = epsrel / 8
-        for value, error in ((s.real, sr), (s.imag, si), (r.real, rr), (r.imag, ri), (c.real, cr), (c.imag, ci)):
-            uncertain |= ~(error <= target * abs(value))
+        uncertain = ~((relative < 1) & np.isfinite(cr) & np.isfinite(ci))
+        if epsrel is not None:
+            # Standalone coefficient requests have no geometry or integral.
+            for value, error in ((s.real, sr), (s.imag, si), (r.real, rr), (r.imag, ri), (c.real, cr), (c.imag, ci)):
+                uncertain |= ~(error <= epsrel * abs(value))
+    coefficients = (s, r, c), ((sr, si), (rr, ri), (cr, ci))
     if np.any(uncertain):
-        # The gapless coefficients are rational in the binary64 inputs.
-        # Round once per component, including the final subtraction in C.
-        for row in np.argwhere(uncertain):
-            i = tuple(row)
-            x, y = _exact_oscillator_sum(material, loss, q[i])
-            norm = (2-x)**2 + y**2
-            if not norm:
-                raise FixedDepthConvergenceError(f"surface pole at loss_eV={loss:g}")
-            rx, ry = (x*(2-x) - y**2)/norm, 2*y/norm
-            s[i], r[i], c[i] = complex(x, y), complex(rx, ry), complex(2*x-rx, 2*y-ry)
-        for value, er, ei in ((s, sr, si), (r, rr, ri), (c, cr, ci)):
-            er[uncertain] = FLOAT_EPSILON * abs(value.real[uncertain])
-            ei[uncertain] = FLOAT_EPSILON * abs(value.imag[uncertain])
-    return (s, r, c), ((sr, si), (rr, ri), (cr, ci))
+        if bounded:
+            return _coefficients(material, loss, q, epsrel)
+        _exact_points(material, loss, q, uncertain, coefficients)
+    return coefficients
 
 
-def _term_integrands(k, coefficients, energy, depth, omega):
+def _term_integrands(k, coefficients, energy, depth, omega, *, select_bounds=False):
     """Eight real densities in d ln(k_parallel), in the order of M1 §4.2."""
     (response, reflection, surface), (ds, dr, dc) = coefficients
     bulk = -response
@@ -136,44 +198,58 @@ def _term_integrands(k, coefficients, energy, depth, omega):
     plus = (omega + 1j*k) / denom
     minus = plus.conj()
     # Contract conjugate phases first. Every remaining phase carries exp(-ka).
-    exponent = -k*depth - 1j*(omega*depth)
-    u = np.exp(exponent)
-    diff = -np.expm1(exponent)                  # 1 − exp(-ka − iΩa)
+    attenuation = -k * depth
+    decay = np.exp(attenuation)
+    phase = -1j * (omega * depth)
+    u = decay * np.exp(phase)
+    diff = -np.expm1(attenuation) - decay * np.expm1(phase)
     norm = abs(diff)**2 / denom
     mixed = u * diff.conj()                     # u − exp(-2ka)
 
     measure = k**2 / (math.pi * BOHR_RADIUS_A * energy)
     pref = measure / (2 * depth * omega)
-    term_13a = measure * response.imag / denom
+    w13a = measure / denom
+    term_13a = w13a * response.imag
     # The A and B terms of 13b form a conjugate pair. C supplies |1-u|².
-    term_13b = pref * (2 * bulk.imag * (plus**2 * diff).imag + bulk.real * norm)
+    w13b = 2 * (plus**2 * diff).imag
+    term_13b = pref * (bulk.imag * w13b + bulk.real * norm)
     weight_14 = plus*diff + minus*mixed
     term_14 = pref * (bulk * weight_14).real / omega
     term_15_T1 = pref * surface.real * norm
-    term_15_T2 = pref * (surface * minus * mixed).real / omega
-    term_15_T3 = pref * (reflection * minus**2 * diff.conj()).real
-    term_16_e = -pref * (reflection * plus * (2j*k/denom - plus*u)).real
-    term_16_h = -pref * (reflection * plus * u).real / omega
+    w15b = minus * mixed
+    w15c = minus**2 * diff.conj()
+    w16e = plus * (2j*k/denom - plus*u)
+    w16h = plus * u
+    term_15_T2 = pref * (surface * w15b).real / omega
+    term_15_T3 = pref * (reflection * w15c).real
+    term_16_e = -pref * (reflection * w16e).real
+    term_16_h = -pref * (reflection * w16h).real / omega
     terms = np.stack((term_13a, term_13b, term_14, term_15_T1, term_15_T2,
-                      term_15_T3, term_16_e, term_16_h), axis=-1)
+                      term_15_T3, term_16_e, term_16_h), axis=-2)
 
-    def projected(weight, coefficient, uncertainty):
-        # A small real projection can result from two large products.
-        return (abs(weight.real)*uncertainty[0] + abs(weight.imag)*uncertainty[1]
-                + PANEL_ROUNDOFF * abs(weight) * abs(coefficient))
+    def projected(weight, coefficient_size, uncertainty):
+        bound = abs(weight.real)*uncertainty[0] + abs(weight.imag)*uncertainty[1]
+        if select_bounds:
+            return bound
+        return bound + abs(weight)*coefficient_size
+
+    bulk_size = PANEL_ROUNDOFF * abs(bulk)
+    reflection_size = PANEL_ROUNDOFF * abs(reflection)
+    surface_size = PANEL_ROUNDOFF * abs(surface)
+    error13b = ds[1] * abs(w13b) + ds[0] * norm
+    if not select_bounds:
+        error13b += PANEL_ROUNDOFF * (2 * abs(bulk.imag) * abs(diff) / denom + abs(bulk.real) * norm)
 
     errors = np.stack((
-        measure * ds[1] / denom,
-        pref * (2 * (ds[1] * abs((plus**2 * diff).imag)
-                     + PANEL_ROUNDOFF * abs(bulk.imag) * abs(diff) / denom)
-                + (ds[0] + PANEL_ROUNDOFF * abs(bulk.real)) * norm),
-        pref * projected(weight_14, bulk, ds) / omega,
+        w13a * ds[1],
+        pref * error13b,
+        pref * projected(weight_14, bulk_size, ds) / omega,
         pref * dc[0] * norm,
-        pref * projected(minus*mixed, surface, dc) / omega,
-        pref * projected(minus**2 * diff.conj(), reflection, dr),
-        pref * projected(plus * (2j*k/denom - plus*u), reflection, dr),
-        pref * projected(plus*u, reflection, dr) / omega,
-    ), axis=-1)
+        pref * projected(w15b, surface_size, dc) / omega,
+        pref * projected(w15c, reflection_size, dr),
+        pref * projected(w16e, reflection_size, dr),
+        pref * projected(w16h, reflection_size, dr) / omega,
+    ), axis=-2)
     return terms, errors
 
 
@@ -267,73 +343,143 @@ def _log_breakpoints(material, loss, lower, upper, q_offset):
 def _panel_integrals(edges_left, edges_right, integrand):
     mid = (edges_left + edges_right) / 2
     half = (edges_right - edges_left) / 2
+    values, errors = integrand(np.exp(mid[:, None] + half[:, None] * _NODES))
+    split = len(_LOW_RULE[0])
 
-    def integrate(rule):
-        nodes, weights = rule
-        values, errors = integrand(np.exp(mid[:, None] + half[:, None] * nodes))
-        weights = (half[:, None] * weights)[..., None]
-        weighted = weights * values
-        return weighted.sum(axis=1), abs(weighted).sum(axis=1), (weights * errors).sum(axis=1)
+    def weighted(array, nodes, weights):
+        return half[:, None] * np.einsum("ptn,n->pt", array[..., nodes], weights)
 
-    low, _, _ = integrate(_LOW_RULE)
-    high, magnitude, arithmetic = integrate(_HIGH_RULE)
-    uncertainty = arithmetic + np.maximum(abs(high - low), PANEL_ROUNDOFF * magnitude)
-    return high, uncertainty
+    low = weighted(values, slice(None, split), _LOW_RULE[1])
+    high = weighted(values, slice(split, None), _HIGH_RULE[1])
+    magnitude = weighted(abs(values), slice(split, None), _HIGH_RULE[1])
+    high_error = weighted(errors, slice(split, None), _HIGH_RULE[1])
+    low_error = weighted(errors, slice(None, split), _LOW_RULE[1])
+    # Rounding affects both sides of the embedded difference as well as
+    # the returned high-rule value. The weights of both rules are positive.
+    quadrature = np.maximum(abs(high - low), PANEL_ROUNDOFF * magnitude)
+    arithmetic = 2 * high_error + low_error
+    return high, quadrature + arithmetic, arithmetic
+
+
+def _component_sums(terms, charge_weight):
+    """Sum termwise bounds for the two unit components and their common bound."""
+    electron = terms[..., _ELECTRON].sum(axis=-1)
+    hole = terms[..., _HOLE].sum(axis=-1)
+    return np.stack((electron, hole, electron + charge_weight * hole), axis=-1)
+
+
+def _initial_edges(material, loss, lower, upper, q_offset, limit):
+    edges = _log_breakpoints(material, loss, lower, upper, q_offset)
+    if len(edges) - 1 > limit:
+        raise _PanelLimitError(f"integration limit too small for {len(edges) - 1} initial oscillator panels")
+    return edges
+
+
+def _initial_panels(material, losses, energy, depth, omega, offsets, lower, upper, limit):
+    """Evaluate both rules for a batch of loss grids; each grid keeps its own panel boundaries."""
+    edges = [_initial_edges(material, t, lo, hi, off, limit)
+             for t, lo, hi, off in zip(losses, lower, upper, offsets)]
+    counts = [len(e) - 1 for e in edges]
+    owners = np.repeat(np.arange(len(edges)), counts)
+    loss = losses[owners, None]
+    frequency = omega[owners, None]
+    offset = offsets[owners, None]
+    dispersive = any(o.dispersion and o.strength_eV2 for o in material.oscillators)
+
+    def integrand(k):
+        q = np.hypot(k, offset) if offset.any() else k
+        coefficients = _coefficients(material, loss, q if dispersive else np.zeros_like(loss), bounded=True)
+        return _term_integrands(k, coefficients, energy, depth, frequency)
+
+    panels = _panel_integrals(np.concatenate([e[:-1] for e in edges]),
+                              np.concatenate([e[1:] for e in edges]), integrand)
+    starts = np.cumsum([0, *counts])
+    return [(e, tuple(a[start:stop] for a in panels)) for e, start, stop in zip(edges, starts, starts[1:])]
 
 
 def _integrate_loss(material, loss, energy, depth, omega, q_offset, lower, upper,
-                    charge, epsabs, epsrel, limit):
-    edges = _log_breakpoints(material, loss, lower, upper, q_offset)
+                    charge, epsabs, epsrel, limit, initial=None):
+    edges = initial[0] if initial is not None else _initial_edges(material, loss, lower, upper, q_offset, limit)
     # Refining one panel must not move either endpoint of its neighbor.
     left, right = edges[:-1].copy(), edges[1:].copy()
-    if len(left) > limit:
-        raise _PanelLimitError(f"integration limit too small for {len(left)} initial oscillator panels")
 
     constant = None
-    if not any(o.dispersion and o.strength_eV2 for o in material.oscillators):
-        constant = _coefficients(material, loss, np.zeros(1), epsrel)
-
+    constant_exact = False
+    density_budget = None
     def integrand(k):
-        coefficients = constant or _coefficients(material, loss, np.hypot(k, q_offset), epsrel)
+        nonlocal constant, constant_exact
+        if constant is None and not any(o.dispersion and o.strength_eV2 for o in material.oscillators):
+            constant = _coefficients(material, loss, np.zeros(1))
+        q = np.hypot(k, q_offset) if q_offset else k
+        coefficients = constant or _coefficients(material, loss, q)
+        if density_budget is not None and not constant_exact:
+            _, bounds = _term_integrands(k, coefficients, energy, depth, omega, select_bounds=True)
+            points = (bounds > density_budget[:, None]).any(axis=-2)
+            if np.any(points):
+                if constant is None:
+                    _exact_points(material, loss, q, points, coefficients)
+                else:
+                    _exact_points(material, loss, np.zeros(1), np.ones(1, dtype=bool), constant)
+                    constant_exact = True
         return _term_integrands(k, coefficients, energy, depth, omega)
 
     # The same estimate covers individual terms, both unit-charge components
     # and their user-weighted sum, even when signed contributions cancel.
-    error_weights = np.ones(len(TERM_NAMES))
-    hole_terms = [2, 4, 7]
-    error_weights[hole_terms] = max(1, abs(charge))
-    electron_terms = [0, 1, 3, 5, 6]
-    values, errors = _panel_integrals(left, right, integrand)
+    charge_weight = max(1, abs(charge))
+    values, errors, arithmetic = initial[1] if initial is not None else _panel_integrals(left, right, integrand)
     while True:
         terms = values.sum(axis=0)
         term_error = errors.sum(axis=0)
-        error = term_error @ error_weights
-        no_hole = terms[electron_terms].sum()
-        hole = terms[hole_terms].sum()
-        total = no_hole + charge * hole
         term_budget = _accuracy(terms, epsabs, epsrel)
-        electron_budget, hole_budget, total_budget = _accuracy(np.array([no_hole, hole, total]), epsabs, epsrel)
-        if (np.all(term_error <= term_budget) and term_error[electron_terms].sum() <= electron_budget
-                and term_error[hole_terms].sum() <= hole_budget and error <= total_budget):
-            return terms, error
+        component_budget = _accuracy(_component_sums(terms, charge), epsabs, epsrel)
+        component_error = _component_sums(term_error, charge_weight)
+        if np.all(term_error <= term_budget) and np.all(component_error <= component_budget):
+            return terms, component_error[-1]
+        if initial is not None:
+            # Tighten the oscillator-specific bounds before choosing any
+            # expensive point recomputations or subdividing the batch's mesh.
+            initial = None
+            values, errors, arithmetic = _panel_integrals(left, right, integrand)
+            continue
+        if density_budget is None:
+            rounding = arithmetic.sum(axis=0)
+            budgets = np.concatenate((term_budget, component_budget))
+            estimates = np.concatenate((term_error, component_error))
+            rounding = np.concatenate((rounding, _component_sums(rounding, charge_weight)))
+            quadrature = np.maximum(estimates - rounding, 0.0)
+            affected = (estimates > budgets) & ((rounding >= budgets) | (quadrature < budgets))
+            if np.any(affected):
+                # Allocate the remaining budget after the embedded estimate to
+                # terms of affected outputs only. If quadrature also exceeds
+                # its budget, its panels will need refinement independently.
+                residual = np.where(quadrature < budgets, budgets - quadrature, budgets)
+                allowance = np.where(affected, residual, np.inf)
+                remaining, component_left = allowance[:8], allowance[8:]
+                remaining[_ELECTRON] = np.minimum(remaining[_ELECTRON], component_left[0] / len(_ELECTRON))
+                remaining[_HOLE] = np.minimum(remaining[_HOLE], component_left[1] / len(_HOLE))
+                total_share = component_left[2] / (len(_ELECTRON) + charge_weight * len(_HOLE))
+                density_budget = np.minimum(remaining, total_share) / (3 * (edges[-1] - edges[0]))
+                values, errors, arithmetic = _panel_integrals(left, right, integrand)
+                continue
         if len(left) >= limit:
             raise FixedDepthConvergenceError(
                 f"fixed-depth oscillator sum quadrature failed to converge at loss_eV={loss:g} "
-                f"with {limit} panels (estimated error {error:.3g})")
+                f"with {limit} panels (estimated error {component_error[-1]:.3g})")
         # Refine where the largest fraction of a requested budget is spent.
         priority = np.max(errors / term_budget, axis=1)
-        priority = np.maximum(priority, errors[:, electron_terms].sum(axis=1) / electron_budget)
-        priority = np.maximum(priority, errors[:, hole_terms].sum(axis=1) / hole_budget)
-        i = np.maximum(priority, (errors @ error_weights) / total_budget).argmax()
+        priority = np.maximum(priority, np.max(_component_sums(errors, charge_weight) / component_budget, axis=1))
+        i = priority.argmax()
         midpoint = (left[i] + right[i]) / 2
         children_left = np.array([left[i], midpoint])
         children_right = np.array([midpoint, right[i]])
-        child_values, child_errors = _panel_integrals(children_left, children_right, integrand)
+        child_values, child_errors, child_arithmetic = _panel_integrals(children_left, children_right, integrand)
         right[i], values[i], errors[i] = midpoint, child_values[0], child_errors[0]
         left = np.append(left, midpoint)
         right = np.append(right, children_right[1])
         values = np.vstack((values, child_values[1]))
         errors = np.vstack((errors, child_errors[1]))
+        arithmetic[i] = child_arithmetic[0]
+        arithmetic = np.vstack((arithmetic, child_arithmetic[1]))
 
 
 def _finite_real(value, label):
@@ -396,12 +542,21 @@ def effective_cross_section_fixed_depth(
             raise FixedDepthConvergenceError(f"fixed-depth at {_loss_point(grid, (i,))}: {exc}") from exc
         terms = np.empty((len(TERM_NAMES), grid.size))
         error = np.empty(grid.size)
+        batch = None
         for i, t in enumerate(grid):
             try:
                 with np.errstate(over="raise", divide="raise", invalid="raise"):
+                    if i % LOSS_BATCH == 0 and grid.size > 1:
+                        block = slice(i, i + LOSS_BATCH)
+                        try:
+                            batch = _initial_panels(material, grid[block], energy, depth, omega[block],
+                                                    offsets[block], lower[block], upper[block], limit)
+                        except (ArithmeticError, NumericalConvergenceError, _PanelLimitError):
+                            # Replay individually to report the original loss and grid index.
+                            batch = None
                     terms[:, i], error[i] = _integrate_loss(
                         material, t, energy, depth, omega[i], offsets[i], lower[i], upper[i],
-                        charge, epsabs, epsrel, limit)
+                        charge, epsabs, epsrel, limit, batch[i % LOSS_BATCH] if batch is not None else None)
             except _PanelLimitError as exc:
                 raise ValueError(f"fixed-depth at {_loss_point(grid, (i,))}: {exc}") from exc
             except (ArithmeticError, NumericalConvergenceError) as exc:
