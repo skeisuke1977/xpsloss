@@ -59,7 +59,7 @@ class FollowupTests(unittest.TestCase):
         mat = Material("synthetic", 7.89193759455495, tuple(Oscillator(*o) for o in STATIC))
         ref = -0.11194158142913157
         diag = dielectric_diagnostics(mat)
-        self.assertEqual(diag.static_status, "stable")
+        self.assertEqual(diag.static_sign, "negative")
         self.assertAlmostEqual(diag.static_negative_inverse_epsilon, ref, delta=1e-7*abs(ref))
         r = dielectric_response(mat, [0, 3])
         self.assertAlmostEqual(r.negative_inverse_epsilon[0].real, ref, delta=1e-7*abs(ref))

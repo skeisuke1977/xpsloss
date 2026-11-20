@@ -46,6 +46,7 @@ class CLITests(unittest.TestCase):
             self.assertEqual(result["point_count"], 160)
             manifest = json.loads((output / "run.json").read_text())
             self.assertEqual(manifest["status"], "complete")
+            self.assertNotIn("applicability", manifest)
             self.assertEqual(manifest["input_file"], input_arg)
             self.assertEqual(manifest["input_sha256"], hashlib.sha256(EXAMPLE.read_bytes()).hexdigest())
             self.assertEqual(manifest["units"]["diimfp_per_A_eV"], "angstrom^-1 eV^-1")
@@ -86,6 +87,10 @@ class CLITests(unittest.TestCase):
             self.assertEqual(manifest["input_file"], str(path))
             self.assertEqual(manifest["input_sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
             diagnostics = manifest["diagnostics"]
+            self.assertNotIn("applicability", manifest)
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertEqual(diagnostics["static_sign"], "negative")
+            self.assertNotIn("static_status", diagnostics)
             self.assertFalse(diagnostics["electron_energy_used"])
             self.assertEqual(diagnostics["q_inv_A"], 0.4)
             self.assertEqual(diagnostics["high_energy_tail"], "untruncated_oscillator_model")
@@ -95,6 +100,7 @@ class CLITests(unittest.TestCase):
             self.assertEqual(diagnostics["sub_gap_pole_status"], "located")
             self.assertTrue(0 < diagnostics["sub_gap_pole_eV"] < 14.25)
             self.assertTrue(manifest["warnings"])
+            self.assertEqual(json.loads(r.stdout)["warning_count"], len(manifest["warnings"]))
             parse_config(manifest["config"])
             data = np.loadtxt(output / "dielectric.csv", delimiter=",", skiprows=1)
             self.assertEqual(data.shape, (160, 6))
@@ -184,6 +190,7 @@ class CLITests(unittest.TestCase):
             manifest = json.loads((output / "run.json").read_text(encoding="utf-8"))
             self.assertNotIn("gap_edge_policy", manifest["diagnostics"])
             self.assertEqual(manifest["warnings"], [])
+            self.assertEqual(json.loads(r.stdout)["warning_count"], 0)
 
     def test_unknown_and_invalid_config_rejected(self):
         base = json.loads(EXAMPLE.read_text())

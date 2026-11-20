@@ -22,8 +22,30 @@ from .model import (BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, MODEL_ID, FIXED_DEPTH_U
                     NumericalConvergenceError, UNSUPPORTED_PHYSICS, bulk_diimfp, finite_number, loss_function)
 from .xps_fixed_depth import (
     EPSILON_MOMENTA, FIXED_DEPTH_MODEL_ID, TERM_NAMES,
-    effective_cross_section_fixed_depth,
+    FixedDepthResult, effective_cross_section_fixed_depth,
 )
+
+
+# Both bounds come from the same independent calculation with unscaled oscillators.
+_FIXED_DEPTH_ENDPOINT_CHECK = {
+    "source": "tests/test_applicability_envelope.py::EnvelopeEndpointTests::test_terms_and_components_at_both_energies",
+    "basis": "At 1000 and 4000 eV, independent route I3 checked all eight terms up to max(T)/E0 = 0.1 "
+             "at depth 10 angstrom with k_parallel, using the same oscillators with dispersion 0 and 1. "
+             "For dispersive k_total no independent check covers all finite-depth terms at any E0.",
+}
+FIXED_DEPTH_CHECKED_ENVELOPE = {
+    "max_loss_over_E0": {
+        "max": 0.1,
+        **_FIXED_DEPTH_ENDPOINT_CHECK,
+        "supplementary": "tests/test_xps_fixed_depth.py::FixedDepthPhysicsTests::test_i2_dispersionless_analytic_bulk",
+    },
+    "electron_energy_eV": {
+        "min": 1000.0, "max": 4000.0,
+        **_FIXED_DEPTH_ENDPOINT_CHECK,
+        "supplementary": "tests/test_xps_fixed_depth.py::FixedDepthPhysicsTests::"
+                         "test_i8_energy_and_depth_scaling_and_unit_conversion",
+    },
+}
 
 
 class JSONParser(argparse.ArgumentParser):
@@ -49,11 +71,22 @@ def capabilities():
                           "Drude-Lindhard response; epsilon momentum chosen explicitly",
             "verification": {
                 "internal_tests": "I1-I8 of docs/M2_FIRST_CASE.md",
+                "epsilon_momentum": {
+                    "k_parallel": "Independent numerical route I3 checked all finite-depth terms for "
+                                  "dispersionless and dispersive inputs.",
+                    "k_total": "Checked the Eq. (13a) bulk identity, the deep limit at normal emission, "
+                               "and a second implementation of the same closed forms. For dispersive inputs, "
+                               "there is no independent check of all finite-depth terms from the original "
+                               "charge and potential equations. For dispersionless inputs the two momentum "
+                               "choices coincide, so I3 covers both.",
+                },
+                "checked_envelope": "See applicability.checked_envelope in the xps-fixed-depth run.json.",
                 "independent_reviews": "Separate agents reviewed the equations and implementation. "
                                        "There has been no human peer review.",
-                "published_figures": "A separate reviewer agent reproduced Figs. 3, 5 and 8 within "
-                                     "figure-reading uncertainty using independent code with the 1997 paper's "
-                                     "Eq. (20) dielectric function, outside this package's oscillator model.",
+                "published_figures": "A separate reviewer agent attempted to reproduce Figs. 3, 5 and 8 "
+                                     "using independent code with the 1997 paper's Eq. (20) dielectric "
+                                     "function, outside this package's oscillator model. Per-point results "
+                                     "are to be added to docs/VALIDATION.md before release.",
                 "queels_xps_v2_1": (
                     "At 1000 eV and normal emission, differences for the tested dispersionless synthetic Al "
                     "input were 0.1-0.4% of peak total. Both momentum choices failed the preregistered "
@@ -102,6 +135,43 @@ def build_parser():
     return p
 
 
+def _fixed_depth_applicability(result: FixedDepthResult):
+    energy = result.electron_energy_eV
+    ratio = float(result.loss_eV.max()) / energy
+    ratio_limit = FIXED_DEPTH_CHECKED_ENVELOPE["max_loss_over_E0"]["max"]
+    energy_limits = FIXED_DEPTH_CHECKED_ENVELOPE["electron_energy_eV"]
+    low, high = energy_limits["min"], energy_limits["max"]
+    departures = []
+    if ratio > ratio_limit:
+        departures.append(f"max_loss_over_E0={ratio} exceeds {ratio_limit:g} by {ratio - ratio_limit:.9g}")
+    if energy < low:
+        departures.append(f"electron_energy_eV={energy} is below {low:g} eV by {low - energy:.9g} eV")
+    elif energy > high:
+        departures.append(f"electron_energy_eV={energy} exceeds {high:g} eV by {energy - high:.9g} eV")
+
+    applicability = {
+        "max_loss_over_E0": ratio, "electron_energy_eV": energy, "epsilon_momentum": result.epsilon_momentum,
+        "assumptions": {
+            "velocity": "constant_at_initial_kinetic_energy", "kinematics": "nonrelativistic",
+            "trajectory": "rectilinear", "core_hole": "static", "small_loss": "T << E0",
+            "pair_creation": "sudden_at_t0", "core_hole_lifetime": "infinite",
+            "surface": "specular_reflection_model",
+            "source": "Simonsen et al. (1997) p. 1613 and Eq. (3); docs/M1_EQUATION_MAP.md section 2",
+        },
+        "checked_envelope": FIXED_DEPTH_CHECKED_ENVELOPE,
+        "within_checked_envelope": not departures,
+        "note": "Only max(T)/E0 and E0 are compared with the bounds. Depth, material, line widths, "
+                "dispersion, hole charge and the lower end of the loss grid are not part of this envelope, "
+                "and for k_total with dispersive oscillators no independent check covers all finite-depth "
+                "terms. The bounds summarize numerical checks at discrete inputs. Being inside them "
+                "establishes neither accuracy for arbitrary inputs nor physical validity.",
+    }
+    warnings = [f"Outside the checked envelope: {departure}. The numerical checks in this repository "
+                "do not cover this input, and physical applicability is not verified."
+                for departure in departures]
+    return applicability, warnings
+
+
 def run(args):
     if args.command == "capabilities":
         emit(capabilities())
@@ -144,6 +214,7 @@ def run(args):
             hole_charge=args.hole_charge, epsilon_momentum=args.epsilon_momentum,
             epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
         )
+        applicability, warnings = _fixed_depth_applicability(result)
         columns = ("loss_eV", "total", "no_hole", "hole", *TERM_NAMES, "quadrature_error")
         table = np.column_stack([getattr(result, name) for name in columns])
         header, output_name = ",".join(columns), "xps_fixed_depth.csv"
@@ -153,7 +224,7 @@ def run(args):
         diagnostics = {
             "depth_A": result.depth_A, "path_length_A": result.path_length_A,
             "theta_deg": result.theta_deg, "hole_charge": result.hole_charge,
-            "epsilon_momentum": result.epsilon_momentum, "velocity": "nonrelativistic",
+            "epsilon_momentum": result.epsilon_momentum, "kinematics": "nonrelativistic",
             "delta_terms": "pi*delta(omega_perp) parts of Eqs. (14)-(16) contribute nothing for loss > 0 "
                            "and are omitted; only loss > 0 is accepted",
             "normalization": "per unit path length in the solid, including vacuum terms",
@@ -234,12 +305,15 @@ def run(args):
     if args.command == "dielectric":
         manifest["references"].append("https://doi.org/10.1209/0295-5075/90/10003")
     elif args.command == "xps-fixed-depth":
+        manifest["applicability"] = applicability
         manifest["unsupported_physics"] = list(FIXED_DEPTH_UNSUPPORTED_PHYSICS)
         manifest["references"].append("https://doi.org/10.1103/PhysRevB.56.1612")
     (args.out / "run.json").write_text(json.dumps(manifest, ensure_ascii=False, allow_nan=False, indent=2) + "\n", encoding="utf-8")
-    emit({"status": "complete", "model_id": model_id, "output_dir": str(args.out.resolve()),
-          "files": [output_name, "run.json"], "point_count": len(grid),
-          "queels_xps_equivalence": False})
+    success = {"status": "complete", "model_id": model_id, "output_dir": str(args.out.resolve()),
+               "files": [output_name, "run.json"], "point_count": len(grid), "queels_xps_equivalence": False}
+    if "warnings" in manifest:
+        success["warning_count"] = len(manifest["warnings"])
+    emit(success)
     return 0
 
 

@@ -218,9 +218,11 @@ class FixedDepthCLITests(unittest.TestCase):
             self.assertIn("https://doi.org/10.1103/PhysRevB.56.1612", manifest["references"])
             self.assertEqual(parse_config(manifest["config"]).material, AL)
             diag = manifest["diagnostics"]
+            self.assertNotIn("velocity", diag)
+            self.assertEqual(manifest["schema_version"], 1)
             for key, expected in (("depth_A", 10), ("path_length_A", 10), ("theta_deg", 0),
                                   ("hole_charge", 0.5), ("epsilon_momentum", "k_parallel"),
-                                  ("velocity", "nonrelativistic")):
+                                  ("kinematics", "nonrelativistic")):
                 self.assertEqual(diag[key], expected)
             self.assertEqual(set(diag["component_definitions"]), {"total", "no_hole", "hole"})
             csv = out / "xps_fixed_depth.csv"

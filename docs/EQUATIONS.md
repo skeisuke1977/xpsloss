@@ -116,6 +116,8 @@ E4a を上半平面に延長すると、\(\operatorname{Im}F(q,z)\) は \(\opera
 
 `simonsen1997_fixed_depth_v0` は、ギャップのない材料で、表面法線からの出射角 \(\theta=0\)、生成深さ \(a>0\)、損失 \(0<T=\hbar\omega<E_0\) を扱う。非相対論の \(\hbar v=2\sqrt{HE_0}\) を使うと、\(\Omega_0=\omega_\perp=T/(\hbar v)\) となる。正の損失では式(14)–(16)の \(\delta(\omega_\perp)\) の寄与はゼロで、正孔因子には \(i/\omega_\perp\) が残る。[Simonsen ら (1997) 式(13)–(17)](https://doi.org/10.1103/PhysRevB.56.1612)
 
+原著は、t = 0 に電子と正孔が同じ点に突然生じ、正孔は静止して寿命は無限、電子は直線の軌道を一定の速度で進むとする。速度を一定とみなせるのは、損失が E0 に比べて無視できるときである（p. 1613左、式(3)）。表面は鏡面反射の模型で扱う（p. 1613右）。本実装はこれに従い、速度を初期運動エネルギーから非相対論の式 \(\hbar v=2\sqrt{HE_0}\) で一度だけ決める。式(17)の運動量の上下限は \(E_0-T\) を含むが、速度は変えない。計算できる範囲 \(0<T<E_0\) と、数値で照合した範囲は別である。CLI の `run.json` の `applicability` は、格子の \(\max T/E_0\)、これらの仮定、照合した範囲（[VALIDATION.md](VALIDATION.md) の「段階4b」）を記録し、範囲の外では警告を出す。
+
 `xps_fixed_depth.effective_cross_section_fixed_depth` は、式(17)の上下限を `_parallel_limits` で求め、`_term_integrands` で 13a、13b、14、15-T1/T2/T3、16-e/h を \(\ln k_\parallel\) 上で積分する。E4b の評価点は `epsilon_momentum` で明示する。`k_parallel` は \(q=k_\parallel\)、`k_total` は \(q=\sqrt{k_\parallel^2+\Omega_0^2}\) である。分散がある場合、13a が法線で E2 に一致するのは後者である。[式の対応表 §4.2、Q1](M1_EQUATION_MAP.md)
 
 媒質・正孔・真空の各項はすべて固体内経路長 \(x=a\) 当たりの eV⁻¹ Å⁻¹ で返す。13a の積分 \(k_\parallel\,dk_\parallel/(\Omega_0^2+k_\parallel^2)\) は無次元である。残りの項でも面積次元の核と \(k_\parallel\,dk_\parallel\) の積は無次元で、追加の前因子 \(1/(2x\omega_\perp)\) も無次元となる。単位は共通の \(1/(\pi a_0 E_0)\) で決まる。単位電荷の正孔差分 `hole` は 14、15-T2、16-h の符号付き和で、`total = no_hole + hole_charge * hole` とする。検査条件は [M2 内部検査 I1–I8](M2_FIRST_CASE.md#41-内部の検査参照ソフトなしで自動テストにする) にある。

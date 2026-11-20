@@ -72,11 +72,18 @@ class GapEdgePoint:
 
 @dataclass(frozen=True)
 class DielectricDiagnostics:
-    """Static classification and the real-axis pole diagnostic at one q."""
+    """Static sign and real-axis pole diagnostics for the oscillator representation.
+
+    At the given q, static_sign compares Re[-1/epsilon(q, 0)] to the tolerance
+    τ0 (static_sign_tolerance): below -τ0 is negative, within ±τ0 is marginal,
+    and above τ0 is positive. A positive sign means epsilon of this representation
+    has an upper-half-plane pole, so dielectric_response rejects the response.
+    This diagnostic does not test material stability.
+    """
 
     static_negative_inverse_epsilon: float
     static_sign_tolerance: float
-    static_status: str
+    static_sign: str
     gap_edge_exclusion_eV: float
     sub_gap_pole_eV: float | None
     sub_gap_pole_status: str
@@ -373,7 +380,8 @@ def dielectric_response(
     unique_q, q_indices = np.unique(q, return_inverse=True)
     static, tolerance = _static_response(material, unique_q, epsabs, epsrel, limit)
     if np.any(static > tolerance):
-        raise ValueError("positive static -1/epsilon gives epsilon a pole in the upper half-plane")
+        raise ValueError("Re[-1/epsilon(q, 0)] exceeds the static sign tolerance: "
+                         "epsilon of the oscillator representation has a pole in the upper half-plane")
     marginal = (abs(static) <= tolerance)[q_indices].reshape(t.shape)
     if np.any((t == 0) & marginal):
         raise ValueError("epsilon has a pole at zero energy for a marginal static response")
@@ -441,14 +449,14 @@ def dielectric_diagnostics(
     static, tolerance = float(static), float(tolerance)
     pole, pole_status = None, "absent"
     if abs(static) <= tolerance:
-        static_status, pole_status = "marginal", "marginal_static"
+        static_sign, pole_status = "marginal", "marginal_static"
     elif static > tolerance:
-        static_status = "unstable"
+        static_sign = "positive"
     else:
-        static_status = "stable"
+        static_sign = "negative"
         if exclusion:
             pole, pole_status = _sub_gap_pole(material, q, exclusion, settings)
-    return DielectricDiagnostics(static, tolerance, static_status, exclusion, pole, pole_status,
+    return DielectricDiagnostics(static, tolerance, static_sign, exclusion, pole, pole_status,
                                  band, near_edge_points)
 
 

@@ -191,7 +191,7 @@ class DielectricTests(unittest.TestCase):
         q = 0.4
         expected = brentq(lambda energy: retained_kk(mat, energy, q), 0, gap - 0.001)
         diagnostics = dielectric_diagnostics(mat, q)
-        self.assertEqual(diagnostics.static_status, "stable")
+        self.assertEqual(diagnostics.static_sign, "negative")
         self.assertEqual(diagnostics.sub_gap_pole_status, "located")
         self.assertAlmostEqual(diagnostics.sub_gap_pole_eV, expected, delta=1e-9)
         near_edge = Material("synthetic", 3.3, (Oscillator(100, 1, 1),))
@@ -211,7 +211,7 @@ class DielectricTests(unittest.TestCase):
                 with self.assertRaisesRegex(DielectricConvergenceError, "ill-conditioned"):
                     negative_inverse_dielectric_closed_form(mat, 10)
 
-    def test_vacuum_static_pole_and_unstable_epsilon(self):
+    def test_vacuum_static_pole_and_positive_static_sign(self):
         vacuum = Material("synthetic", 8, (Oscillator(10, 0, 1),))
         response = dielectric_response(vacuum, 8)
         self.assertEqual(response.negative_inverse_epsilon, -1 + 0j)
@@ -222,10 +222,11 @@ class DielectricTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "epsilon has a pole"):
             dielectric_response(pole, 0)
         dielectric_response(pole, 1)
-        unstable = Material("synthetic", 0, (Oscillator(10, 110, 1),))
-        self.assertAlmostEqual(negative_inverse_dielectric_function(unstable, 0).real, 0.1)
+        positive = Material("synthetic", 0, (Oscillator(10, 110, 1),))
+        self.assertAlmostEqual(negative_inverse_dielectric_function(positive, 0).real, 0.1)
+        self.assertEqual(dielectric_diagnostics(positive).static_sign, "positive")
         with self.assertRaisesRegex(ValueError, "upper half-plane"):
-            dielectric_response(unstable, 1)
+            dielectric_response(positive, 1)
 
     def test_metal_closed_form_and_rounded_al_input(self):
         energies = np.array([1e-3, 0.1, 1.0, 15.6])
@@ -253,7 +254,7 @@ class DielectricTests(unittest.TestCase):
                 mat = Material("synthetic_drude", 0, tuple(Oscillator(e, a, 1, 0.5) for e, a in pairs))
                 response = dielectric_response(mat, [0.1, 5], q_inv_A=0)
                 self.assertTrue(np.all(response.epsilon.imag > 0))
-                self.assertEqual(dielectric_diagnostics(mat).static_status, "marginal")
+                self.assertEqual(dielectric_diagnostics(mat).static_sign, "marginal")
                 with self.assertRaisesRegex(ValueError, "pole at zero energy"):
                     dielectric_response(mat, [0, 5], q_inv_A=0)
                 # A finite-q static point is allowed on a broadcast grid with marginal q=0 at T>0.
@@ -277,7 +278,7 @@ class DielectricTests(unittest.TestCase):
                 result = dielectric_response(mat, energies)
                 np.testing.assert_allclose(result.epsilon, 1 / expected, rtol=1e-8, atol=0)
                 self.assertLess(1e-8, float(inverse_static))
-                self.assertEqual(dielectric_diagnostics(mat).static_status, "stable")
+                self.assertEqual(dielectric_diagnostics(mat).static_sign, "negative")
 
     def test_optical_sum_rules_gapless_closed_forms(self):
         mat = Material("synthetic", 0, (Oscillator(10, 20, 0.01), Oscillator(5, 5, 30, 0.8)))
