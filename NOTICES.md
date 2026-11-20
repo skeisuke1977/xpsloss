@@ -4,7 +4,7 @@ Keisuke Sato は xpsloss のコードを MIT、自作文書を CC BY 4.0 で提�
 
 | 区分 | 対象 | ライセンス |
 | --- | --- | --- |
-| コード・実行例・ビルド設定 | `src/**`、`tests/**`、`benchmarks/**/*.py`、`examples/**`、`pyproject.toml`、`MANIFEST.in`、文書中の自作コード例 | MIT |
+| コード・実行例・ビルド設定 | `src/**`、`tests/**`、`benchmarks/**/*.py`、`examples/**`、`pyproject.toml`、`MANIFEST.in`、`.github/**`、`.gitattributes`、`.gitignore`、文書中の自作コード例 | MIT |
 | 自作文書と自作の計算結果 | ルートの Markdown ファイル、`docs/**`、`benchmarks/**/*.md`、`benchmarks/queels_prereg/predictions_a10.txt`、`benchmarks/paper_figures/comparison.csv` の計算値、`readings.csv` の読取り値以外の列（図・パネル・条件・読取り誤差の見積り）、`CITATION.cff` の自作部分 | CC BY 4.0。コード例は上記の MIT に従う |
 | 原著の図から読み取った値 | `benchmarks/paper_figures/readings.csv` の読取り値と、`comparison.csv`・`RESULTS.md` に再掲した読取り値 | 下の「文書中の引用」のとおり、出典を示した引用として扱い、本プロジェクトの CC BY 4.0 の対象外とする |
 | 第三者データ | `benchmarks/sources/**`、`benchmarks/inputs/*elfdb*` | Pauly、Yubero、Tougaard による CC BY 4.0 |
