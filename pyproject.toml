@@ -1,11 +1,24 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "xpsloss-starter"
-version = "0.0.1"
-description = "Independent, limited bulk dielectric-loss calculation starter"
+name = "xpsloss"
+dynamic = ["version"]
+description = "Dielectric response, bulk electron energy losses, and fixed-depth cross sections for normal-emission XPS"
+readme = "README.md"
+license = "MIT AND CC-BY-4.0"
+license-files = ["LICENSE", "NOTICES.md"]
+authors = [{name = "Keisuke Sato"}]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24", "scipy>=1.10"]
 
@@ -14,3 +27,6 @@ xpsloss = "xpsloss.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "xpsloss.__version__"}

@@ -17,6 +17,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+from scipy.integrate import trapezoid
 
 from xpsloss.config import load_config
 from xpsloss.xps_fixed_depth import effective_cross_section_fixed_depth
@@ -116,11 +117,11 @@ def main(argv=None):
             tol = K_UNCERTAINTY * u + GLOBAL_FRACTION * t_scale
             diff = np.abs(mine - k_ref[name])
             worst = int(np.argmax(diff / tol))
-            area_ref = float(np.trapezoid(k_ref[name], loss_w))
-            area_unc = float(np.trapezoid(k_unc[name], loss_w))
-            area_mine = float(np.trapezoid(mine, loss_w))
+            area_ref = float(trapezoid(k_ref[name], loss_w))
+            area_unc = float(trapezoid(k_unc[name], loss_w))
+            area_mine = float(trapezoid(mine, loss_w))
             area_tol = K_UNCERTAINTY * abs(area_ref - area_unc) + GLOBAL_FRACTION * float(
-                np.trapezoid(k_ref["total"], loss_w))
+                trapezoid(k_ref["total"], loss_w))
             verdicts[name] = {
                 "pointwise_pass": bool(np.all(diff <= tol)),
                 "points_failing": int(np.sum(diff > tol)),

@@ -1,6 +1,6 @@
-# ベンチマークの固定入力
+# xpsloss のベンチマーク入力
 
-`inputs/` に出典ごとの入力記録4件と、データ集のSi・Au・Alを使ったバルク実行設定3件を収録しています。入力記録には原典の位置、利用条件、材料パラメータを保存しています。マニュアルのSiは相対強度で、絶対強度への換算手順が未確認のため実行設定はありません。[出典、帰属表示、和則の検算](../docs/BENCHMARK_INPUTS.md)
+`inputs/` にELFデータ集のSi・Au・Alの入力記録3件と、それぞれのバルク実行設定を収録しています。入力記録には原典の位置、利用条件、材料パラメータを保存しています。[出典、帰属表示、和則の検算](../docs/BENCHMARK_INPUTS.md)
 
 `sources/zenodo6024064_v1.0/` は Pauly、Yubero、Tougaard のデータ集 Version 1.0 の原本です。入力記録のSHA-256は改行を含む原本のバイト列に対応します。[データ集（DOI 10.5281/zenodo.6024064）](https://doi.org/10.5281/zenodo.6024064)、[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
@@ -37,7 +37,7 @@ al, = source.materials
 
 ```powershell
 $env:PYTHONPATH = 'src'
-python benchmarks/compare_queels_fixed_depth.py --reference-dir <QUEELS-XPSの出力フォルダー> --out work/comparisons/m2_1_al_1000_0.json
+python benchmarks/compare_queels_fixed_depth.py --reference-dir <QUEELS-XPSの出力フォルダー> --out comparison.json
 ```
 
-2026-11-20 の比較の結果は、分散のあるAlで不合格でした。原因の特定は [QUEELS_DISPERSION_TEST.md](../docs/QUEELS_DISPERSION_TEST.md) にあります。
+2026-11-20 の比較では、分散のあるAlで両方の運動量指定が不合格でした。合成入力3件で行った追試には、候補式が参照出力と一致した条件と許容幅を記録しています。[事前登録試験と結果](../docs/QUEELS_DISPERSION_TEST.md)

@@ -22,12 +22,13 @@ class CLITests(unittest.TestCase):
         env = dict(os.environ)
         env["PYTHONPATH"] = str(ROOT / "src")
         return subprocess.run([sys.executable, "-m", "xpsloss", *map(str, args)],
-                              env=env, capture_output=True, text=True, check=False)
+                              cwd=ROOT, env=env, capture_output=True, text=True, check=False)
 
     def test_capabilities_and_validation(self):
         r = self.call("capabilities", "--json")
         self.assertEqual(r.returncode, 0, r.stderr)
         cap = json.loads(r.stdout)
+        self.assertEqual(cap["package"], "xpsloss")
         self.assertFalse(cap["queels_xps_equivalence"])
         self.assertIn("core_hole", cap["unsupported_physics"])
         r = self.call("validate", EXAMPLE)
@@ -38,12 +39,15 @@ class CLITests(unittest.TestCase):
     def test_bulk_end_to_end_and_overwrite_protection(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "bulk"
-            r = self.call("bulk", EXAMPLE, "--out", output)
+            input_arg = "./examples/synthetic_bulk.json"
+            r = self.call("bulk", input_arg, "--out", output)
             self.assertEqual(r.returncode, 0, r.stderr)
             result = json.loads(r.stdout)
             self.assertEqual(result["point_count"], 160)
             manifest = json.loads((output / "run.json").read_text())
             self.assertEqual(manifest["status"], "complete")
+            self.assertEqual(manifest["input_file"], input_arg)
+            self.assertEqual(manifest["input_sha256"], hashlib.sha256(EXAMPLE.read_bytes()).hexdigest())
             self.assertEqual(manifest["units"]["diimfp_per_A_eV"], "angstrom^-1 eV^-1")
             data = np.loadtxt(output / "bulk.csv", delimiter=",", skiprows=1)
             np.testing.assert_allclose(data[:, 0], np.arange(0.5, 80.01, 0.5), rtol=0, atol=1e-12)
@@ -79,6 +83,7 @@ class CLITests(unittest.TestCase):
             self.assertEqual(manifest["model_id"], "causal_oscillator_elf_v1")
             self.assertEqual(manifest["input_config_model_id"], manifest["config"]["model"])
             self.assertEqual(manifest["input_config_model_id"], "bulk_drude_lindhard_v0")
+            self.assertEqual(manifest["input_file"], str(path))
             self.assertEqual(manifest["input_sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
             diagnostics = manifest["diagnostics"]
             self.assertFalse(diagnostics["electron_energy_used"])

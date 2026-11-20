@@ -1,0 +1,8 @@
+include README.ja.md CHANGELOG.md CITATION.cff AGENTS.md CLAUDE.md
+recursive-include docs *.md
+exclude docs/chatgpt_conversation_*.md
+recursive-include examples *.json
+include benchmarks/README.md benchmarks/compare_queels_fixed_depth.py
+recursive-include benchmarks/inputs *elfdb*.json
+recursive-include benchmarks/sources *.txt
+recursive-include tests *.py

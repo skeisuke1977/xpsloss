@@ -81,6 +81,6 @@
   "notes": [
     "Preserves the source strengths in eV^2 without rescaling. Width is the oscillator damping parameter in eV and dispersion is dimensionless.",
     "The source file contains material parameters. It specifies no calculation conditions or normalization procedure.",
-    "This record uses Eg = 1.12 eV and absolute strengths from the data set. See the separate v2.1 manual record for the relative strengths and tutorial settings."
+    "This record uses Eg = 1.12 eV and absolute strengths from the data set."
   ]
 }

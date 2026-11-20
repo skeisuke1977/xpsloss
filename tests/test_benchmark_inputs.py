@@ -21,7 +21,6 @@ ROOT = Path(__file__).resolve().parents[1]
 INPUTS = ROOT / "benchmarks" / "inputs"
 SOURCES = ROOT / "benchmarks" / "sources" / "zenodo6024064_v1.0"
 ABSOLUTE = ("si_elfdb_v1.0", "au_elfdb_v1.0", "al_elfdb_v1.0")
-MANUAL = "si_queels_manual_v2.1"
 
 
 def read_record(stem):
@@ -206,36 +205,20 @@ class BenchmarkRecordTests(unittest.TestCase):
                 self.assertEqual(record["strength_basis"], "absolute_eV2")
                 self.assertTrue(all(value is None for value in record["source_run_conditions"].values()))
 
-    def test_manual_relative_strengths_cannot_be_used_in_bulk(self):
-        manual = json.loads((INPUTS / f"{MANUAL}.json").read_text(encoding="utf-8"))
-        self.assertEqual(manual["strength_basis"], "relative")
-        self.assertIsNone(manual["source_run_conditions"]["normalization"])
-        self.assertIsNone(manual["source_run_conditions"]["lower_loss_limit_eV"])
-        self.assertEqual(manual["source_run_conditions"]["loss_grid_eV"]["min"], 0.2)
-        self.assertIsNone(manual["bulk_usage"]["run_config"])
-        self.assertFalse((INPUTS / f"{MANUAL}.bulk.json").exists())
-        with self.assertRaises(ValueError):
-            load_config(INPUTS / f"{MANUAL}.json")
-        # Even projecting onto the material fields expected by bulk leaves
-        # explicitly relative strengths, which strict config validation rejects.
-        material = {key: manual["material"][key] for key in ("name", "gap_eV", "oscillators")}
-        settings = manual["source_run_conditions"]
-        candidate = {
-            "material": material,
-            "electron_energy_eV": settings["electron_energy_eV"],
-            "loss_grid_eV": settings["loss_grid_eV"],
-        }
+    def test_relative_strengths_cannot_be_used_in_bulk(self):
+        candidate = json.loads((ROOT / "examples/synthetic_bulk.json").read_text(encoding="utf-8"))
+        oscillator = candidate["material"]["oscillators"][0]
+        oscillator["strength_relative"] = oscillator.pop("strength_eV2")
         with self.assertRaisesRegex(ValueError, "oscillator 0: missing keys .*strength_eV2"):
             parse_config(candidate)
 
-        for oscillator in material["oscillators"]:
-            oscillator["strength_eV2"] = oscillator.pop("strength_relative")
+        oscillator["strength_eV2"] = oscillator.pop("strength_relative")
         parse_config(candidate)  # The renamed values satisfy the numerical schema.
         candidate["provenance"] = {
-            "source_id": manual["source"]["id"],
-            "reference_input": f"benchmarks/inputs/{MANUAL}.json",
-            "run_conditions_source": "QUEELS-XPS v2.1, p. 27",
-            "strength_basis": manual["strength_basis"],
+            "source_id": "synthetic",
+            "reference_input": "examples/synthetic_bulk.json",
+            "run_conditions_source": "synthetic test",
+            "strength_basis": "relative",
         }
         with self.assertRaisesRegex(ValueError, "provenance.strength_basis must be 'absolute_eV2'"):
             parse_config(candidate)
