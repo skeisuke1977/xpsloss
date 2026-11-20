@@ -33,8 +33,8 @@ class JSONParser(argparse.ArgumentParser):
 
 def capabilities():
     return {
-        "package": "xpsloss-starter", "version": __version__, "model_id": MODEL_ID,
-        "status": "experimental_starter",
+        "package": "xpsloss", "version": __version__, "model_id": MODEL_ID,
+        "status": "experimental",
         "supported": ["strict_json_validation", "drude_lindhard_elf", "bulk_diimfp",
                       "causal_dielectric_response", "xps_fixed_depth"],
         "dielectric_model_id": DIELECTRIC_MODEL_ID,
@@ -45,24 +45,32 @@ def capabilities():
             "scope": "fixed depth, normal emission from a gapless material",
             "supported": ["surface_losses", "vacuum_losses", "core_hole", "electron_hole_interference"],
             "unsupported_physics": list(FIXED_DEPTH_UNSUPPORTED_PHYSICS),
-            "implements": "published Eqs. (13)-(17) of Simonsen, Yubero & Tougaard (1997) with the causal "
+            "implements": "Based on Eqs. (13)-(17) of Simonsen, Yubero & Tougaard (1997) with the causal "
                           "Drude-Lindhard response; epsilon momentum chosen explicitly",
             "verification": {
                 "internal_tests": "I1-I8 of docs/M2_FIRST_CASE.md",
-                "independent_reviews": "equation review A and implementation review B (separate agents)",
-                "published_figures": "Figs. 3, 5 and 8 of the 1997 paper reproduced within digitizing error "
-                                     "(reviewer's independent code)",
+                "independent_reviews": "Separate agents reviewed the equations and implementation. "
+                                       "There has been no human peer review.",
+                "published_figures": "A separate reviewer agent reproduced Figs. 3, 5 and 8 within "
+                                     "figure-reading uncertainty using independent code with the 1997 paper's "
+                                     "Eq. (20) dielectric function, outside this package's oscillator model.",
                 "queels_xps_v2_1": (
-                    "Agrees for dispersionless ELFs. For dispersive ELFs QUEELS-XPS v2.1 output matches an "
-                    "undispersed numerator in Re(1/eps), not the published Eq. (32) of Yubero et al. (1996); "
-                    "see docs/QUEELS_DISPERSION_TEST.md. Not reproduced by this model."),
+                    "At 1000 eV and normal emission, differences for the tested dispersionless synthetic Al "
+                    "input were 0.1-0.4% of peak total. Both momentum choices failed the preregistered "
+                    "criteria for dispersive Al at 9.967 angstrom. In three synthetic follow-up runs "
+                    "(5.0-99.8 eV, depth nearest 10 angstrom), all three components agreed within 0.3% "
+                    "of peak reference total with k_total and a candidate using the undispersed oscillator "
+                    "energy in the numerator of Re(1/eps). The published Eq. (32) of Yubero et al. (1996) "
+                    "used here exceeded that threshold for each input. The comparison tested numerical "
+                    "outputs only. See docs/QUEELS_DISPERSION_TEST.md."),
                 "experiment": "not compared",
             },
         },
         "queels_xps_equivalence": False,
         "material_validation": (
-            "Literature ELF inputs (Si, Au, Al; benchmarks/inputs) are bundled with provenance, "
-            "but no agreement with QUEELS-XPS output or experiment is claimed."),
+            "Literature ELF inputs (Si, Au, Al) and their provenance are available in benchmarks/inputs "
+            "in the repository and source distribution. The wheel omits these inputs. Agreement with "
+            "measured spectra and general equivalence to QUEELS-XPS have not been established."),
     }
 
 
@@ -77,10 +85,10 @@ def build_parser():
     cap = sub.add_parser("capabilities")
     cap.add_argument("--json", action="store_true", help="output is always JSON")
     val = sub.add_parser("validate")
-    val.add_argument("config", type=Path)
+    val.add_argument("config")
     for name in ("bulk", "elf", "dielectric", "xps-fixed-depth"):
         child = sub.add_parser(name)
-        child.add_argument("config", type=Path)
+        child.add_argument("config")
         child.add_argument("--out", type=Path, required=True, help="new output directory; never overwritten")
         if name in ("elf", "dielectric"):
             child.add_argument("--q-inv-A", dest="q_inv_A", type=float, default=0.0,
@@ -204,7 +212,7 @@ def run(args):
         "schema_version": 1, "status": "complete", "command": args.command,
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "elapsed_seconds": time.perf_counter() - start,
-        "input_sha256": config.input_sha256, "input_file": str(args.config.resolve()),
+        "input_sha256": config.input_sha256, "input_file": str(args.config),
         "package_version": __version__, "model_id": model_id,
         "runtime": {"python": platform.python_version(), "numpy": np.__version__, "scipy": scipy.__version__},
         "config": config.public_dict(), "point_count": len(grid), "units": units,

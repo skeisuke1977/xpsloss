@@ -4,7 +4,7 @@ Not a full QUEELS-XPS implementation: depth averaging, oblique emission, gapped
 materials in the fixed-depth model and spectra are not implemented.
 """
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 from .dielectric import (
     DielectricConvergenceError, DielectricResponse, dielectric_response,

@@ -1,94 +1,44 @@
-# xpsloss-starter
+# xpsloss
 
-公開理論に基づく、XPSの誘電損失計算の独立実装に向けた着手版です。
-作成日: 2026-11-19。
+xpsloss is a Python library and command-line tool for researchers reproducing published models of electron energy loss in X-ray photoelectron spectroscopy (XPS). Version 0.1.0 covers oscillator energy-loss functions (ELFs), bulk differential inverse inelastic mean free paths in an infinite medium, causal dielectric response including hard gaps, and fixed-depth XPS cross sections. [日本語版](README.ja.md)
 
-**現時点で動くのは、次の4つです。**
-- **振動子で表した損失関数**
-- **その因果的な複素誘電応答**
-- **均質・等方な無限媒質のバルク非弾性散乱**
-- **法線出射・固定深さでの表面・正孔・真空中の項（Simonsen 1997 の公表式。ギャップのない材料のみ）**
+For emission at 0° from the surface normal, a positive creation depth, and a gapless material, xpsloss implements a fixed-depth effective cross section based on Eqs. (13)–(17) of Simonsen, Yubero and Tougaard (1997). The caller chooses the momentum argument of the dielectric function. `k_parallel` uses the approximation made in the closed-form derivation. At normal emission, `k_total` recovers the dispersive bulk limit. Oblique emission, fixed-depth calculations for gapped materials, depth averaging, and full spectra are outside this release. [Equations and units (Japanese)](docs/EQUATIONS.md)
 
-**深さ平均、斜出射、ギャップのある材料での表面・正孔の項、スペクトルは未実装です。QUEELS-XPSの完全再現版ではありません。試験した分散のある入力では、QUEELS-XPS v2.1 の出力と一致しませんでした（[条件と、差を説明できた処方](docs/QUEELS_DISPERSION_TEST.md)）。**
+xpsloss is independent of QUEELS-XPS, QUASES and their authors. It is not an official, endorsed, or compatibility-guaranteed version of QUEELS-XPS and uses none of its executables, DLLs, source code, or figures.
 
-このパッケージはQUEELS/QUASESの公式製品ではなく、その実行ファイル・DLL・ソースコードを利用していません。公開されている数式から新規に実装しています。
+## Quick start
 
-## 現在の範囲
+From the root of the v0.1.0 source tree, use Python 3.10 or later in a virtual environment. The example material is synthetic.
 
-| 機能 | 状態 |
-| --- | --- |
-| JSON入力の検証 | 実装済み |
-| Drude-Lindhard型振動子からELFを計算 | 実装済み |
-| 運動量分散を含むバルクDIIMFP | 実装済み |
-| CSV、JSONによる出力、計算条件の記録 | 実装済み |
-| 解析解・和則・収束との照合 | テストあり |
-| 振動子ELFからの因果的な複素誘電応答（ギャップ時はKKで実部を再構成） | 実装済み・テストあり・別担当がレビュー |
-| 表形式ELFからのKK再構成（参照・診断用） | 実装済み・テストあり・別担当がレビュー |
-| 光学和則・一次モーメントの診断（入力は再規格化しない） | 実装済み・テストあり |
-| 文献由来の固定入力（ELFデータ集のSi・Au・Al、manualのSi）と来歴の記録 | 同梱。値の物理的妥当性は未検証 |
-| 法線出射・固定深さの表面・真空中の損失・静止正孔・干渉（ギャップなし、[Simonsen 1997 式(13)–(17)](docs/M1_EQUATION_MAP.md)） | 実装済み・テストあり・別担当のエージェントがレビュー。原著の図3・5・8は、別担当が原著の式(20)を使った独立なコードで再現 |
-| 同上の QUEELS-XPS v2.1 との照合 | 分散0の入力では一致。試験した分散ありの入力では不一致。試験した条件の参照ソフトの出力が、実部の分子に分散前のエネルギーを使う処方と一致することを、事前登録試験で確認（[QUEELS_DISPERSION_TEST.md](docs/QUEELS_DISPERSION_TEST.md)） |
-| 斜出射、ギャップのある材料での表面・正孔の項 | 未実装 |
-| 深さ平均と自己無撞着な平均自由行程 | 未実装 |
-| 多重散乱、スペクトル畳み込み、装置関数 | 未実装 |
-| Quanty接続、CoO物性値、フィッティング | 未実装 |
-| 元のQUEELS-XPSとの数値一致 | 主張しない（上記） |
-
-ELFは Im[-1/epsilon]、DIIMFPは単位経路長・単位損失エネルギー当たりの非弾性散乱確率密度です。ELF単体を、測定されるXPSの損失確率と同一視しないでください。
-
-## Windows PowerShellでの開始
-
-Python 3.10以上を想定します。展開した `xpsloss-starter` フォルダーを開きます。
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m xpsloss capabilities --json
-.\.venv\Scripts\python.exe -m xpsloss validate examples/synthetic_bulk.json
-.\.venv\Scripts\python.exe -m xpsloss elf examples/synthetic_bulk.json --out runs/elf-demo
-.\.venv\Scripts\python.exe -m xpsloss dielectric examples/synthetic_bulk.json --q-inv-A 0.5 --out runs/dielectric-demo
-.\.venv\Scripts\python.exe -m xpsloss bulk examples/synthetic_bulk.json --out runs/bulk-demo
-.\.venv\Scripts\python.exe -m xpsloss xps-fixed-depth examples/synthetic_bulk.json --depth-A 10 --epsilon-momentum k_total --out runs/xps-fixed-depth-demo
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```sh
+python -m pip install .
+xpsloss capabilities --json
+xpsloss validate examples/synthetic_bulk.json
+xpsloss bulk examples/synthetic_bulk.json --out runs/bulk
+xpsloss dielectric examples/synthetic_bulk.json --q-inv-A 0.5 --out runs/dielectric
+xpsloss xps-fixed-depth examples/synthetic_bulk.json --depth-A 10 --epsilon-momentum k_total --out runs/fixed-depth
 ```
 
-`xps-fixed-depth` は、表面法線からの出射角0°、生成深さ `--depth-A` で、正孔ありの有効断面積と、その「正孔なし」「正孔（単位電荷）」成分、項ごとの値を出力します。`--epsilon-momentum` は必須です。`k_total`（全運動量で ε を評価）を選ぶと、深い極限でバルクの式に一致します。`k_parallel` は原著の閉形式の導出どおりの評価です。
+Give each calculation a new output directory. The CSV contains values on the loss-energy grid. For fixed depth these include the total, the electron contribution with zero hole charge, and the signed unit-hole contribution including interference, in Å⁻¹ eV⁻¹ per path length in the solid. The accompanying `run.json` records the input path as supplied, its SHA-256, units, model, numerical settings, and runtime versions.
 
-文献由来の固定入力と実行例は [benchmarks/README.md](benchmarks/README.md)、出典・帰属表示・和則の検算は [docs/BENCHMARK_INPUTS.md](docs/BENCHMARK_INPUTS.md)、複素誘電応答の設計と規約は [docs/DIELECTRIC_DESIGN.md](docs/DIELECTRIC_DESIGN.md) にあります。
+## Verification
 
-仮想環境のactivateは不要です。通常のインストールには依存パッケージ取得のため通信が必要ですが、計算処理そのものは外部APIを使いません。依存関係を事前に導入すればオフラインで計算できます。
+Run `python -m unittest discover -s tests -v` from the source tree. The suite checks analytical limits, sum rules, convergence, fixed-depth terms against an independent numerical integration, and the comparison script using synthetic files. Agents independent of the implementer reviewed the equations and the implementation. There has been no human peer review. A separate reviewer agent used independent code with the dielectric function in Eq. (20) of Simonsen et al. (1997) to reproduce Figs. 3, 5, and 8 within figure-reading uncertainty. [Validation record (Japanese)](docs/VALIDATION.md)
 
-## macOS / Linux
+The suite passed on Windows 11 with Python 3.12.10, NumPy 2.5.5, and SciPy 1.18.1. An earlier pre-release suite passed on Windows with Python 3.11.14 and the minimum NumPy 1.24.0 and SciPy 1.10.0. Python 3.10 and 3.13, macOS, and Linux beyond M0 remain untested. [Validation record (Japanese)](docs/VALIDATION.md)
 
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -e .
-.venv/bin/python -m xpsloss capabilities --json
-.venv/bin/python -m xpsloss bulk examples/synthetic_bulk.json --out runs/bulk-demo
-.venv/bin/python -m unittest discover -s tests -v
-```
+### Comparison with QUEELS-XPS v2.1
 
-**`examples/` の例題は合成材料です。Al、CoO、Siなどの実測・文献データとして利用しないでください。** 文献由来の入力は `benchmarks/inputs/` にだけ置き、出典ごとに分けています。既存の出力ディレクトリには上書きしません。再計算するときは新しい出力名を指定します。
+For dispersive Al from the ELF data set at 1000 eV, normal emission, and a depth of 9.967 Å, both momentum choices failed the prespecified pointwise and integrated-area criteria over 1.0–99.8 eV. The maximum absolute difference in `total`, relative to the maximum reference `total` over that interval, was 6.6% for `k_total` and 7.5% for `k_parallel`. [Original criteria and results (Japanese)](docs/M2_FIRST_CASE.md)
 
-## AIエージェントとの共同開発
+The follow-up hypothesis and decision rule were recorded in local Git before three new synthetic runs. Given the convergence of the reference components at low loss, the follow-up used 5.0–99.8 eV and the depth nearest 10 Å in each run. With `k_total` and a candidate expression using the undispersed oscillator energy in the numerator of the real part of the inverse dielectric function, the maximum absolute difference for each of the three components was within 0.3% of the maximum reference `total` for all three inputs. With the published expression, at least one component exceeded this threshold for each input. [Preregistered follow-up (Japanese)](docs/QUEELS_DISPERSION_TEST.md)
 
-最初に `AGENTS.md`、`docs/PROJECT_PLAN.md`、`docs/EQUATIONS.md` を渡してください。`CLAUDE.md`にも同じ資料への案内があります。
+xpsloss uses the published Eq. (32) of Yubero et al. (1996). The comparison tested v2.1 numerical output under the stated conditions. Its internal implementation, the cause of the residual difference of order 10⁻³, and accuracy against measured spectra remain unverified. Reference-software output is excluded from distribution. [Validation record (Japanese)](docs/VALIDATION.md)
 
-次に依頼する仕事は `docs/NEXT_TASK.md` に書いてあります。バルクの実装を足場として、まず1997年原著の数式と計算手順の対応を確定します。ソフトの機能が増えたことと、物理モデルの妥当性が検証されたことは、別々に記録します。
+## License and citation
 
-## 検証と資料
+Keisuke Sato licenses the code under MIT and the project's own documentation under CC BY 4.0. Third-party quotations retain their owners' terms. Both grants exclude third-party data in `benchmarks/sources/**` and `benchmarks/inputs/*elfdb*`. Those files retain the original CC BY 4.0 license of N. Pauly, F. Yubero and S. Tougaard, *ELF dielectric functions for various materials*, v1.0 (2022). [MIT license](LICENSE) · [Notices and attribution](NOTICES.md) · [ELF data set](https://doi.org/10.5281/zenodo.6024064) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
-- `docs/VALIDATION.md`: この配布物で実行した検証と未検証事項。
-- `docs/EQUATIONS.md`: 数式、単位、検証の根拠。
-- `docs/M1_EQUATION_MAP.md`: 1997年原著の式(13)–(17)の転記、記号と単位、項ごとの実装予定、未確定の点。
-- `docs/M2_FIRST_CASE.md`: M2の最初のケース（Al、1000 eV、法線出射）、参照ソフトとの比較の許容幅（比較の前に固定）。
-- `docs/REVIEW_CHECKLISTS.md`: 実装前・実装後・参照比較のレビュー項目。
-- `docs/QUEELS_DISPERSION_TEST.md`: QUEELS-XPS v2.1 の分散の扱いを判別した事前登録試験と、その結果。
-- `docs/ROADMAP.md`: 公開までのロードマップと、利用者が決める事項。
-- `docs/DIELECTRIC_DESIGN.md`: 複素誘電応答の方式比較、符号・幅の規約、ギャップ端と極の扱い。
-- `docs/BENCHMARK_INPUTS.md`: 固定入力の出典、利用条件、光学和則の監査。
-- `docs/PROJECT_PLAN.md`: 完全モデルとQuanty接続へ進むための設計。
-- `docs/REFERENCES.md`: 一次資料と用途。
-- `NOTICES.md`: 独立実装、同梱データの帰属表示、公開時の整理。
+Cite Keisuke Sato, *xpsloss*, version 0.1.0. The software DOI will be added at release. When using the ELF data set, cite its authors separately. [Software citation](CITATION.cff)
 
-Windows 11（Python 3.12）とLinux（Python 3.12、M0のみ）で確認済みです。macOSは未確認です。詳細は `docs/VALIDATION.md` を参照してください。
+The Japanese documentation gives the [benchmark inputs and provenance](docs/BENCHMARK_INPUTS.md), [dielectric-response design](docs/DIELECTRIC_DESIGN.md), and [equation-to-implementation map](docs/M1_EQUATION_MAP.md).
