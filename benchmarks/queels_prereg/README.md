@@ -12,7 +12,7 @@ python benchmarks/queels_prereg/evaluate_prereg.py evaluate PATH_TO_YOUR_EXPORTS
 python -m unittest discover -s tests -p test_queels_prereg.py
 ```
 
-`predict` は深さ 10 Å の全予測を ASCII・CRLF で標準出力に書く。Windows PowerShell 5.1 の `>` はテキストを UTF-16 に変換するため、ファイル保存には `--out` を使う。`--out nominal.txt` は同名のファイルを上書きするため、既存の予測を残すには別名を指定する。`--check` は再計算したバイト列を同梱の凍結ファイルと照合し、JSON に一致の真偽と再計算値の SHA-256 を出す。一致すれば終了0、不一致なら1。登録時の SHA-256 は `test_frozen_hash_and_recalculated_bytes` が照合する。
+`predict` は深さ 10 Å の全予測を ASCII・CRLF で標準出力に書く。Windows PowerShell 5.1 の `>` はテキストを UTF-16 に変換するため、ファイル保存には `--out` を使う。`--out nominal.txt` は同名のファイルを上書きするため、既存の予測を残すには別名を指定する。`--check` の JSON は、再計算したバイト列と同梱ファイルの一致を `identical`、同梱ファイルの SHA-256 と事前登録値の一致を `matches_registered_sha256` で示す。`sha256` は再計算値、`frozen_sha256` は同梱ファイルのハッシュである。両方の照合が通れば終了0、どちらかが不一致なら1。
 
 `evaluate` は指定ディレクトリ直下に、QUEELS-XPS v2.1 で作成した `K_XPS_{T,e,h}_{入力名}_1000_0_q1_n2000.m` を計9個必要とする。ギャップ0、法線から0°、正孔電荷1、1000 eV での実行を使う。`@` 以降のヘッダのエネルギー・角度・IMFP・刻み・点数・ac/bc と、65深さ列の格子を検査する。先頭3行は深さ・固体内の経路長・深さごとの量、その後の500行の損失は行番号 i（1始まり）×0.2 eV で決まる。独立な損失軸の列はない。最終行は未計算のゼロ行。成分間で深さと経路長を照合し、実行ごとの格子を使う。
 
@@ -27,7 +27,7 @@ python -m unittest discover -s tests -p test_queels_prereg.py
 | ファイル | 事前登録の SHA-256 | 配布版の SHA-256 |
 |---|---|---|
 | numerator_rule.py | `a57b11d1d8eb0f5000da123389574bc82e6d2d0481a297b69919f80f28f81ccd` | `848dca6b75db80813a8f1ef71a747ea1fb8e59b411061cccebb951a50ad1c6e8` |
-| evaluate_prereg.py | `ba213db1344c46b64d511dee004d98b7f8af4219f326f793cbd0a26196e2d77c` | `ab1795447aab0f21351821e7ff8f79002c9e8c7f237d17b9b5079dc28d8dd574` |
+| evaluate_prereg.py | `ba213db1344c46b64d511dee004d98b7f8af4219f326f793cbd0a26196e2d77c` | `54c838d7fedf4a4726c4d0756b1e86b267111a63fc16539824dfedc5237b28d2` |
 | predictions_a10.txt | `715f4f455227beacce8880f5697a071a531b3f07fd7d93b4eacc8fd5163f2a3d` | `715f4f455227beacce8880f5697a071a531b3f07fd7d93b4eacc8fd5163f2a3d` |
 
 候補コードから非公開の参照値表、それを使った旧実演、不要になった import を除き、説明文を改めた。`terms` と `combine` は同じ演算を同じ順で行う。`terms` の式(17)の呼び出し先を同梱した補助関数に替えた。この関数の本体は登録直後の M2-1 コミットの `xps_fixed_depth._parallel_limits` と共通で、定数名を `H` にした。登録時は未コミットの作業ツリーを使っており、名目予測15行の再現をバイト単位で確かめた。公表式は現行のインストールまたは `PYTHONPATH` のパッケージから `effective_cross_section_fixed_depth` を `k_total` で呼ぶ。

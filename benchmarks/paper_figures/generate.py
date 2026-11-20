@@ -4,7 +4,10 @@ import argparse
 from collections import Counter
 import csv
 from functools import lru_cache
+from itertools import zip_longest
+import math
 from pathlib import Path
+import re
 import tempfile
 
 import numpy as np
@@ -19,6 +22,18 @@ HERE = Path(__file__).resolve().parent
 WITHIN = "within reading uncertainty"
 OUTSIDE = "outside"
 DEPENDENT = "depends on width assumption"
+
+# compare_point writes 12 significant digits for values and 8 for margins.
+CSV_REL_TOL = 1e-9
+MARGIN_REL_TOL = 1e-7
+ABS_TOL = 1e-12
+NUMERIC_COLUMNS = {
+    "figure", "E0_eV", "depth_A", "loss_eV", "reading", "uncertainty", "width_eV",
+    "k_parallel", "k_parallel_grid", "k_parallel_margin", "k_total", "k_total_grid", "k_total_margin",
+}
+# write_results prints each calculated value to 7 significant digits next to its verdict.
+RESULT_REL_TOL = 1e-6
+RESULT_VALUE = re.compile(r"(?<=\|)(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)(?= [○×]\|)")
 
 
 TABLE_I = {175: 3.4, 300: 2.8, 500: 2.1, 1180: 1.5, 2000: 1.3}
@@ -208,6 +223,50 @@ def generate(output):
     write_results(groups, output / "RESULTS.md")
 
 
+def close_numbers(expected, actual, rel_tol):
+    try:
+        a, b = float(expected), float(actual)
+    except ValueError:
+        return False
+    return math.isfinite(a) and math.isfinite(b) and math.isclose(a, b, rel_tol=rel_tol, abs_tol=ABS_TOL)
+
+
+def csv_differences(reference, generated):
+    with reference.open(encoding="utf-8", newline="") as ref, generated.open(encoding="utf-8", newline="") as new:
+        expected_rows, actual_rows = csv.reader(ref), csv.reader(new)
+        header, actual_header = next(expected_rows, None), next(actual_rows, None)
+        if not header or header != actual_header:
+            yield f"header: expected {header!a}, got {actual_header!a}"
+            return
+        for line, (expected, actual) in enumerate(zip_longest(expected_rows, actual_rows), start=2):
+            if expected is None or actual is None or len(expected) != len(header) or len(actual) != len(header):
+                yield f"row {line}: expected {expected!a}, got {actual!a}"
+                continue
+            for column, a, b in zip(header, expected, actual):
+                if column in NUMERIC_COLUMNS and (a or b):
+                    tolerance = MARGIN_REL_TOL if column.endswith("_margin") else CSV_REL_TOL
+                    same = close_numbers(a, b, tolerance)
+                else:
+                    same = a == b
+                if not same:
+                    yield f"row {line}, {column}: expected {a!a}, got {b!a}"
+
+
+def results_differences(reference, generated):
+    with reference.open(encoding="utf-8") as ref, generated.open(encoding="utf-8") as new:
+        for line, (expected, actual) in enumerate(zip_longest(ref, new), start=1):
+            if expected == actual:
+                continue
+            # Even fields contain all prose, delimiters, counts and verdict marks.
+            left, right = RESULT_VALUE.split(expected or ""), RESULT_VALUE.split(actual or "")
+            if left[::2] != right[::2]:
+                yield f"line {line}: expected {expected!a}, got {actual!a}"
+                continue
+            for column, a, b in zip(model.MOMENTA, left[1::2], right[1::2]):
+                if not close_numbers(a, b, RESULT_REL_TOL):
+                    yield f"line {line}, {column}: expected {a!a}, got {b!a}"
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
@@ -219,10 +278,13 @@ def main(argv=None):
             output = Path(tmp)
             generate(output)
             ok = True
-            for name in ("comparison.csv", "RESULTS.md"):
-                same = (output / name).read_bytes() == (HERE / name).read_bytes()
-                print(f"{name}: {'identical' if same else 'differs'}")
-                ok &= same
+            for name, compare in (("comparison.csv", csv_differences), ("RESULTS.md", results_differences)):
+                differences = list(compare(HERE / name, output / name))
+                print(f"{name}: {'differs' if differences else 'matches within tolerance'}")
+                for detail in differences:
+                    print(detail)
+                if differences:
+                    ok = False
             return 0 if ok else 1
     generate(args.out)
     return 0

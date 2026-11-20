@@ -29,13 +29,23 @@ class NominalPredictionTests(unittest.TestCase):
         frozen = Path(prereg.__file__).with_name("predictions_a10.txt").read_bytes()
         with tempfile.TemporaryDirectory() as tmp, patch.object(prereg, "predictions", return_value=frozen):
             path = Path(tmp) / "result.txt"
+            path.write_bytes(b"old contents")
             self.assertEqual(prereg.main(["predict", "--out", str(path)]), 0)
             self.assertEqual(path.read_bytes(), frozen)
-        for sample, matches in ((frozen, True), (frozen.replace(b"\r\n", b"\n"), False)):
-            with patch.object(prereg, "predictions", return_value=sample), redirect_stdout(StringIO()) as log:
-                self.assertEqual(prereg.main(["predict", "--check"]), 0 if matches else 1)
-                self.assertEqual(json.loads(log.getvalue()), {
-                    "identical": matches, "sha256": hashlib.sha256(sample).hexdigest()})
+        changed = frozen.replace(b"\r\n", b"\n")
+        with tempfile.TemporaryDirectory() as tmp, patch.object(prereg, "__file__", str(Path(tmp) / "script.py")):
+            for bundled, generated, identical, registered in (
+                (frozen, frozen, True, True), (frozen, changed, False, True),
+                (changed, frozen, False, False), (changed, changed, True, False),
+            ):
+                with self.subTest(identical=identical, registered=registered):
+                    (Path(tmp) / "predictions_a10.txt").write_bytes(bundled)
+                    with patch.object(prereg, "predictions", return_value=generated), redirect_stdout(StringIO()) as log:
+                        self.assertEqual(prereg.main(["predict", "--check"]), 0 if identical and registered else 1)
+                    self.assertEqual(json.loads(log.getvalue()), {
+                        "identical": identical, "sha256": hashlib.sha256(generated).hexdigest(),
+                        "frozen_sha256": hashlib.sha256(bundled).hexdigest(),
+                        "matches_registered_sha256": registered})
 
 
 class DecisionTests(unittest.TestCase):

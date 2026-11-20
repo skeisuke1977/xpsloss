@@ -45,6 +45,12 @@ jobs:
         env:
           PYTHONPATH: src
         run: python -m unittest discover -s tests -v
+      - name: Check preregistered predictions
+        env:
+          PYTHONPATH: src
+        run: python benchmarks/queels_prereg/evaluate_prereg.py predict --check
+      - name: Check paper figure comparisons
+        run: python benchmarks/paper_figures/generate.py --check
 
   package:
     name: build, install and run outside the source tree

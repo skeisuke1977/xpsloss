@@ -27,6 +27,7 @@ LIMIT = 0.003
 SELF_LIMIT = 1e-4
 COMPONENTS = ("T", "e", "h")
 STEP, N_LOSS, N_DEPTH = 0.2, 500, 65
+REGISTERED_SHA256 = "715f4f455227beacce8880f5697a071a531b3f07fd7d93b4eacc8fd5163f2a3d"
 
 
 def candidate(oscs, losses, depth, panels=400):
@@ -141,17 +142,20 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     predict = commands.add_parser("predict").add_mutually_exclusive_group()
-    predict.add_argument("--out", type=Path, help="write the registered ASCII/CRLF format")
-    predict.add_argument("--check", action="store_true", help="compare bytes with the frozen predictions")
+    predict.add_argument("--out", type=Path, help="write ASCII/CRLF predictions, overwriting an existing file")
+    predict.add_argument("--check", action="store_true", help="verify frozen bytes and their registered SHA-256")
     commands.add_parser("evaluate").add_argument("reference_dir", type=Path)
     args = parser.parse_args(argv)
     if args.command == "predict":
         data = predictions()
         if args.check:
-            frozen = Path(__file__).with_name("predictions_a10.txt")
-            same = data == frozen.read_bytes()
-            print(json.dumps({"identical": same, "sha256": hashlib.sha256(data).hexdigest()}))
-            return 0 if same else 1
+            frozen = Path(__file__).with_name("predictions_a10.txt").read_bytes()
+            same = data == frozen
+            frozen_sha256 = hashlib.sha256(frozen).hexdigest()
+            registered = frozen_sha256 == REGISTERED_SHA256
+            print(json.dumps({"identical": same, "sha256": hashlib.sha256(data).hexdigest(),
+                              "frozen_sha256": frozen_sha256, "matches_registered_sha256": registered}))
+            return 0 if same and registered else 1
         if args.out is not None:
             args.out.write_bytes(data)
         else:

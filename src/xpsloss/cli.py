@@ -116,7 +116,7 @@ def capabilities():
 
 
 def emit(data, stream=sys.stdout):
-    print(json.dumps(data, ensure_ascii=False, allow_nan=False, indent=2), file=stream)
+    print(json.dumps(data, ensure_ascii=True, allow_nan=False, indent=2), file=stream)
 
 
 def build_parser():
