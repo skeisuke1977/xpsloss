@@ -6,6 +6,7 @@ authors:
   - family-names: Sato
     given-names: Keisuke
 license: MIT
+repository-code: "https://github.com/skeisuke1977/xpsloss"
 abstract: >-
   xpsloss implements oscillator energy-loss functions, causal dielectric response,
   and bulk inelastic scattering in Python. For normal emission from a positive

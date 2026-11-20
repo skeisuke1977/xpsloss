@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: tests (${{ matrix.os }}, Python ${{ matrix.python }}, ${{ matrix.deps }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.10"
+            deps: minimum
+          - os: ubuntu-latest
+            python: "3.12"
+            deps: latest
+          - os: windows-latest
+            python: "3.12"
+            deps: latest
+          - os: macos-latest
+            python: "3.13"
+            deps: latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install minimum declared dependencies
+        if: matrix.deps == 'minimum'
+        run: python -m pip install "numpy==1.24.0" "scipy==1.10.0"
+      - name: Install latest dependencies
+        if: matrix.deps == 'latest'
+        run: python -m pip install numpy scipy
+      - name: Record versions
+        run: python -c "import sys, numpy, scipy; print(sys.version); print('numpy', numpy.__version__); print('scipy', scipy.__version__)"
+      - name: Run the test suite against the source tree
+        env:
+          PYTHONPATH: src
+        run: python -m unittest discover -s tests -v
+
+  package:
+    name: build, install and run outside the source tree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install build
+          python -m build --outdir dist
+      - name: Install the wheel in a fresh environment and run the CLI
+        run: |
+          python -m venv /tmp/wheelenv
+          /tmp/wheelenv/bin/python -m pip install dist/*.whl
+          mkdir /tmp/cli && cp -r examples /tmp/cli/
+          cd /tmp/cli
+          /tmp/wheelenv/bin/xpsloss capabilities --json
+          /tmp/wheelenv/bin/xpsloss validate examples/synthetic_bulk.json
+          /tmp/wheelenv/bin/xpsloss bulk examples/synthetic_bulk.json --out runs/bulk
+          /tmp/wheelenv/bin/xpsloss xps-fixed-depth examples/synthetic_bulk.json --depth-A 10 --epsilon-momentum k_total --out runs/fixed-depth
+          /tmp/wheelenv/bin/python -m pip check
+      - name: Run the full test suite from the unpacked sdist
+        run: |
+          mkdir /tmp/sdist && tar -xzf dist/*.tar.gz -C /tmp/sdist
+          cd /tmp/sdist/xpsloss-*
+          python -m pip install numpy scipy
+          PYTHONPATH=src python -m unittest discover -s tests -v

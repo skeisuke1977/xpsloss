@@ -25,6 +25,9 @@ dependencies = ["numpy>=1.24", "scipy>=1.10"]
 [project.scripts]
 xpsloss = "xpsloss.cli:main"
 
+[project.urls]
+Repository = "https://github.com/skeisuke1977/xpsloss"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
