@@ -458,7 +458,7 @@ def _edge_log(energy, edge):
 
 
 def _closed_kk_band(t, gap, center, strength, width):
-    """Integrate the retained rational KK kernel by partial fractions (Eqs. D2-D3)."""
+    """Return the retained-band integral (Eqs. D2-D3) and its absolute roundoff estimate."""
     half_width = width / 2
     splitting = cmath.sqrt(half_width - center) * cmath.sqrt(half_width + center)
     p = half_width + splitting
@@ -493,9 +493,10 @@ def _closed_kk_band(t, gap, center, strength, width):
     value = scale * (regular + pole).real
     roundoff_scale = scale * (abs(regular) + log_term + t**2 * abs(j_b))
     resonance_condition = max(1.0, center**2 / math.sqrt(denominator))
-    if RECIPROCAL_ROUNDOFF * resonance_condition * roundoff_scale > _accuracy(value, CLOSED_ABS, CLOSED_REL):
+    roundoff = RECIPROCAL_ROUNDOFF * resonance_condition * roundoff_scale
+    if not math.isfinite(roundoff) or roundoff > _accuracy(value, CLOSED_ABS, CLOSED_REL):
         raise DielectricConvergenceError("closed-form KK is ill-conditioned; use numerical KK")
-    return value
+    return value, roundoff
 
 
 def negative_inverse_dielectric_closed_form(material: Material, loss_eV, q_inv_A=0.0):
@@ -513,6 +514,7 @@ def negative_inverse_dielectric_closed_form(material: Material, loss_eV, q_inv_A
     _check_gap_edge(material, t)
     real = np.full(t.shape, -1.0)
     magnitude = np.ones(t.shape)
+    band_roundoff = np.zeros(t.shape)
     with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
         for i, osc in enumerate(material.oscillators):
             if osc.strength_eV2 == 0:
@@ -524,19 +526,22 @@ def negative_inverse_dielectric_closed_form(material: Material, loss_eV, q_inv_A
                     if (osc.dispersion and q[index] and COORDINATE_ULPS * math.ulp(center)
                             > CLOSED_CENTER_REL * max(osc.width_eV, abs(gap - center))):
                         raise DielectricConvergenceError("dispersed center unresolved at the gap")
-                    value = _closed_kk_band(energy, gap, center, osc.strength_eV2, osc.width_eV)
+                    value, estimate = _closed_kk_band(energy, gap, center, osc.strength_eV2, osc.width_eV)
                     real[index] += value
                     magnitude[index] += abs(value)
+                    band_roundoff[index] += estimate
                 except (ArithmeticError, DielectricConvergenceError) as exc:
                     raise DielectricConvergenceError(f"closed-form KK oscillator {i}, {_loss_point(t, index)}: {exc}") from exc
         try:
             result = real + 1j * loss_function(material, t, q)
         except NumericalConvergenceError as exc:
             raise DielectricConvergenceError(f"closed-form KK: {exc}") from exc
-    rounding = SUM_ROUNDOFF * len(material.oscillators) * magnitude
-    bad = ~np.isfinite(result) | (rounding > _accuracy(real))
+    # Opposite bands can cancel in Re F; their absolute error estimates still add.
+    rounding = band_roundoff + SUM_ROUNDOFF * len(material.oscillators) * magnitude
+    bad = ~(np.isfinite(result) & (rounding <= _accuracy(real)))
     if np.any(bad):
-        raise DielectricConvergenceError(f"closed-form KK oscillator sum unresolved at {_first_loss(t, bad)}")
+        raise DielectricConvergenceError(
+            f"closed-form KK oscillator sum unresolved at {_first_loss(t, bad)}; use numerical KK")
     return complex(result) if result.ndim == 0 else result
 
 
