@@ -101,6 +101,8 @@ class FixedDepthApplicabilityTests(unittest.TestCase):
         self.assertIn("applicability.checked_envelope", verification["checked_envelope"])
         figures = verification["published_figures"]
         self.assertIn("attempted to reproduce", figures)
-        self.assertIn("Of 84 comparison points, 37 are within reading uncertainty, "
-                      "10 are outside and 37 depend on width assumptions", figures)
-        self.assertIn("benchmarks/paper_figures/RESULTS.md", figures)
+        self.assertIn("outside this package's oscillator model", figures)
+        self.assertIn("Of 84 comparison points, 36 are within reading uncertainty, "
+                      "18 are outside and 30 depend on width assumptions", figures)
+        self.assertIn("37/19/28 for k_parallel and 37/18/29 for k_total", figures)
+        self.assertIn("benchmarks/paper_figures/RESULTS.md in the source distribution or repository", figures)

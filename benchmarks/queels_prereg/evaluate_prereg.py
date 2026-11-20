@@ -1,6 +1,7 @@
 """Predict or evaluate the three synthetic inputs of the frozen dispersion test."""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -139,11 +140,22 @@ def evaluate(directory):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("predict")
+    predict = commands.add_parser("predict").add_mutually_exclusive_group()
+    predict.add_argument("--out", type=Path, help="write the registered ASCII/CRLF format")
+    predict.add_argument("--check", action="store_true", help="compare bytes with the frozen predictions")
     commands.add_parser("evaluate").add_argument("reference_dir", type=Path)
     args = parser.parse_args(argv)
     if args.command == "predict":
-        sys.stdout.buffer.write(predictions())
+        data = predictions()
+        if args.check:
+            frozen = Path(__file__).with_name("predictions_a10.txt")
+            same = data == frozen.read_bytes()
+            print(json.dumps({"identical": same, "sha256": hashlib.sha256(data).hexdigest()}))
+            return 0 if same else 1
+        if args.out is not None:
+            args.out.write_bytes(data)
+        else:
+            sys.stdout.buffer.write(data)
         return 0
     try:
         result = evaluate(args.reference_dir)

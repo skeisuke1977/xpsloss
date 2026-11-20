@@ -25,6 +25,18 @@ class NominalPredictionTests(unittest.TestCase):
         actual = subprocess.check_output([sys.executable, str(script), "predict"])
         self.assertEqual(actual, frozen)
 
+    def test_binary_file_output_and_check_status(self):
+        frozen = Path(prereg.__file__).with_name("predictions_a10.txt").read_bytes()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(prereg, "predictions", return_value=frozen):
+            path = Path(tmp) / "result.txt"
+            self.assertEqual(prereg.main(["predict", "--out", str(path)]), 0)
+            self.assertEqual(path.read_bytes(), frozen)
+        for sample, matches in ((frozen, True), (frozen.replace(b"\r\n", b"\n"), False)):
+            with patch.object(prereg, "predictions", return_value=sample), redirect_stdout(StringIO()) as log:
+                self.assertEqual(prereg.main(["predict", "--check"]), 0 if matches else 1)
+                self.assertEqual(json.loads(log.getvalue()), {
+                    "identical": matches, "sha256": hashlib.sha256(sample).hexdigest()})
+
 
 class DecisionTests(unittest.TestCase):
     @classmethod
@@ -46,7 +58,8 @@ class DecisionTests(unittest.TestCase):
                     table[27, column] += 30  # Exactly at the criterion, at 5.0 eV.
                     table[501, 1] += 1000  # Diagnostic-only discrepancy at 99.8 eV.
                 np.savetxt(cls.folder / f"K_XPS_{letter}_{name}_1000_0_q1_n2000.m",
-                           table, fmt="%.10g", comments="", header="synthetic\n@\n1000\n0\n20\n0.2\n500\n65")
+                           table, fmt="%.10g", comments="",
+                           header="synthetic\n@\n1000\n0\n20\n0.2\n500\n1.6 -3.6 ac and bc")
 
     def verdict(self, scenario):
         # Use deterministic synthetic curves for threshold tests. Independently
@@ -146,3 +159,38 @@ class DecisionTests(unittest.TestCase):
                     target.write_text("\n".join(changed), encoding="ascii")
                     with self.assertRaisesRegex(ValueError, message):
                         prereg.read_run(folder, name)
+
+    def test_header_path_lengths_and_last_row(self):
+        source = next(self.folder.glob("K_XPS_T*"))
+        original = source.read_text(encoding="ascii").splitlines()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / source.name
+            for index, replacement, error in (
+                (2, "999", "energy"), (3, "1", "angle"), (4, "nan", "IMFP"), (4, "0", "IMFP"),
+                (7, "1.5 -3.6 ac and bc", "ac/bc"), (7, "1.6 -3.5 ac and bc", "ac/bc"),
+                (7, "64", "depth count"), (9, "2 " * 65, "path lengths"), (-1, "1 " * 65, "final"),
+            ):
+                with self.subTest(index=index, replacement=replacement):
+                    lines = original.copy()
+                    lines[index] = replacement
+                    path.write_text("\n".join(lines), encoding="ascii")
+                    with self.assertRaisesRegex(ValueError, error):
+                        prereg.read_m(path)
+            original[7] = "65"  # Also support the earlier, count-only synthetic header.
+            path.write_text("\n".join(original), encoding="ascii")
+            depths, _ = prereg.read_m(path)
+            self.assertEqual(len(depths), 65)
+
+    def test_nonpositive_normalization_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            for p in self.folder.glob("*.m"):
+                (folder / p.name).write_bytes(p.read_bytes())
+            target, = folder.glob("K_XPS_T_Alg075*")
+            lines = target.read_text(encoding="ascii").splitlines()
+            for level in ("0", "-1"):
+                lines[11:-1] = [" ".join([level] * 65)] * 499
+                target.write_text("\n".join(lines), encoding="ascii")
+                with redirect_stdout(StringIO()) as log:
+                    self.assertEqual(prereg.main(["evaluate", tmp]), 2)
+                    self.assertIn("maximum reference total must be positive", json.loads(log.getvalue())["error"])

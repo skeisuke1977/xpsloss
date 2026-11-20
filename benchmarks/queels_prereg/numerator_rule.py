@@ -10,8 +10,8 @@ from xpsloss.model import BOHR_RADIUS_A as a0, HBAR2_OVER_2ME_EV_A2 as H
 W, A, GAMMA, E = 15.6, 243.3598, 1.5, 1000.
 
 
-# Preserve the preregistration's Eq. (17) quadrature limits and operation order
-# independently of later changes to the package's private helper.
+# Eq. (17) limits from the M2-1 commit; the package still uses this body.
+# Keeping a local copy insulates the frozen predictions from future changes.
 def _parallel_limits(energy, loss):
     """Eq. (17), factoring k±² − Ω0² before evaluating either square root."""
     s, r = math.sqrt(energy), np.sqrt(energy - loss)

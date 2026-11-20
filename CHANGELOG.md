@@ -10,9 +10,15 @@
 
 ### Verification
 
-- Tests cover analytical limits, sum rules, convergence, and an independent numerical integration of the fixed-depth terms. Agents independent of the implementer reviewed the equations and implementation. There has been no human peer review. A separate reviewer agent attempted to reproduce Figs. 3, 5, and 8 with independent code using Eq. (20) of Simonsen et al. (1997), outside the package's oscillator model. Of 84 comparison points, 37 lie within the figure-reading uncertainty, 10 outside it, and 37 depend on the assumed width. [Per-point results](benchmarks/paper_figures/RESULTS.md) · [Validation record](docs/VALIDATION.md)
+- Tests cover analytical limits, sum rules, convergence, and an independent numerical integration of the fixed-depth terms. Agents independent of the implementer reviewed the equations and implementation. There has been no human peer review. A separate reviewer agent attempted to reproduce Figs. 3, 5, and 8 with independent code using Eq. (20) of Simonsen et al. (1997), outside the package's oscillator model. Of 84 comparison points, 36 lie within the figure-reading uncertainty, 18 outside it, and 30 depend on the assumed width. [Per-point results](benchmarks/paper_figures/RESULTS.md) · [Validation record](docs/VALIDATION.md)
 - The two momentum choices of the fixed-depth model are checked differently: the independent route I3 covers `k_parallel` (dispersionless and dispersive); `k_total` is checked through the 13a bulk identity, the deep limit and a second implementation of the same closed forms, with no independent check of all finite-depth terms for dispersive inputs.
 - Both momentum choices failed the preregistered QUEELS-XPS v2.1 comparison for dispersive Al. In three preregistered synthetic follow-up runs, all components of a candidate expression agreed with the v2.1 numerical output within the preset tolerance. The published expression used by xpsloss exceeded the tolerance for at least one component in each run. The comparison did not examine QUEELS-XPS internals. [Original comparison](docs/M2_FIRST_CASE.md) · [Follow-up](docs/QUEELS_DISPERSION_TEST.md)
+
+### Added (pre-release, phase 4c)
+
+- `benchmarks/queels_prereg/`: the derived candidate code of the preregistered QUEELS-XPS v2.1 follow-up (without the reference-software value table), the frozen predictions (byte-identical to the registered file) and a portable evaluator that applies the registered decision rule to the reader's own exports; `predict --check` verifies the predictions byte by byte. [README](benchmarks/queels_prereg/README.md)
+- `benchmarks/paper_figures/`: independent Eq. (20) code for Figs. 3, 5 and 8 of Simonsen et al. (1997), cited figure readings, a uniform width rule based on Table I, refined computed peaks, and a generated per-point comparison; `generate.py --check` verifies the tables byte by byte. [Results](benchmarks/paper_figures/RESULTS.md)
+- The source distribution ships these folders and `benchmarks/numerics/`.
 
 ### Changed (pre-release numerical robustness, phase 4a)
 

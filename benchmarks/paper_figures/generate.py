@@ -5,8 +5,10 @@ from collections import Counter
 import csv
 from functools import lru_cache
 from pathlib import Path
+import tempfile
 
 import numpy as np
+from scipy.optimize import minimize_scalar
 
 if __package__:
     from . import model
@@ -19,21 +21,23 @@ OUTSIDE = "outside"
 DEPENDENT = "depends on width assumption"
 
 
-def widths(figure, energy):
-    """Table I is on p. 1615. It has 1180 eV, not 1000 eV."""
-    if figure == 3:
-        return [(1.5, "assumed from 1180 eV"), (1.6, "assumed sensitivity"),
-                (1.7, "assumed sensitivity")]
-    if figure == 8:
-        return [(1.44, "assumed interpolation (1180/2000 eV)"), (1.5, "assumed from 1180 eV")]
-    return {
-        200: [(3.4, "assumed from 175 eV"), (2.1, "assumed from 500 eV")],
-        500: [(2.1, "Table I")],
-        1000: [(1.5, "assumed from 1180 eV")],
-        2000: [(1.3, "Table I")],
-        5000: [(1.3, "assumed from 2000 eV")],
-        10000: [(1.3, "assumed from 2000 eV")],
-    }[energy]
+TABLE_I = {175: 3.4, 300: 2.8, 500: 2.1, 1180: 1.5, 2000: 1.3}
+POST_HOC = {(3, 1000): (1.6, 1.7), (5, 200): (2.1,)}
+
+
+def widths(energy):
+    """Classification widths for every figure, from Table I on p. 1615."""
+    if energy in TABLE_I:
+        return [(TABLE_I[energy], "Table I")]
+    if energy > max(TABLE_I):
+        return [(TABLE_I[2000], "assumed from 2000 eV")]
+    for low, high in zip(sorted(TABLE_I), sorted(TABLE_I)[1:]):
+        if low < energy < high:
+            interpolated = TABLE_I[low] + (TABLE_I[high] - TABLE_I[low]) * (energy - low) / (high - low)
+            return [(TABLE_I[low], f"neighbour at {low} eV"),
+                    (TABLE_I[high], f"neighbour at {high} eV"),
+                    (interpolated, f"linear interpolation ({low}/{high} eV)")]
+    raise ValueError(f"energy below Table I: {energy} eV")
 
 
 @lru_cache(maxsize=None)
@@ -48,23 +52,15 @@ def components(figure, energy, depth, width, momentum, loss):
     return {"electron": electron, "hole": hole, "total": electron + hole}
 
 
-def computed(point, width, momentum):
-    figure = int(point["figure"])
-    energy = float(point["E0_eV"])
-    depth = float(point["depth_A"]) if point["depth_A"] else None
-    component = point["component"]
-    quantity = point["quantity"]
-    if component == "bulk":
-        momentum = None  # Eq. (1) has a single integration variable k.
-
+@lru_cache(maxsize=None)
+def peak_values(figure, energy, depth, width, momentum, component, surface):
+    """Return grid and refined (position, height) pairs for the same local maximum."""
     def at(loss):
         return components(figure, energy, depth, width, momentum, loss)[component]
 
-    if quantity == "value":
-        return at(float(point["loss_eV"]))
     if figure == 3:
         low, high, step = (8 if component == "bulk" else 13), 25, 0.05
-    elif quantity.startswith("surface"):
+    elif surface:
         low, high, step = 10, 12, 0.1
     else:
         low = 14
@@ -77,36 +73,77 @@ def computed(point, width, momentum):
     grid = grid.round(10)
     values = [at(loss) for loss in grid]
     peak = np.argmax(values)
-    return grid[peak] if quantity.endswith("position") else values[peak]
+    if not 0 < peak < len(grid) - 1:
+        raise ValueError("peak is not bracketed inside its search window")
+    bounds = (grid[peak - 1], grid[peak + 1])
+    optimum = minimize_scalar(lambda x: -at(x), bounds=bounds, method="bounded",
+                              options={"xatol": 1e-8})
+    if not optimum.success:
+        raise ValueError(f"peak refinement failed: {optimum.message}")
+    # Check the optimizer against a three-point vertex on a decimal grid.
+    # Re-evaluate the curve itself at the reported micro-eV position.
+    spacing = 0.0001
+    center = round(float(optimum.x), 4)
+    left, middle, right = at(center - spacing), at(center), at(center + spacing)
+    curvature = left - 2 * middle + right
+    if curvature >= 0 or middle < max(left, right):
+        raise ValueError("local grid does not bracket a concave maximum")
+    position = round(center + spacing * (left - right) / (2 * curvature), 6)
+    height = at(position)
+    if abs(position - optimum.x) > 1e-5 or abs(height + optimum.fun) > 1e-10:
+        raise ValueError("peak refinements disagree beyond the position/height tolerances")
+    return (grid[peak], values[peak]), (position, height)
+
+
+def computed(point, width, momentum):
+    figure = int(point["figure"])
+    energy = float(point["E0_eV"])
+    depth = float(point["depth_A"]) if point["depth_A"] else None
+    component, quantity = point["component"], point["quantity"]
+    if quantity == "value":
+        value = components(figure, energy, depth, width, momentum, float(point["loss_eV"]))[component]
+        return None, value
+    grid, refined = peak_values(figure, energy, depth, width, None if component == "bulk" else momentum,
+                                component, quantity.startswith("surface"))
+    index = 0 if quantity.endswith("position") else 1
+    return grid[index], refined[index]
+
+
+def classify(policy_rows, choices, extrapolated):
+    outcomes = [{row[ch + "_within"] for row in policy_rows} for ch in choices]
+    if any(len(flags) > 1 for flags in outcomes):
+        return DEPENDENT
+    if any(False in flags for flags in outcomes):
+        return OUTSIDE
+    return DEPENDENT if extrapolated else WITHIN
 
 
 def compare_point(point):
     observed, error = float(point["reading"]), float(point["uncertainty"])
     rows = []
-    for width, source in widths(int(point["figure"]), float(point["E0_eV"])):
-        row = dict(point, width_eV=width, width_source=source)
+    energy = float(point["E0_eV"])
+    widths_to_check = widths(energy) + [(w, "sensitivity (post hoc)")
+                                        for w in POST_HOC.get((int(point["figure"]), energy), ())]
+    for width, source in widths_to_check:
+        row = dict(point, width_eV=width, width_source=source, policy_width=source != "sensitivity (post hoc)")
         for choice in model.MOMENTA:
-            value = computed(point, width, choice)
+            grid, value = computed(point, width, choice)
             row[choice] = f"{value:.12g}"
-            # Decimal grid positions exactly one reading interval away are inside.
-            row[choice + "_within"] = bool(abs(value - observed) <= error + 1e-14)
+            row[choice + "_grid"] = "" if grid is None else f"{grid:.12g}"
+            margin = abs(value - observed) - error
+            row[choice + "_margin"] = f"{margin:.8g}"
+            row[choice + "_within"] = bool(margin <= 0)
         rows.append(row)
-    outcomes = [{row[ch + "_within"] for row in rows} for ch in model.MOMENTA]
-    if any(len(flags) > 1 for flags in outcomes):
-        status = DEPENDENT
-    elif any(False in flags for flags in outcomes):
-        status = OUTSIDE
-    elif len(rows) == 1 and rows[0]["width_source"] != "Table I":
-        status = DEPENDENT
-    else:
-        status = WITHIN
+    policy_rows = [row for row in rows if row["policy_width"]]
+    extrapolated = energy > max(TABLE_I)
+    statuses = {ch + "_status": classify(policy_rows, (ch,), extrapolated) for ch in model.MOMENTA}
+    statuses["status"] = classify(policy_rows, model.MOMENTA, extrapolated)
     for row in rows:
-        row["status"] = status
+        row.update(statuses)
     return rows
 
 
 def write_results(groups, destination):
-    counts = Counter(rows[0]["status"] for rows in groups)
     lines = [
         "# 原著の図3・5・8との比較",
         "",
@@ -116,18 +153,35 @@ def write_results(groups, destination):
         "独立実装で式(20)を使い、法線出射の比較点ごとに紙面の読取りと照合した。"
         "同じ点の線幅違いは一度だけ数える。",
         "",
-        "| 比較点 | 読取り誤差内 | 誤差外 | 幅の仮定に依存 |",
-        "|---:|---:|---:|---:|",
-        f"| {len(groups)} | {counts[WITHIN]} | {counts[OUTSIDE]} | {counts[DEPENDENT]} |",
+        "| 図 | 判定に使う運動量 | 比較点 | 読取り誤差内 | 誤差外 | 幅の仮定に依存 |",
+        "|---|---|---:|---:|---:|---:|",
+    ]
+    points = [rows[0] for rows in groups]
+    for figure in ("全図", "3", "5", "8"):
+        selected = [p for p in points if figure == "全図" or p["figure"] == figure]
+        for label, field in (("両方", "status"), ("k_parallel", "k_parallel_status"), ("k_total", "k_total_status")):
+            counts = Counter(p[field] for p in selected)
+            lines.append(f"| {figure} | {label} | {len(selected)} | {counts[WITHIN]} |"
+                         f" {counts[OUTSIDE]} | {counts[DEPENDENT]} |")
+    labels = {WITHIN: "誤差内", OUTSIDE: "誤差外", DEPENDENT: "幅依存"}
+    lines.extend(["", "片方の運動量だけが全判定幅で誤差外となった点を示す。", ""])
+    for p in points:
+        failed = [ch for ch in model.MOMENTA if p[ch + "_status"] == OUTSIDE]
+        if len(failed) == 1:
+            name = p["quantity"].replace("_", " ") if not p["loss_eV"] else f'{p["loss_eV"]} eV の値'
+            lines.append(f'- 図{p["figure"]}({p["panel"]})、E₀ = {p["E0_eV"]} eV、'
+                         f'{p["component"]} {name}。誤差外は {failed[0]}。総合判定は{labels[p["status"]]}。')
+    lines.extend([
         "",
-        "各行に一つの幅を示す。○はその幅で読取り誤差内、×は誤差外。"
+        "図5(b)の2000 eV付近では上位の正孔曲線が重なり、読み取ったピークの帰属に不確かさがある。",
+        "",
+        "各行に一つの幅を示す。○はその幅で読取り誤差内、×は誤差外。「事後」の行は集計から除いた。"
         "全体判定の規則、読取り方、単位、再計算コマンドは [README](README.md) に記載した。"
         "数値と各運動量の判定は [比較表](comparison.csv) から取得できる。",
         "",
         "|図・パネル|E₀ (eV)|深さ (Å)|成分・量|ħγ₀ (eV)|読取り ± 誤差|k_parallel|k_total|点の判定|",
         "|---|---:|---:|---|---:|---|---|---|---|",
-    ]
-    labels = {WITHIN: "誤差内", OUTSIDE: "誤差外", DEPENDENT: "幅依存"}
+    ])
     for rows in groups:
         for r in rows:
             name = r["component"] + " " + r["quantity"].replace("_", " ")
@@ -136,7 +190,8 @@ def write_results(groups, destination):
             values = [f'{float(r[ch]):.7g} {"○" if r[ch + "_within"] else "×"}'
                       for ch in model.MOMENTA]
             lines.append(f'|{r["figure"]} {r["panel"]}|{r["E0_eV"]}|{r["depth_A"] or "—"}|{name}|'
-                         f'{r["width_eV"]}|{r["reading"]} ± {r["uncertainty"]}|'
+                         f'{r["width_eV"]:.7g}{" (事後)" if not r["policy_width"] else ""}|'
+                         f'{r["reading"]} ± {r["uncertainty"]}|'
                          f'{values[0]}|{values[1]}|{labels[r["status"]]}|')
     destination.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
@@ -153,7 +208,25 @@ def generate(output):
     write_results(groups, output / "RESULTS.md")
 
 
-if __name__ == "__main__":
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, default=HERE)
-    generate(parser.parse_args().out)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--out", type=Path, default=HERE)
+    mode.add_argument("--check", action="store_true", help="regenerate and compare both distributed files")
+    args = parser.parse_args(argv)
+    if args.check:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            generate(output)
+            ok = True
+            for name in ("comparison.csv", "RESULTS.md"):
+                same = (output / name).read_bytes() == (HERE / name).read_bytes()
+                print(f"{name}: {'identical' if same else 'differs'}")
+                ok &= same
+            return 0 if ok else 1
+    generate(args.out)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
