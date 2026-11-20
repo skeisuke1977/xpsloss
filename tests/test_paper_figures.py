@@ -18,8 +18,8 @@ class PaperFigureTests(unittest.TestCase):
         md_text = "|3 single|1000|2|total bulk peak height|2.1|0.092 ± 0.001|0.07300294 ×|0.07258735 ×|誤差外|\n"
 
         def write_tables(folder, table, report):
-            (folder / "comparison.csv").write_text(table, encoding="utf-8")
-            (folder / "RESULTS.md").write_text(report, encoding="utf-8")
+            (folder / "comparison.csv").write_text(table, encoding="utf-8", newline="\n")
+            (folder / "RESULTS.md").write_text(report, encoding="utf-8", newline="\n")
 
         with tempfile.TemporaryDirectory() as tmp, patch.object(generate, "HERE", Path(tmp)):
             write_tables(Path(tmp), csv_text, md_text)
@@ -31,12 +31,45 @@ class PaperFigureTests(unittest.TestCase):
                 (csv_text.replace("outside", "within"), md_text.replace("×", "○"), ("row 2, status:", "line 1:")),
                 (csv_text.replace("0.0730029433454", "nan"), md_text, ("row 2, k_parallel:",)),
                 (csv_text.splitlines(keepends=True)[0], md_text, ("row 2:",)),
+                (csv_text.replace("\n", "\r\n"), md_text, ("generated: expected LF",)),
+                (csv_text, md_text.replace("\n", "\r\n"), ("generated: expected LF",)),
             ):
                 with self.subTest(table=table, report=report), redirect_stdout(StringIO()) as log:
                     with patch.object(generate, "generate", side_effect=lambda dest: write_tables(dest, table, report)):
                         self.assertEqual(generate.main(["--check"]), 1 if diagnostics else 0)
                     for detail in diagnostics:
                         self.assertIn(detail, log.getvalue())
+
+    def test_csv_tolerances_at_and_beyond_the_boundary(self):
+        header = "quantity,k_parallel,k_parallel_grid,k_parallel_margin,E0_eV\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            ref, new = (Path(tmp) / name for name in ("reference.csv", "generated.csv"))
+            for original, changed, different_columns in (
+                ("bulk_peak_position,15.504847,15.5,-0.095153,1000",
+                 "bulk_peak_position,15.504849,15.499998,-0.095155,1000", []),
+                ("bulk_peak_position,15.504847,15.5,-0.095153,1000",
+                 "bulk_peak_position,15.504850,15.499997,-0.095156,1000",
+                 ["k_parallel", "k_parallel_grid", "k_parallel_margin"]),
+                ("bulk_peak_height,0.02,0.019,-1e-7,1000",
+                 "bulk_peak_height,0.02,0.019,-1.0002e-7,1000", []),
+                ("bulk_peak_height,0.02,0.019,-1e-7,1000",
+                 "bulk_peak_height,0.02,0.019,-1.00021e-7,1000.0", ["k_parallel_margin", "E0_eV"]),
+            ):
+                with self.subTest(row=changed):
+                    ref.write_text(header + original + "\n", encoding="utf-8", newline="\n")
+                    new.write_text(header + changed + "\n", encoding="utf-8", newline="\n")
+                    differences = list(generate.csv_differences(ref, new))
+                    self.assertEqual([d.split(":")[0] for d in differences],
+                                     ["row 2, " + column for column in different_columns])
+
+    def test_markdown_rejects_a_third_momentum_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ref, new = (Path(tmp) / name for name in ("reference.md", "generated.md"))
+            ref.write_text("|1 ×|2 ×|3 ×|\n", encoding="utf-8", newline="\n")
+            for third in (3, 4):
+                new.write_text(f"|1 ×|2 ×|{third} ×|\n", encoding="utf-8", newline="\n")
+                self.assertEqual(list(generate.results_differences(ref, new)),
+                                 ["line 1: expected 2 momentum values, got 3"])
 
     def test_200_ev_bulk_peak_at_policy_and_post_hoc_widths(self):
         def peak(row):

@@ -3,9 +3,9 @@
 import argparse
 from collections import Counter
 import csv
+from decimal import Decimal, DecimalException
 from functools import lru_cache
 from itertools import zip_longest
-import math
 from pathlib import Path
 import re
 import tempfile
@@ -24,15 +24,16 @@ OUTSIDE = "outside"
 DEPENDENT = "depends on width assumption"
 
 # compare_point writes 12 significant digits for values and 8 for margins.
-CSV_REL_TOL = 1e-9
-MARGIN_REL_TOL = 1e-7
-ABS_TOL = 1e-12
+CSV_REL_TOL = Decimal("1e-9")
+MARGIN_REL_TOL = Decimal("1e-7")
+ABS_TOL = Decimal("1e-12")
+POSITION_ABS_TOL = Decimal("2e-6")  # Refined positions are rounded to micro-eV.
 NUMERIC_COLUMNS = {
-    "figure", "E0_eV", "depth_A", "loss_eV", "reading", "uncertainty", "width_eV",
+    "width_eV",
     "k_parallel", "k_parallel_grid", "k_parallel_margin", "k_total", "k_total_grid", "k_total_margin",
 }
 # write_results prints each calculated value to 7 significant digits next to its verdict.
-RESULT_REL_TOL = 1e-6
+RESULT_REL_TOL = Decimal("1e-6")
 RESULT_VALUE = re.compile(r"(?<=\|)(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)(?= [○×]\|)")
 
 
@@ -223,12 +224,38 @@ def generate(output):
     write_results(groups, output / "RESULTS.md")
 
 
-def close_numbers(expected, actual, rel_tol):
+def close_numbers(expected, actual, rel_tol, abs_tol=ABS_TOL, *, margin_value=None):
+    # Compare the printed decimals, including a difference exactly on a tolerance boundary.
     try:
-        a, b = float(expected), float(actual)
-    except ValueError:
+        a, b = Decimal(expected), Decimal(actual)
+        if not (a.is_finite() and b.is_finite()):
+            return False
+        if margin_value is not None:
+            value = Decimal(margin_value)
+            if not value.is_finite():
+                return False
+            abs_tol = max(abs_tol, CSV_REL_TOL * abs(value))
+        return abs(a - b) <= max(abs_tol, rel_tol * max(abs(a), abs(b)))
+    except DecimalException:
         return False
-    return math.isfinite(a) and math.isfinite(b) and math.isclose(a, b, rel_tol=rel_tol, abs_tol=ABS_TOL)
+
+
+def csv_cell_matches(row, column, actual):
+    expected = row[column]
+    if column not in NUMERIC_COLUMNS or not expected or not actual:
+        return expected == actual
+    if column.startswith("k_") and row.get("quantity", "").endswith("position"):
+        return close_numbers(expected, actual, 0, POSITION_ABS_TOL)
+    if column.endswith("_margin"):
+        value = row.get(column.removesuffix("_margin"), "")
+        return close_numbers(expected, actual, MARGIN_REL_TOL, margin_value=value)
+    return close_numbers(expected, actual, CSV_REL_TOL)
+
+
+def line_ending_differences(reference, generated):
+    for label, stream in (("reference", reference), ("generated", generated)):
+        if stream.newlines not in (None, "\n"):
+            yield f"{label}: expected LF line endings, found {stream.newlines!a}"
 
 
 def csv_differences(reference, generated):
@@ -242,29 +269,28 @@ def csv_differences(reference, generated):
             if expected is None or actual is None or len(expected) != len(header) or len(actual) != len(header):
                 yield f"row {line}: expected {expected!a}, got {actual!a}"
                 continue
-            for column, a, b in zip(header, expected, actual):
-                if column in NUMERIC_COLUMNS and (a or b):
-                    tolerance = MARGIN_REL_TOL if column.endswith("_margin") else CSV_REL_TOL
-                    same = close_numbers(a, b, tolerance)
-                else:
-                    same = a == b
-                if not same:
-                    yield f"row {line}, {column}: expected {a!a}, got {b!a}"
+            row = dict(zip(header, expected))
+            for column, value in zip(header, actual):
+                if not csv_cell_matches(row, column, value):
+                    yield f"row {line}, {column}: expected {row[column]!a}, got {value!a}"
+        yield from line_ending_differences(ref, new)
 
 
 def results_differences(reference, generated):
     with reference.open(encoding="utf-8") as ref, generated.open(encoding="utf-8") as new:
         for line, (expected, actual) in enumerate(zip_longest(ref, new), start=1):
-            if expected == actual:
-                continue
             # Even fields contain all prose, delimiters, counts and verdict marks.
             left, right = RESULT_VALUE.split(expected or ""), RESULT_VALUE.split(actual or "")
             if left[::2] != right[::2]:
                 yield f"line {line}: expected {expected!a}, got {actual!a}"
                 continue
+            if len(left[1::2]) not in (0, len(model.MOMENTA)):
+                yield f"line {line}: expected {len(model.MOMENTA)} momentum values, got {len(left[1::2])}"
+                continue
             for column, a, b in zip(model.MOMENTA, left[1::2], right[1::2]):
                 if not close_numbers(a, b, RESULT_REL_TOL):
                     yield f"line {line}, {column}: expected {a!a}, got {b!a}"
+        yield from line_ending_differences(ref, new)
 
 
 def main(argv=None):

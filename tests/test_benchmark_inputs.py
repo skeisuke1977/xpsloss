@@ -273,6 +273,7 @@ class BenchmarkRecordTests(unittest.TestCase):
                     {key: value for key, value in provenance.items() if key != "strength_basis"},
                     {**provenance, "strength_basis": "relative"},
                     {**provenance, "scope_note": ""},
+                    {**provenance, "scope_note": "lone\udfff"},
                     {**provenance, "raw_file_sha256": "0" * 63},
                     {**provenance, "raw_file_sha256": "g" * 64},
                     {**provenance, "raw_file_sha256": None}):

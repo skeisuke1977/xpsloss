@@ -12,6 +12,13 @@ import numpy as np
 from .model import MODEL_ID, Material, Oscillator, finite_number
 
 
+def _require_utf8(text, label):
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise ValueError(f"{label} must be valid UTF-8 text (lone surrogate)") from exc
+
+
 def keys(obj, required, optional=(), *, label):
     if not isinstance(obj, dict):
         raise ValueError(f"{label} must be a JSON object")
@@ -47,6 +54,7 @@ def _parse_provenance(obj):
             continue
         if not isinstance(obj[key], str) or not obj[key].strip():
             raise ValueError(f"provenance.{key} must be a nonempty string")
+        _require_utf8(obj[key], f"provenance.{key}")
     if "raw_file_sha256" in obj:
         digest = obj["raw_file_sha256"]
         if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
@@ -104,6 +112,7 @@ def parse_config(obj, input_sha256=""):
         keys(osc, ["energy_eV", "strength_eV2", "width_eV", "dispersion"], label=f"oscillator {i}")
         oscillators.append(Oscillator(**osc))
     material = Material(mat["name"], mat["gap_eV"], tuple(oscillators))
+    _require_utf8(material.name, "material.name")
     energy = finite_number(obj["electron_energy_eV"], "electron_energy_eV")
     grid = obj["loss_grid_eV"]
     keys(grid, ["min", "max", "step"], label="loss_grid_eV")
@@ -143,7 +152,9 @@ def _reject_constant(value):
 
 
 def load_config(path):
-    raw = Path(path).read_bytes()
+    path = Path(path)
+    _require_utf8(str(path), "input path")
+    raw = path.read_bytes()
     obj = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_unique_object,
                      parse_constant=_reject_constant)
     return parse_config(obj, hashlib.sha256(raw).hexdigest())

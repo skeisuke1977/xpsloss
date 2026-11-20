@@ -215,6 +215,29 @@ class CLITests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     parse_config(data)
 
+    def test_lone_surrogates_rejected_before_creating_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "input.json"
+            output = Path(tmp) / "output"
+            obj = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+            obj["material"]["name"] = "lone\ud800"
+            path.write_text(json.dumps(obj), encoding="ascii")
+            for args in (("validate", path), ("bulk", path, "--out", output)):
+                with self.subTest(command=args[0]):
+                    result = self.call(*args)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(result.stdout, "")
+                    error = json.loads(result.stderr)
+                    self.assertEqual((error["status"], error["error_type"]), ("error", "ValueError"))
+                    self.assertIn("material.name", error["message"])
+                    self.assertFalse(output.exists())
+
+            obj["material"]["name"] = "paired \U0001f600"
+            path.write_text(json.dumps(obj), encoding="ascii")
+            self.assertEqual(load_config(path).material.name, obj["material"]["name"])
+            with self.assertRaisesRegex(ValueError, "input path"):
+                load_config(Path(tmp) / "bad\udcff.json")
+
     def test_nonfinite_and_duplicate_json_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "bad.json"

@@ -82,7 +82,7 @@ python3 -m venv .venv
 
 計算結果の `run.json` には、コマンドラインで指定した表記のままの入力パス `input_file` と、入力ファイルのバイト列の SHA-256 `input_sha256` が入ります。
 
-API の数値未収束では `NumericalConvergenceError` またはその派生例外が発生します。CLI は数値未収束を `not_converged`、入力の誤りを `error` として標準エラーに返します。どちらも終了コード2で止まり、新しい出力先は作りません。`dielectric` と `xps-fixed-depth` は、成功時の標準出力に `warning_count` を含めます。`run.json` の診断名 `static_sign`、`kinematics` の旧名は[変更履歴](CHANGELOG.md)にあります。標準出力と標準エラーの JSON は、ASCII 以外の文字をエスケープして書くので、端末の文字コードによらず正しい JSON になります。`run.json` は UTF-8 で、文字をそのまま保存します。
+API の数値未収束では `NumericalConvergenceError` またはその派生例外が発生します。CLI は数値未収束を `not_converged`、入力の誤りを `error` として標準エラーに返します。どちらも終了コード2で止まり、新しい出力先は作りません。`dielectric` と `xps-fixed-depth` は、成功時の標準出力に `warning_count` を含めます。`run.json` の診断名 `static_sign`、`kinematics` の旧名は[変更履歴](CHANGELOG.md)にあります。標準出力と標準エラーの JSON は、ASCII 以外の文字をエスケープして書くので、端末・パイプ・ファイルの文字コードによらず正しい JSON になります。`run.json` は UTF-8 で、文字をそのまま保存します。
 
 ## ライセンスと引用
 
@@ -106,4 +106,4 @@ Keisuke Sato がコードを MIT、自作文書を CC BY 4.0 で提供します�
 - `docs/REFERENCES.md`: 一次資料と用途。
 - `NOTICES.md`: ライセンスの適用範囲、同梱データの帰属表示、参照ソフトとの関係。
 
-公開候補の全116件が、Windows の Python 3.12.10（NumPy 2.5.5、SciPy 1.18.1）と Python 3.10.22（NumPy 1.24.0、SciPy 1.10.0）で、作業ツリーから合格しました。端末の文字コードは既定のままです。その前の版の全112件は、両方の環境で展開した sdist からも合格しました。別担当も、Windows の Python 3.11.14（NumPy 2.4.6、SciPy 1.17.1）で、展開した sdist の全112件を確認しました。以前の版のテスト（75件）は、CI で Linux（Python 3.10 と依存の最低版、3.12）、Windows（3.12）、macOS（3.13）と、wheel の導入・展開した sdist のテストのジョブに合格しました。公開の前に、公開候補で CI を改めて確かめます。詳細は `docs/VALIDATION.md` を参照してください。
+公開候補の全119件が、Windows の Python 3.12.10（NumPy 2.5.5、SciPy 1.18.1）と Python 3.10.22（NumPy 1.24.0、SciPy 1.10.0）で、作業ツリーから合格しました。Python 3.12.10 では、展開した sdist からも合格しました。UTF-8 モードを使わず、リダイレクトした出力は既定の文字コード（cp932）でした。その前の版の全112件は、両方の環境で展開した sdist からも合格しました。別担当も、Windows の Python 3.11.14（NumPy 2.4.6、SciPy 1.17.1）で、展開した sdist の全112件を確認しました。以前の版のテスト（75件）は、CI で Linux（Python 3.10 と依存の最低版、3.12）、Windows（3.12）、macOS（3.13）と、wheel の導入・展開した sdist のテストのジョブに合格しました。公開の前に、公開候補で CI を改めて確かめます。詳細は `docs/VALIDATION.md` を参照してください。

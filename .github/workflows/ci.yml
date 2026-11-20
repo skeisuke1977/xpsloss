@@ -75,9 +75,11 @@ jobs:
           /tmp/wheelenv/bin/xpsloss bulk examples/synthetic_bulk.json --out runs/bulk
           /tmp/wheelenv/bin/xpsloss xps-fixed-depth examples/synthetic_bulk.json --depth-A 10 --epsilon-momentum k_total --out runs/fixed-depth
           /tmp/wheelenv/bin/python -m pip check
-      - name: Run the full test suite from the unpacked sdist
+      - name: Run the full test suite and benchmark checks from the unpacked sdist
         run: |
           mkdir /tmp/sdist && tar -xzf dist/*.tar.gz -C /tmp/sdist
           cd /tmp/sdist/xpsloss-*
           python -m pip install numpy scipy
           PYTHONPATH=src python -m unittest discover -s tests -v
+          PYTHONPATH=src python benchmarks/queels_prereg/evaluate_prereg.py predict --check
+          python benchmarks/paper_figures/generate.py --check
