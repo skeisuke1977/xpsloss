@@ -15,13 +15,13 @@ import scipy
 from . import __version__
 from .config import load_config
 from .dielectric import (
-    DIELECTRIC_MODEL_ID, DielectricConvergenceError, DielectricGapEdgeError,
+    DIELECTRIC_MODEL_ID, DielectricGapEdgeError,
     dielectric_diagnostics, dielectric_response,
 )
 from .model import (BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, MODEL_ID, FIXED_DEPTH_UNSUPPORTED_PHYSICS,
-                    UNSUPPORTED_PHYSICS, bulk_diimfp, finite_number, loss_function)
+                    NumericalConvergenceError, UNSUPPORTED_PHYSICS, bulk_diimfp, finite_number, loss_function)
 from .xps_fixed_depth import (
-    EPSILON_MOMENTA, FIXED_DEPTH_MODEL_ID, TERM_NAMES, FixedDepthConvergenceError,
+    EPSILON_MOMENTA, FIXED_DEPTH_MODEL_ID, TERM_NAMES,
     effective_cross_section_fixed_depth,
 )
 
@@ -205,7 +205,11 @@ def run(args):
             warnings.append("The hard gap gives a logarithmic edge singularity and can produce a real-axis pole in epsilon.")
         warnings.extend(physics.warnings)
     # Computation succeeds before creating output. A run.json marks a completed run.
-    args.out.mkdir(parents=True, exist_ok=False)
+    # mkdir is the exclusive claim, including when another run finishes first.
+    try:
+        args.out.mkdir(parents=True, exist_ok=False)
+    except FileExistsError as exc:
+        raise FileExistsError(f"output path already exists: {args.out}") from exc
     np.savetxt(args.out / output_name, table, delimiter=",", header=header,
                comments="", fmt="%.17g", encoding="utf-8")
     manifest = {
@@ -249,7 +253,7 @@ def main(argv=None):
             "offending_loss_eV": exc.offending_loss_eV, "remedy": exc.remedy,
         }, sys.stderr)
         return 2
-    except (DielectricConvergenceError, FixedDepthConvergenceError) as exc:
+    except NumericalConvergenceError as exc:
         emit({"status": "not_converged", "error_type": type(exc).__name__, "message": str(exc)}, sys.stderr)
         return 2
     except (ValueError, OSError, OverflowError, RuntimeError) as exc:

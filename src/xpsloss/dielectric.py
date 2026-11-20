@@ -8,15 +8,30 @@ import numpy as np
 from scipy.integrate import quad
 from scipy.optimize import brentq
 
-from .model import Material, _loss_coordinates, _oscillator_energy, finite_number, loss_function
+from .model import (COORDINATE_ULPS, DEFAULT_ABS, DEFAULT_REL, FLANK_RATIO, FLOAT_EPSILON, NEARBY_FACTOR,
+                    RECIPROCAL_ROUNDOFF, SUM_ROUNDOFF, Material, NumericalConvergenceError,
+                    _PanelLimitError, _accuracy, _first_loss, _loss_coordinates, _loss_point, _oscillator_energy,
+                    _oscillator_response, finite_number, loss_function)
 
 
 DIELECTRIC_MODEL_ID = "causal_oscillator_elf_v1"
-FLOAT_EPSILON = np.finfo(float).eps
-GAP_EDGE_WARNING_FRACTION = 1e-3
+GAP_EDGE_ULPS = 32  # Leave several representable neighbors outside the singular endpoint.
+GAP_EDGE_REL = 1e-12  # Relative hard-edge exclusion specified in DIELECTRIC_DESIGN.
+KK_REFINEMENT = 8  # Reduce the preceding absolute error per line by three binary digits per pass.
+TAB_ROUNDOFF = 32 * FLOAT_EPSILON  # Local weights, endpoint logarithms and compensated reduction.
+SMALL_SEGMENT_RATIO = 0.01  # Eighth-order log1p weight has relative remainder below 1e-16 here.
+TAIL_SERIES_RATIO = 0.03  # Five even powers suffice below this loss/cutoff ratio.
+TAIL_SLOPE_WARNING = 0.5  # Warn when the measured terminal exponent differs from -3 by half a unit.
+CLOSED_ABS = 1e-10  # Per-line cancellation budget for the auxiliary partial-fraction check.
+CLOSED_REL = 1e-9  # Leave two relative guard digits before combining closed-form terms.
+CLOSED_CENTER_REL = 1e-8  # Reserve one relative digit for the gap-to-pole distance at finite q.
+CRITICAL_SPLITTING_FRACTION = 0.25  # Use a divided difference when the two damped poles coalesce.
+
+GAP_EDGE_WARNING_FRACTION = 1e-3  # Diagnostic band expressed as a fraction of the gap.
+BRENT_MIN_REL = 4 * FLOAT_EPSILON  # Smallest relative root tolerance supported by brentq.
 
 
-class DielectricConvergenceError(RuntimeError):
+class DielectricConvergenceError(NumericalConvergenceError):
     """The numerical dielectric response could not be resolved."""
 
 
@@ -34,7 +49,12 @@ class DielectricGapEdgeError(ValueError):
 
 @dataclass(frozen=True)
 class DielectricResponse:
-    """Dimensionless responses and the quadrature error estimate for Re[-1/epsilon]."""
+    """Dimensionless responses and estimated absolute error of the real KK integral.
+
+    For a hard gap the estimate includes quadrature and arithmetic used to
+    reconstruct and sum the bands. Gapless analytic responses have zero
+    quadrature error; their component roundoff is checked separately.
+    """
 
     negative_inverse_epsilon: complex | np.ndarray
     epsilon: complex | np.ndarray
@@ -96,7 +116,7 @@ class TabulatedKK:
 def _quadrature(integrand, upper, points, settings):
     epsabs, epsrel, limit = settings
     if len(points) >= limit:
-        raise ValueError("dielectric integration limit is too small for oscillator breakpoints")
+        raise _PanelLimitError("dielectric integration limit is too small for oscillator breakpoints")
     result = quad(integrand, 0, upper, points=points, epsabs=epsabs,
                   epsrel=epsrel, limit=limit, full_output=True)
     if len(result) > 3:
@@ -114,7 +134,7 @@ def _breakpoints(start, stop, scale):
         point = start + direction * offset
         if point != start and point != stop:
             points.append(point)
-        offset *= 8
+        offset *= FLANK_RATIO
     return points
 
 
@@ -124,7 +144,7 @@ def _removed_kk_band(energy, gap, resonance, strength, width, settings):
         return ((resonance - u) * (resonance + u))**2 + (width * u)**2
 
     prefactor = 2 * strength * width / math.pi
-    if 0 < energy < gap or 0 < energy - gap <= min(gap / 2, max(width, resonance - gap)):
+    if 0 < energy < gap or 0 < energy - gap <= min(gap / NEARBY_FACTOR, max(width, resonance - gap)):
         anchor = min(energy, gap)
         at_anchor = denominator(anchor)
         resonance_squared = resonance**2
@@ -151,10 +171,14 @@ def _removed_kk_band(energy, gap, resonance, strength, width, settings):
         analytic = 0.0
 
     points = [p for p in _breakpoints(resonance, 0, max(width, resonance - gap)) if p < gap]
+    # Above the gap the anchor is the endpoint. The regularized integrand
+    # still turns over at gap-u ~ energy-gap, independently of the linewidth.
+    if energy > gap:
+        points.extend(_breakpoints(gap, 0, energy - gap))
     overdamped_scale = resonance * (resonance / width)
     points.extend(_breakpoints(0, gap, overdamped_scale))
     integral, error = _quadrature(integrand, gap, sorted(set(points)), settings)
-    return integral + analytic, error
+    return integral + analytic, error + SUM_ROUNDOFF * (abs(integral) + abs(analytic))
 
 
 def _retained_kk_band(energy, gap, resonance, strength, width, settings):
@@ -164,12 +188,12 @@ def _retained_kk_band(energy, gap, resonance, strength, width, settings):
     prefactor = (2 / math.pi) * (strength / gap / gap) * w
 
     def detuning(x):
-        return relative_spacing + r * (1 - x)
+        return (1 - r * x) if r > NEARBY_FACTOR else relative_spacing + r * (1 - x)
 
     def denominator(x):
         return (detuning(x) * (1 + r * x))**2 + (w * x)**2
 
-    if energy <= gap / 2:
+    if energy <= gap / NEARBY_FACTOR:
         def integrand(x):
             return prefactor * x**2 / (denominator(x) * (1 - (s * x)**2))
 
@@ -192,45 +216,89 @@ def _retained_kk_band(energy, gap, resonance, strength, width, settings):
         analytic = (prefactor / at_anchor) * anchor**2 * (gap / energy / 2) * log_ratio
 
     points = _breakpoints(1.0, 0, max(relative_spacing, w))
+    if gap / NEARBY_FACTOR < energy < gap:
+        points.extend(_breakpoints(1.0, 0, (gap - energy) / gap))
     points.extend(_breakpoints(0, 1.0, 1 / w))
     integral, error = _quadrature(integrand, 1.0, sorted(set(points)), settings)
-    return integral + analytic, error
+    return integral + analytic, error + SUM_ROUNDOFF * (abs(integral) + abs(analytic))
+
+
+def _gapped_real(lines, energy, gap, epsabs, epsrel, limit, location):
+    """Sum KK bands, refining to a shared absolute budget when terms cancel."""
+    count = len(lines)
+    # Use the same pilot and refinement sequence at every requested tolerance.
+    # A looser tolerance accepts an earlier pass or the same pass.
+    abs_goal, rel_goal = DEFAULT_ABS / count, DEFAULT_REL
+    while True:
+        values, estimates = [-1.0], []
+        for i, center, osc, bare_real in lines:
+            try:
+                flank = max(abs(gap - center), osc.width_eV)
+                if COORDINATE_ULPS * math.ulp(center) > epsrel * flank:
+                    raise DielectricConvergenceError("failed to converge at the resonance flank")
+                params = (energy, gap, center, osc.strength_eV2, osc.width_eV, (abs_goal, rel_goal, limit))
+                overdamped = osc.width_eV >= 2 * center and center * (center / osc.width_eV) <= gap
+                if center < gap or overdamped:
+                    value, estimate = _retained_kk_band(*params)
+                else:
+                    correction, estimate = _removed_kk_band(*params)
+                    value = bare_real - correction
+                    estimate += SUM_ROUNDOFF * (abs(bare_real) + abs(correction))
+            except _PanelLimitError as exc:
+                raise ValueError(f"gapped KK oscillator {i}, {location}: {exc}") from exc
+            except (ArithmeticError, DielectricConvergenceError) as exc:
+                raise DielectricConvergenceError(f"gapped KK oscillator {i}, {location}: {exc}") from exc
+            values.append(value)
+            estimates.append(estimate)
+        try:
+            real = math.fsum(values)
+            error = math.fsum(estimates) + SUM_ROUNDOFF * math.fsum(map(abs, values))
+        except (OverflowError, ValueError) as exc:
+            raise DielectricConvergenceError(f"gapped KK oscillator sum outside numerical range at {location}") from exc
+        if math.isfinite(real) and math.isfinite(error) and error <= _accuracy(real, epsabs, epsrel):
+            return real, error
+        # Divide the observed error between all oscillators, using only an
+        # absolute target on the next pass. Stop if rounding prevents progress.
+        next_goal = error / (KK_REFINEMENT * count)
+        if not math.isfinite(next_goal) or next_goal <= 0 or (rel_goal == 0 and next_goal >= abs_goal):
+            raise DielectricConvergenceError(f"gapped KK oscillator sum failed to converge at {location}")
+        abs_goal, rel_goal = next_goal, 0.0
 
 
 def _inverse_response(material, energies, q, epsabs, epsrel, limit):
     real = np.full(energies.shape, -1.0)
     error = np.zeros(energies.shape)
-    oscillators = tuple(o for o in material.oscillators if o.strength_eV2 > 0)
-    if not oscillators or not energies.size:
-        return real.astype(complex), error
+    imag = np.zeros(energies.shape)
     gap = material.gap_eV
-
-    try:
-        with np.errstate(over="raise", invalid="raise", divide="raise"):
-            for osc in oscillators:
-                resonance = _oscillator_energy(osc, q)
-                if gap == 0:
-                    delta = (resonance - energies) * (resonance + energies)
-                    real += (osc.strength_eV2 / (delta - 1j * osc.width_eV * energies)).real
-                    continue
-                settings = (epsabs / len(oscillators), epsrel, limit)
-                for index in np.ndindex(energies.shape):
-                    energy, center = float(energies[index]), float(resonance[index])
-                    parameters = (energy, gap, center, osc.strength_eV2, osc.width_eV, settings)
-                    if center < gap:
-                        contribution, estimate = _retained_kk_band(*parameters)
-                    else:
-                        correction, estimate = _removed_kk_band(*parameters)
-                        delta = (center - energy) * (center + energy)
-                        bare = osc.strength_eV2 / complex(delta, -osc.width_eV * energy)
-                        contribution = bare.real - correction
-                    real[index] += contribution
-                    error[index] += estimate
-            result = real + 1j * loss_function(material, energies, q)
-    except (FloatingPointError, OverflowError, ZeroDivisionError) as exc:
-        raise ValueError("dielectric response is outside the numerical range") from exc
-    if not np.all(np.isfinite(result)) or not np.all(np.isfinite(error)):
-        raise ValueError("nonfinite dielectric response")
+    bands = []
+    magnitude = np.ones(energies.shape)
+    active = 0
+    with np.errstate(over="ignore", invalid="ignore"):
+        for i, osc in enumerate(material.oscillators):
+            if not osc.strength_eV2:
+                continue
+            active += 1
+            try:
+                bare = _oscillator_response(osc, energies, q, for_real_sum=True)
+            except NumericalConvergenceError as exc:
+                raise DielectricConvergenceError(f"dielectric oscillator {i}: {exc}") from exc
+            imag += bare.imag
+            if gap:
+                bands.append((i, _oscillator_energy(osc, q), osc, bare.real))
+            else:
+                real += bare.real
+                magnitude += abs(bare.real)
+        if bands:
+            for index in np.ndindex(energies.shape):
+                lines = [(i, float(center[index]), osc, float(bare[index])) for i, center, osc, bare in bands]
+                real[index], error[index] = _gapped_real(
+                    lines, float(energies[index]), gap, epsabs, epsrel, limit, _loss_point(energies, index))
+        result = real + 1j * np.where(energies > gap, imag, 0.0)
+    bad = ~np.isfinite(result)
+    if not gap:
+        bad |= SUM_ROUNDOFF * active * magnitude > _accuracy(real, epsabs, epsrel)
+    if np.any(bad):
+        raise DielectricConvergenceError(f"dielectric oscillator sum failed to converge at {_first_loss(energies, bad)}")
     return result, error
 
 
@@ -238,7 +306,7 @@ def _gap_edge_exclusion_eV(material):
     gap = material.gap_eV
     if gap == 0 or all(o.strength_eV2 == 0 for o in material.oscillators):
         return 0.0
-    return max(math.ulp(0.0), min(gap / 2, max(32 * math.ulp(gap), 1e-12 * gap)))
+    return max(math.ulp(0.0), min(gap / 2, max(GAP_EDGE_ULPS * math.ulp(gap), GAP_EDGE_REL * gap)))
 
 
 def _check_gap_edge(material, energies):
@@ -257,7 +325,7 @@ def _static_response(material, q, epsabs, epsrel, limit):
     real = response.real
     count = sum(o.strength_eV2 > 0 for o in material.oscillators)
     # Scale from 1 and the positive static KK contribution F(0)+1.
-    tolerance = error + (8 * (count + 1) * FLOAT_EPSILON) * (1 + abs(real + 1))
+    tolerance = error + (COORDINATE_ULPS * (count + 1) * FLOAT_EPSILON) * (1 + abs(real + 1))
     return real, tolerance
 
 
@@ -275,14 +343,15 @@ def _response_inputs(loss_eV, q_inv_A, epsabs, epsrel, limit):
 
 
 def negative_inverse_dielectric_function(
-    material: Material, loss_eV, q_inv_A=0.0, *, epsabs=1e-9, epsrel=1e-7, limit=200,
+    material: Material, loss_eV, q_inv_A=0.0, *, epsabs=DEFAULT_ABS, epsrel=DEFAULT_REL, limit=200,
 ):
     """Return F=-1/epsilon, with the existing ELF as Im(F) and F(infinity)=-1.
 
     Loss and q are nonnegative with NumPy broadcasting. At a positive hard
     gap edge, F diverges for any material with nonzero oscillator strength;
     points within the documented exclusion interval raise a gap edge error.
-    Quadrature settings apply for a positive gap.
+    At the supplied binary64 q, accuracy is checked on Re F itself, including
+    close to a dispersed resonance. Quadrature is needed only for a positive gap.
     """
     t, q, epsabs, epsrel = _response_inputs(loss_eV, q_inv_A, epsabs, epsrel, limit)
     _check_gap_edge(material, t)
@@ -291,7 +360,7 @@ def negative_inverse_dielectric_function(
 
 
 def dielectric_response(
-    material: Material, loss_eV, q_inv_A=0.0, *, epsabs=1e-9, epsrel=1e-7, limit=200,
+    material: Material, loss_eV, q_inv_A=0.0, *, epsabs=DEFAULT_ABS, epsrel=DEFAULT_REL, limit=200,
 ):
     """Return F, epsilon=-1/F, and the Re(F) error estimate.
 
@@ -311,13 +380,14 @@ def dielectric_response(
     response, error = _inverse_response(material, t, q, epsabs, epsrel, limit)
     if np.any(response == 0):
         raise ValueError("epsilon has a pole where -1/epsilon vanishes")
-    if np.any(abs(response) <= error):
-        raise DielectricConvergenceError("epsilon is unresolved near a zero of -1/epsilon")
-    try:
-        with np.errstate(over="raise", invalid="raise", divide="raise"):
-            epsilon = -1 / response
-    except FloatingPointError as exc:
-        raise ValueError("epsilon is outside the numerical range") from exc
+    unresolved = abs(response) <= error
+    if np.any(unresolved):
+        raise DielectricConvergenceError(f"epsilon unresolved near a zero of -1/epsilon at {_first_loss(t, unresolved)}")
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        epsilon = -1 / response
+    bad = ~np.isfinite(epsilon)
+    if np.any(bad):
+        raise DielectricConvergenceError(f"epsilon oscillator sum outside numerical range at {_first_loss(t, bad)}")
     if response.ndim == 0:
         return DielectricResponse(complex(response), complex(epsilon), float(error))
     return DielectricResponse(response, epsilon, error)
@@ -348,13 +418,13 @@ def _sub_gap_pole(material, q, exclusion, settings):
         # A zero is guaranteed by the logarithmic divergence, but the interval
         # between the nearest float below the gap and the gap cannot be resolved.
         return None, "unresolved_at_gap_edge"
-    pole = brentq(sub_gap_real, 0, upper, xtol=math.ulp(gap), rtol=4 * FLOAT_EPSILON)
+    pole = brentq(sub_gap_real, 0, upper, xtol=math.ulp(gap), rtol=BRENT_MIN_REL)
     pole_status = "within_gap_edge_exclusion" if gap - pole <= exclusion else "located"
     return pole, pole_status
 
 
 def dielectric_diagnostics(
-    material: Material, q_inv_A=0.0, *, loss_eV=(), epsabs=1e-9, epsrel=1e-7, limit=200,
+    material: Material, q_inv_A=0.0, *, loss_eV=(), epsabs=DEFAULT_ABS, epsrel=DEFAULT_REL, limit=200,
 ):
     """Classify static F, locate a sub-gap pole and flag optional near-edge samples."""
     _, q, epsabs, epsrel = _response_inputs(0, q_inv_A, epsabs, epsrel, limit)
@@ -392,15 +462,27 @@ def _closed_kk_band(t, gap, center, strength, width):
     half_width = width / 2
     splitting = cmath.sqrt(half_width - center) * cmath.sqrt(half_width + center)
     p = half_width + splitting
-    b = center * (center / p)  # p*b = center**2, also in the overdamped limit
-    j_b = cmath.atan(b / gap) / b
+    if half_width < center:
+        # atan(p/gap) has a logarithmic branch point at p=i*gap.
+        # Compute gap-Im(p) without rounding away the width² correction.
+        h = splitting.imag
+        near = (gap - center) + half_width * (half_width / (center + h))
+        far = gap + h
+        angle = 0.5 * (math.atan2(half_width, near) + math.atan2(half_width, far))
+        # atan(z) = [log(1+iz) - log(1-iz)]/(2i).
+        log_ratio = math.log(math.hypot(far, half_width) / math.hypot(near, half_width))
+        j_p = complex(angle, 0.5 * log_ratio) / p
+        j_b = j_p.conjugate()
+    else:
+        b = center * (center / p)  # p*b = center**2, also in the overdamped limit
+        j_b = cmath.atan(b / gap) / b
+        j_p = cmath.atan(p / gap) / p
     difference = 2 * splitting
-    if abs(difference) < width / 4:
+    if abs(difference) < width * CRITICAL_SPLITTING_FRACTION:
         h = gap / (gap**2 + center**2)
         atan_ratio = cmath.atan(h * difference) / difference if difference else h
         j_divided = (j_b - atan_ratio) / (p * width)
     else:
-        j_p = cmath.atan(p / gap) / p
         j_divided = (j_b - j_p) / (width * difference)
 
     denominator = ((center - t) * (center + t))**2 + (width * t)**2
@@ -411,7 +493,7 @@ def _closed_kk_band(t, gap, center, strength, width):
     value = scale * (regular + pole).real
     roundoff_scale = scale * (abs(regular) + log_term + t**2 * abs(j_b))
     resonance_condition = max(1.0, center**2 / math.sqrt(denominator))
-    if 16 * FLOAT_EPSILON * resonance_condition * roundoff_scale > max(1e-10, 1e-9 * abs(value)):
+    if RECIPROCAL_ROUNDOFF * resonance_condition * roundoff_scale > _accuracy(value, CLOSED_ABS, CLOSED_REL):
         raise DielectricConvergenceError("closed-form KK is ill-conditioned; use numerical KK")
     return value
 
@@ -426,25 +508,35 @@ def negative_inverse_dielectric_closed_form(material: Material, loss_eV, q_inv_A
     """
     if material.gap_eV == 0 or all(o.strength_eV2 == 0 for o in material.oscillators):
         return negative_inverse_dielectric_function(material, loss_eV, q_inv_A)
-    t, q, _, _ = _response_inputs(loss_eV, q_inv_A, 1e-9, 1e-7, 200)
+    t, q, _, _ = _response_inputs(loss_eV, q_inv_A, DEFAULT_ABS, DEFAULT_REL, 200)
     gap = material.gap_eV
     _check_gap_edge(material, t)
     real = np.full(t.shape, -1.0)
-    try:
-        with np.errstate(over="raise", invalid="raise", divide="raise"):
-            for osc in material.oscillators:
-                if osc.strength_eV2 == 0:
-                    continue
-                centers = _oscillator_energy(osc, q)
-                for index in np.ndindex(t.shape):
-                    real[index] += _closed_kk_band(
-                        float(t[index]), gap, float(centers[index]), osc.strength_eV2, osc.width_eV,
-                    )
+    magnitude = np.ones(t.shape)
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        for i, osc in enumerate(material.oscillators):
+            if osc.strength_eV2 == 0:
+                continue
+            centers = _oscillator_energy(osc, q)
+            for index in np.ndindex(t.shape):
+                energy, center = float(t[index]), float(centers[index])
+                try:
+                    if (osc.dispersion and q[index] and COORDINATE_ULPS * math.ulp(center)
+                            > CLOSED_CENTER_REL * max(osc.width_eV, abs(gap - center))):
+                        raise DielectricConvergenceError("dispersed center unresolved at the gap")
+                    value = _closed_kk_band(energy, gap, center, osc.strength_eV2, osc.width_eV)
+                    real[index] += value
+                    magnitude[index] += abs(value)
+                except (ArithmeticError, DielectricConvergenceError) as exc:
+                    raise DielectricConvergenceError(f"closed-form KK oscillator {i}, {_loss_point(t, index)}: {exc}") from exc
+        try:
             result = real + 1j * loss_function(material, t, q)
-    except (FloatingPointError, OverflowError, ZeroDivisionError) as exc:
-        raise ValueError("closed-form dielectric response is outside the numerical range") from exc
-    if not np.all(np.isfinite(result)):
-        raise ValueError("nonfinite closed-form dielectric response")
+        except NumericalConvergenceError as exc:
+            raise DielectricConvergenceError(f"closed-form KK: {exc}") from exc
+    rounding = SUM_ROUNDOFF * len(material.oscillators) * magnitude
+    bad = ~np.isfinite(result) | (rounding > _accuracy(real))
+    if np.any(bad):
+        raise DielectricConvergenceError(f"closed-form KK oscillator sum unresolved at {_first_loss(t, bad)}")
     return complex(result) if result.ndim == 0 else result
 
 
@@ -463,8 +555,28 @@ def _optical_moment(material, first_moment, settings):
     epsabs, epsrel, limit = settings
     settings = (epsabs / len(oscillators), epsrel, limit)
     total = 0.0
-    for osc in oscillators:
+    for i, osc in enumerate(material.oscillators):
+        if not osc.strength_eV2:
+            continue
         center, width = osc.energy_eV, osc.width_eV
+        if width < center and gap <= NEARBY_FACTOR * center:
+            # z = u - center²/u, theta = atan(z/width) maps the Lorentzian
+            # to d(theta). The two weights are (1 ± z/hypot(z,2*center))/2.
+            # Integrating the second term in cos(theta) gives asinh.
+            z = (gap - center) * (1 + center / gap)
+            phi = math.atan2(width, z)
+            splitting = math.sqrt(2 * center - width) * math.sqrt(2 * center + width)
+            odd = (width / splitting) * math.asinh(splitting / math.hypot(width, z))
+            if first_moment:
+                value = (osc.strength_eV2 / 2) * (phi + odd)
+            else:
+                value = (osc.strength_eV2 / center / center / math.pi) * (phi - odd)
+            estimate = RECIPROCAL_ROUNDOFF * abs(value)
+            if not math.isfinite(value) or estimate > _accuracy(value, settings[0], epsrel):
+                raise DielectricConvergenceError(
+                    f"optical moment oscillator {i}, loss_eV=[{gap:g}, infinity): roundoff")
+            total += value
+            continue
         peak_x = gap / center
         damping = width / gap
         prefactor = osc.strength_eV2 * damping
@@ -485,27 +597,36 @@ def _optical_moment(material, first_moment, settings):
             points.extend(_breakpoints(peak_x, 1, span))
         else:
             points.extend(_breakpoints(1, 0, max(peak_x - 1, span)))
-        value, _ = _quadrature(integrand, 1, sorted(set(points)), settings)
+        try:
+            value, error = _quadrature(integrand, 1, sorted(set(points)), settings)
+            full = (math.pi / 2 * osc.strength_eV2 if first_moment
+                    else osc.strength_eV2 / center / center)
+            if (not 0 <= value <= full + error or not math.isfinite(error)
+                    or error > _accuracy(value, settings[0], epsrel)):
+                raise DielectricConvergenceError("optical moment outside range or error budget")
+        except DielectricConvergenceError as exc:
+            raise DielectricConvergenceError(
+                f"optical moment oscillator {i}, loss_eV=[{gap:g}, infinity): {exc}") from exc
         total += value
     return total
 
 
-def optical_sum_rule_lhs(material: Material, *, epsabs=1e-9, epsrel=1e-7, limit=200):
-    """Return the dimensionless LHS of Eq. D4, using quadrature only for a positive gap."""
+def optical_sum_rule_lhs(material: Material, *, epsabs=DEFAULT_ABS, epsrel=DEFAULT_REL, limit=200):
+    """Return the dimensionless retained optical sum-rule integral (Eq. D4)."""
     _, _, epsabs, epsrel = _response_inputs(0, 0, epsabs, epsrel, limit)
     return _checked_optical_moment(material, False, (epsabs, epsrel, limit))
 
 
 def optical_sum_rule_residual(
-    material: Material, reference_inverse_epsilon, *, epsabs=1e-9, epsrel=1e-7, limit=200,
+    material: Material, reference_inverse_epsilon, *, epsabs=DEFAULT_ABS, epsrel=DEFAULT_REL, limit=200,
 ):
     """Return the sum-rule LHS minus (1 - reference Re[1/epsilon(0)])."""
     reference = finite_number(reference_inverse_epsilon, "reference_inverse_epsilon")
     return optical_sum_rule_lhs(material, epsabs=epsabs, epsrel=epsrel, limit=limit) - (1 - reference)
 
 
-def optical_elf_first_moment(material: Material, *, epsabs=1e-9, epsrel=1e-7, limit=200):
-    """Return the first moment in eV**2 (Eq. D4), using quadrature for a positive gap."""
+def optical_elf_first_moment(material: Material, *, epsabs=DEFAULT_ABS, epsrel=DEFAULT_REL, limit=200):
+    """Return the retained ELF first moment in eV**2 (Eq. D4)."""
     _, _, epsabs, epsrel = _response_inputs(0, 0, epsabs, epsrel, limit)
     return _checked_optical_moment(material, True, (epsabs, epsrel, limit))
 
@@ -513,68 +634,101 @@ def optical_elf_first_moment(material: Material, *, epsabs=1e-9, epsrel=1e-7, li
 def _checked_optical_moment(material, first_moment, settings):
     try:
         value = _optical_moment(material, first_moment, settings)
-    except (OverflowError, ZeroDivisionError) as exc:
-        raise ValueError("optical integral is outside the numerical range") from exc
+    except ArithmeticError as exc:
+        raise DielectricConvergenceError(
+            f"optical oscillator integral, loss_eV=[{material.gap_eV:g}, infinity): {exc}") from exc
     if not math.isfinite(value):
-        raise ValueError("nonfinite optical integral")
+        raise DielectricConvergenceError(
+            f"nonfinite optical oscillator integral, loss_eV=[{material.gap_eV:g}, infinity)")
     return value
 
 
 def _power_law_tail(t, edge, level):
     """Return pi times the KK contribution of level*(edge/u)**3 above edge."""
     ratio = t / edge
-    if ratio < 0.03:
+    if ratio < TAIL_SERIES_RATIO:
         return 2 * level * sum(ratio**(2 * n) / (2 * n + 3) for n in range(5))
     inverse_ratio = edge / t
     return level * inverse_ratio**2 * (inverse_ratio * _edge_log(t, edge) - 2)
 
 
-def _linear_cauchy_outside(pole, nodes, values):
-    """Integrate each linear segment over 1/(u-pole), away from a cutoff."""
+def _outside_segments(pole, nodes, levels):
+    """Regular segments, oriented from the endpoint nearest the pole."""
+    if len(nodes) < 2:
+        return 0.0, 0.0
+    sign = 1
+    if pole > nodes[-1]:
+        nodes, levels = nodes[::-1], levels[::-1]
+        sign = -1
     ratio = np.diff(nodes) / (nodes[:-1] - pole)
-    logarithm = np.log1p(ratio)
-    small = abs(ratio) < 1e-3
-    # 1 - log(1+r)/r loses precision when |r| is small.
-    shape = np.empty_like(ratio)
+    log = np.log1p(ratio)
+    small = ratio < SMALL_SEGMENT_RATIO
+    # Weight of the far endpoint: 1 - log1p(r)/r. Use its convergent
+    # series when subtracting from one would lose significant digits.
+    weight = np.empty_like(ratio)
     r = ratio[small]
-    shape[small] = r * (0.5 + r * (-1 / 3 + r * (0.25 - r / 5)))
-    shape[~small] = 1 - logarithm[~small] / ratio[~small]
-    return float(values[:-1] @ logarithm + np.diff(values) @ shape)
+    series = np.zeros_like(r)
+    for k in range(8, 0, -1):
+        series = 1 / (k + 1) - r * series
+    weight[small] = r * series
+    weight[~small] = 1 - log[~small] / ratio[~small]
+    near = (log - weight) * levels[:-1]
+    far = weight * levels[1:]
+    size = np.sum(abs(near) + abs(far)) + np.sum(abs(np.diff(levels)[~small]))
+    return sign * math.fsum(near + far), size
 
 
-def _linear_cauchy(pole, nodes, values, slopes, tail_level=0.0):
-    """Exact segment transform with internal endpoint logarithms collected."""
+def _linear_cauchy(pole, nodes, values, tail_level=0.0):
+    """PV around the pole; return the transform and its roundoff scale."""
     lower, upper = float(nodes[0]), float(nodes[-1])
-    if pole < -upper or pole > 2 * upper or 0 <= pole < lower / 2:
-        result = _linear_cauchy_outside(pole, nodes, values)
-        if tail_level:
-            result += _power_law_tail(pole, upper, tail_level)
-        return result
+    if pole == lower and values[0]:
+        raise ValueError("tabulated KK diverges at the discontinuous lower cutoff")
+    if pole == upper and values[-1] != tail_level:
+        raise ValueError("tabulated KK diverges at the discontinuous upper cutoff")
+    near_tail = tail_level and upper / NEARBY_FACTOR <= pole <= NEARBY_FACTOR * upper
+    if (pole < lower or pole > upper) and not near_tail:
+        regular, size = _outside_segments(pole, nodes, values)
+        tail = _power_law_tail(pole, upper, tail_level) if tail_level else 0.0
+        return regular + tail, size + abs(tail)
 
-    dist = nodes[1:-1] - pole
-    nonzero = dist != 0
-    dist = dist[nonzero]
-    log_scale = math.log(upper)
-    # The inner log coefficient is (slope_right - slope_left)*(u_i-pole).
-    # Its product with log|u_i-pole| has a zero limit at a sample node.
-    inner = np.diff(slopes)[nonzero] @ (dist * (np.log(abs(dist)) - log_scale))
-    left = float(slopes[0]) * (lower - pole) - float(values[0])
-    right = float(values[-1]) - float(slopes[-1]) * (upper - pole)
-    tail = 0.0
-    if tail_level and pole >= upper / 2:
+    # Subtract the interpolated level throughout the finite band. This makes
+    # the absolute integral of a smooth residual bounded under mesh refinement.
+    # On each segment touching the pole, the regular integrand is just its slope.
+    left = max(0, nodes.searchsorted(pole, "left") - 1)
+    right = min(len(nodes) - 1, nodes.searchsorted(pole, "right"))
+    if left == right:  # just outside the continuous tail join
+        level = values[left]
+    else:
+        j = nodes.searchsorted(pole, "left")
+        if nodes[j] == pole:
+            level = values[j]
+        else:
+            near, far = (left, right) if pole - nodes[left] <= nodes[right] - pole else (right, left)
+            fraction = (pole - nodes[near]) / (nodes[far] - nodes[near])
+            level = values[near] + fraction * (values[far] - values[near])
+    residual = values - level
+    a, size_a = _outside_segments(pole, nodes[:left + 1], residual[:left + 1])
+    b, size_b = _outside_segments(pole, nodes[right:], residual[right:])
+    terms = [a, b, values[right] - values[left]]
+    # Restore the integral of the subtracted constant. Collect the log at
+    # the cutoff with the tail's log before evaluating a continuous join.
+    if level and pole != lower:
+        terms.append(level * (math.log(upper) - math.log(abs(lower - pole))))
+    coefficient = level
+    if near_tail:
         ratio = upper / pole
         tail_weight = tail_level * ratio**3
-        right -= tail_weight
-        tail = tail_weight * math.log1p(pole / upper) - 2 * tail_level * ratio**2
+        coefficient -= tail_weight
+        terms.extend((tail_weight * math.log1p(pole / upper), -2 * tail_level * ratio**2))
     elif tail_level:
-        tail = _power_law_tail(pole, upper, tail_level)
-    if pole == lower and left:
-        raise ValueError("tabulated KK diverges at the discontinuous lower cutoff")
-    if pole == upper and right:
-        raise ValueError("tabulated KK diverges at the discontinuous upper cutoff")
-    left_log = left * (math.log(abs(lower - pole)) - log_scale) if left else 0.0
-    right_log = right * (math.log(abs(upper - pole)) - log_scale) if right else 0.0
-    return math.fsum((float(values[-1]) - float(values[0]), inner, left_log, right_log, tail))
+        terms.append(_power_law_tail(pole, upper, tail_level))
+    if pole != upper:
+        logarithm = math.log(abs(upper - pole)) - math.log(upper)
+        terms.append(coefficient * logarithm)
+        if near_tail:
+            size_b += (abs(level) + abs(tail_weight)) * abs(logarithm)
+    size = size_a + size_b + abs(values[left]) + abs(values[right]) + math.fsum(map(abs, terms[2:]))
+    return math.fsum(terms), size
 
 
 def tabulated_elf_kk(sample_eV, elf, loss_eV, *, low_energy, high_energy):
@@ -583,6 +737,8 @@ def tabulated_elf_kk(sample_eV, elf, loss_eV, *, low_energy, high_energy):
     Between samples use linear interpolation. Below the first sample choose
     "zero" or "linear_to_origin". Above the last sample choose "hard_cut"
     or "power_law_3" (continuous u**-3 tail). Losses can be scalars or arrays.
+    The analytic quadrature error is zero. An independent roundoff check
+    applies the dimensionless component tolerance to the final Re F.
     """
     if np.iscomplexobj(loss_eV):
         raise ValueError("loss must be real")
@@ -613,24 +769,31 @@ def tabulated_elf_kk(sample_eV, elf, loss_eV, *, low_energy, high_energy):
     if high_energy == "power_law_3":
         if terminal_slope is None:
             warnings = ("The terminal log-slope is undefined; the u^-3 tail cannot be checked.",)
-        elif abs(terminal_slope + 3) > 0.5:
+        elif abs(terminal_slope + 3) > TAIL_SLOPE_WARNING:
             warnings = ("The terminal log-slope differs from -3 by more than 0.5; check the u^-3 extrapolation.",)
     if low_energy == "linear_to_origin" and lower > 0:
         nodes, values = np.insert(nodes, 0, 0.0), np.insert(values, 0, 0.0)
     real = np.empty(t.shape)
     try:
-        with np.errstate(over="raise", invalid="raise", divide="raise"):
-            tail_coefficient = tail_level * upper**3 if tail_level else 0.0
-            slopes = np.diff(values) / np.diff(nodes)
-            for index in np.ndindex(t.shape):
-                energy = float(t[index])
-                positive = _linear_cauchy(energy, nodes, values, slopes, tail_level)
-                negative = _linear_cauchy(-energy, nodes, values, slopes)
-                real[index] = -1 + (positive + negative) / math.pi
-    except (OverflowError, ZeroDivisionError, FloatingPointError) as exc:
-        raise ValueError("tabulated KK is outside the numerical range") from exc
-    if not math.isfinite(tail_coefficient) or not np.all(np.isfinite(real)):
-        raise ValueError("nonfinite tabulated KK result")
+        tail_coefficient = float(tail_level) * upper**3 if tail_level else 0.0
+    except OverflowError as exc:
+        raise DielectricConvergenceError(f"tabulated KK tail outside numerical range at cutoff_eV={upper:g}") from exc
+    with np.errstate(over="raise", invalid="raise", divide="raise"):
+        for index in np.ndindex(t.shape):
+            energy = float(t[index])
+            try:
+                positive, p_size = _linear_cauchy(energy, nodes, values, tail_level)
+                negative, n_size = _linear_cauchy(-energy, nodes, values)
+                real[index] = -1 + math.fsum((positive, negative)) / math.pi
+                # Analytic integration gives zero quadrature error. Test its
+                # rounding separately, once, against the final Re F budget.
+                rounding = TAB_ROUNDOFF * (1 + (p_size + n_size) / math.pi)
+                if not math.isfinite(real[index]) or not rounding <= _accuracy(real[index]):
+                    raise ArithmeticError("unresolved segment cancellation")
+            except ArithmeticError as exc:
+                raise DielectricConvergenceError(f"tabulated KK at {_loss_point(t, index)}: {exc}") from exc
+    if not math.isfinite(tail_coefficient):
+        raise DielectricConvergenceError(f"tabulated KK tail outside numerical range at cutoff_eV={upper:g}")
     if t.ndim == 0:
         real, error = float(real), 0.0
     else:

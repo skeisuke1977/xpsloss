@@ -13,6 +13,13 @@
 - Tests cover analytical limits, sum rules, convergence, and an independent numerical integration of the fixed-depth terms. Agents independent of the implementer reviewed the equations and implementation. There has been no human peer review. A separate reviewer agent used independent code with Eq. (20) of Simonsen et al. (1997) to reproduce Figs. 3, 5, and 8 within figure-reading uncertainty. [Validation record](docs/VALIDATION.md)
 - Both momentum choices failed the preregistered QUEELS-XPS v2.1 comparison for dispersive Al. In three preregistered synthetic follow-up runs, all components of a candidate expression agreed with the v2.1 numerical output within the preset tolerance. The published expression used by xpsloss exceeded the tolerance for at least one component in each run. The comparison did not examine QUEELS-XPS internals. [Original comparison](docs/M2_FIRST_CASE.md) · [Follow-up](docs/QUEELS_DISPERSION_TEST.md)
 
+### Changed (pre-release numerical robustness, phase 4a)
+
+- Integrals over very narrow resonances no longer return wrong values as success. Bulk DIIMFP, the dielectric response (gapless oscillators, hard-gap and tabulated Kramers–Kronig, the gapped closed form), the optical sum rules and the fixed-depth terms either resolve such inputs within the stated tolerances or stop with a convergence error. The physical model is unchanged. [Validation record](docs/VALIDATION.md)
+- New exception base class `NumericalConvergenceError` (a `RuntimeError`); `DielectricConvergenceError` and `FixedDepthConvergenceError` now derive from it, and `BulkConvergenceError` is new. Bulk DIIMFP raises `BulkConvergenceError` instead of `ValueError` when it cannot resolve an input, so `except ValueError` no longer catches numerical non-convergence there. Arithmetic overflow of the oscillator ELF for finite inputs raises `NumericalConvergenceError`.
+- Integration settings: a non-positive tolerance, an invalid `limit`, or a `limit` too small for the initial panels raises `ValueError` (CLI `error`). The former special case for `limit == 1` is removed. Failure to reach the tolerance after the initial panels raises the path's convergence error (CLI `not_converged`). Both exit with code 2.
+- CLI: on failure no output directory and no `run.json` are written. An existing output path is rejected before the computation with `FileExistsError` (`error`), and the final directory creation remains exclusive. Error messages give the offending loss value and index instead of the whole grid.
+
 ### Notes
 
 - The QUEELS-XPS v2.1 User's Guide is cited for reference. Its Si input record and tutorial values are excluded from the release.

@@ -9,9 +9,18 @@ from scipy.special import roots_legendre
 
 from .dielectric import dielectric_response
 from .model import (
-    BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, Material, _oscillator_energy, finite_number,
+    BOHR_RADIUS_A, DEFAULT_REL, FLANK_RATIO, FLOAT_EPSILON, HBAR2_OVER_2ME_EV_A2, NEARBY_FACTOR,
+    Material, NumericalConvergenceError, _PanelLimitError, _accuracy, _first_loss, _loss_point,
+    _oscillator_response, finite_number,
 )
 
+
+REFLECTION_ROUNDOFF = 8 * FLOAT_EPSILON  # Complex oscillator sum followed by subtraction from 2.
+PANEL_ROUNDOFF = 32 * FLOAT_EPSILON  # Floor on the embedded 32-node quadrature rule.
+LOG_K_PANEL_SPAN = 1  # Bound the ratio of k endpoints to e before adaptive refinement.
+MOMENTUM_ULPS = 4  # exp(log k), squaring and the offset in k_parallel².
+FIXED_ABS = 1e-12  # Default absolute quadrature error in inverse angstrom per eV.
+FIXED_REL = 1e-9  # Default adaptive quadrature target relative to the total cross section.
 
 FIXED_DEPTH_MODEL_ID = "simonsen1997_fixed_depth_v0"
 EPSILON_MOMENTA = ("k_parallel", "k_total")
@@ -21,7 +30,7 @@ _LOW_RULE = roots_legendre(16)
 _HIGH_RULE = roots_legendre(32)
 
 
-class FixedDepthConvergenceError(RuntimeError):
+class FixedDepthConvergenceError(NumericalConvergenceError):
     """Quadrature could not resolve the requested absolute or relative accuracy."""
 
 
@@ -63,11 +72,18 @@ def _parallel_limits(energy, loss):
 def _oscillator_sum(material, loss, q):
     """E4b: compute S = 1 − 1/ε directly, retaining weak responses near ε = 1."""
     response = np.zeros_like(q, dtype=complex)
+    magnitude = np.zeros_like(q, dtype=float)
     for osc in material.oscillators:
         if osc.strength_eV2:
-            center = _oscillator_energy(osc, q)
-            detuning = (center - loss) * (center + loss)
-            response += osc.strength_eV2 / (detuning - 1j * osc.width_eV * loss)
+            term = _oscillator_response(osc, np.broadcast_to(loss, q.shape), q)
+            response += term
+            magnitude += abs(term)
+    # A dispersionless surface pole can be unresolved even when every
+    # momentum panel is broad. Test cancellation in the full denominator.
+    roundoff = (REFLECTION_ROUNDOFF * len(material.oscillators)) * (2 + magnitude)
+    if np.any(roundoff > DEFAULT_REL * abs(2 - response)):
+        raise FixedDepthConvergenceError(
+            f"fixed-depth surface oscillator sum, loss_eV={loss:g}: unresolved reflection denominator")
     return response
 
 
@@ -107,14 +123,14 @@ def _line_positions(material, loss, q_offset, upper_squared):
     """Centers and half-width scales in k_parallel², used only for panel layout."""
     dispersive = []
     fixed = 0j
-    for osc in material.oscillators:
+    for index, osc in enumerate(material.oscillators):
         if not osc.strength_eV2:
             continue
         slope = osc.dispersion * HBAR2_OVER_2ME_EV_A2
         if slope:
             pole = (loss - osc.energy_eV) / slope - q_offset**2
             dispersive.append((osc, slope, pole))
-            yield pole, osc.width_eV / (2 * slope)
+            yield pole, osc.width_eV / (2 * slope), f"bulk oscillator {index}", loss / slope
         else:
             fixed += osc.strength_eV2 / complex((osc.energy_eV-loss)*(osc.energy_eV+loss),
                                                 -osc.width_eV*loss)
@@ -125,14 +141,14 @@ def _line_positions(material, loss, q_offset, upper_squared):
         osc, slope, _ = dispersive[0]
         center = math.hypot(loss, math.sqrt(osc.strength_eV2 / 2))
         yield ((center - osc.energy_eV) / slope - q_offset**2,
-               osc.width_eV * loss / (2 * center * slope))
+               osc.width_eV * loss / (2 * center * slope), "surface oscillator sum", center / slope)
         return
 
     # Surface lines belong to the oscillator *sum*. In the narrow-line limit
     # Re(S) decreases between successive bulk poles in z=k_parallel². Locate
     # its crossings of 2 and linearize the damping there to seed both flanks.
     poles = {pole for _, _, pole in dispersive}
-    stop = 2 * upper_squared
+    stop = NEARBY_FACTOR * upper_squared
     edges = sorted({0.0, stop, *(p for p in poles if 0 < p < stop)})
     for left, right in zip(edges, edges[1:]):
         def secular(z):
@@ -151,9 +167,9 @@ def _line_positions(material, loss, q_offset, upper_squared):
         try:
             z = brentq(secular, left, right, xtol=np.finfo(float).tiny)
         except RuntimeError as exc:
-            raise FixedDepthConvergenceError(f"surface line unresolved at loss_eV={loss:g}") from exc
+            raise FixedDepthConvergenceError(f"surface oscillator sum unresolved at loss_eV={loss:g}") from exc
         if z in poles:
-            raise FixedDepthConvergenceError(f"unresolved surface and bulk lines at loss_eV={loss:g}")
+            raise FixedDepthConvergenceError(f"unresolved oscillator and surface lines at loss_eV={loss:g}")
         damping, gradient = fixed.imag, 0.0
         for osc, slope, pole in dispersive:
             center = osc.energy_eV + slope * (z + q_offset**2)
@@ -161,24 +177,32 @@ def _line_positions(material, loss, q_offset, upper_squared):
             weight = osc.strength_eV2 / detuning**2
             damping += weight * osc.width_eV * loss
             gradient += weight * 2 * center * slope
-        yield z, damping / gradient
+        yield z, damping / gradient, "surface oscillator sum", z + q_offset**2
 
 
 def _log_breakpoints(material, loss, lower, upper, q_offset):
     """Log panels, split at the dispersive oscillator and surface lines."""
     lo, hi = math.log(lower), math.log(upper)
-    points = list(np.linspace(lo, hi, math.ceil(hi - lo) + 1))
+    points = list(np.linspace(lo, hi, math.ceil((hi - lo) / LOG_K_PANEL_SPAN) + 1))
     lower_squared, upper_squared = lower**2, upper**2
-    for center, width in _line_positions(material, loss, q_offset, upper_squared):
+    for center, width, line, scale in _line_positions(material, loss, q_offset, upper_squared):
+        distance = max(lower_squared - center, center - upper_squared, 0.0)
+        # Propagate coordinate roundoff through exp(log k), k² and the
+        # dispersed energy. Coincident quadrature nodes from both rules can
+        # otherwise give a spuriously tiny difference for an unresolved line.
+        spacing = math.ulp(max(abs(center), q_offset**2, scale))
+        if MOMENTUM_ULPS * spacing > DEFAULT_REL * max(width, distance):
+            raise FixedDepthConvergenceError(
+                f"fixed-depth {line}, loss_eV={loss:g}: linewidth unresolved on momentum panels")
         if lower_squared < center < upper_squared:
             points.append(math.log(center) / 2)
         # Geometric flanks resolve the tails even on a much wider log panel.
         offset = width
-        while 0 < offset < 8 * max(abs(center - lower_squared), abs(upper_squared - center)):
+        while 0 < offset < FLANK_RATIO * max(abs(center - lower_squared), abs(upper_squared - center)):
             for flank in (center - offset, center + offset):
                 if lower_squared < flank < upper_squared:
                     points.append(math.log(flank) / 2)
-            offset *= 8
+            offset *= FLANK_RATIO
     return np.unique(points)
 
 
@@ -194,7 +218,7 @@ def _panel_integrals(edges_left, edges_right, integrand, error_weights):
 
     low, _ = integrate(_LOW_RULE)
     high, magnitude = integrate(_HIGH_RULE)
-    uncertainty = np.maximum(abs(high - low), 32 * np.finfo(float).eps * magnitude)
+    uncertainty = np.maximum(abs(high - low), PANEL_ROUNDOFF * magnitude)
     return high, uncertainty @ error_weights
 
 
@@ -204,7 +228,7 @@ def _integrate_loss(material, loss, energy, depth, omega, q_offset, lower, upper
     # Refining one panel must not move either endpoint of its neighbor.
     left, right = edges[:-1].copy(), edges[1:].copy()
     if len(left) > limit:
-        raise ValueError(f"integration limit too small for initial panels at loss_eV={loss:g}")
+        raise _PanelLimitError(f"integration limit too small for {len(left)} initial oscillator panels")
 
     def integrand(k):
         return _term_integrands(k, material, loss, energy, depth, omega, q_offset)
@@ -220,11 +244,11 @@ def _integrate_loss(material, loss, energy, depth, omega, q_offset, lower, upper
         error = errors.sum()
         no_hole = terms[[0, 1, 3, 5, 6]].sum()
         total = no_hole + charge * terms[hole_terms].sum()
-        if error <= max(epsabs, epsrel * abs(total)):
+        if error <= _accuracy(total, epsabs, epsrel):
             return terms, error
         if len(left) >= limit:
             raise FixedDepthConvergenceError(
-                f"fixed-depth quadrature failed to converge at loss_eV={loss:g} "
+                f"fixed-depth oscillator sum quadrature failed to converge at loss_eV={loss:g} "
                 f"with {limit} panels (estimated error {error:.3g})")
         i = errors.argmax()
         midpoint = (left[i] + right[i]) / 2
@@ -246,13 +270,15 @@ def _finite_real(value, label):
 
 def effective_cross_section_fixed_depth(
     material: Material, electron_energy_eV, loss_eV, depth_A, *, theta_deg=0.0,
-    hole_charge=1.0, epsilon_momentum, epsabs=1e-12, epsrel=1e-9, limit=200,
+    hole_charge=1.0, epsilon_momentum, epsabs=FIXED_ABS, epsrel=FIXED_REL, limit=200,
 ) -> FixedDepthResult:
     """Fixed-depth K for a scalar or 1-D loss grid, returned as 1-D arrays.
 
     θ is measured from the surface normal. All hole terms refer to unit charge.
     epsabs is in eV^-1 Å^-1, epsrel is relative to total, and limit caps panels
     per loss. The quadrature estimate excludes material and model uncertainties.
+    Every nonzero line must be resolved on the momentum grid. Strength alone
+    cannot bound its peak or its effect on the coupled surface denominator.
     """
     if not isinstance(material, Material):
         raise ValueError("material must be a Material")
@@ -280,27 +306,36 @@ def effective_cross_section_fixed_depth(
     if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
         raise ValueError("limit must be a positive integer")
 
-    with np.errstate(over="raise", divide="raise", invalid="raise", under="ignore"):
+    with np.errstate(over="ignore", divide="ignore", invalid="ignore", under="ignore"):
+        lower, upper = _parallel_limits(energy, grid)
+        omega = grid / (2 * math.sqrt(HBAR2_OVER_2ME_EV_A2 * energy))
+        bad = ~((lower > 0) & (lower < upper) & np.isfinite(upper) & (omega > 0) & np.isfinite(omega))
+        if np.any(bad):
+            raise FixedDepthConvergenceError(f"parallel momentum bounds unresolved at {_first_loss(grid, bad)}")
+        offsets = omega if epsilon_momentum == "k_total" else np.zeros_like(omega)
+        # For nonnegative dispersions static F is largest at the smallest q.
+        i = int(np.hypot(lower, offsets).argmin())
         try:
-            lower, upper = _parallel_limits(energy, grid)
-            if not np.all((lower > 0) & (lower < upper)):
-                raise ValueError("parallel momentum bounds outside numerical range")
-            omega = grid / (2 * math.sqrt(HBAR2_OVER_2ME_EV_A2 * energy))
-            offsets = omega if epsilon_momentum == "k_total" else np.zeros_like(omega)
-            # For nonnegative dispersions, static F is largest at the smallest
-            # sampled q. Apply the same upper-half-plane pole check as M1 there.
-            i = np.hypot(lower, offsets).argmin()
             dielectric_response(material, grid[i], np.hypot(lower[i], offsets[i]))
-            terms = np.empty((len(TERM_NAMES), grid.size))
-            error = np.empty(grid.size)
-            for i, t in enumerate(grid):
-                terms[:, i], error[i] = _integrate_loss(
-                    material, t, energy, depth, omega[i], offsets[i], lower[i], upper[i],
-                    charge, epsabs, epsrel, limit)
-            no_hole = terms[0] + terms[1] + terms[3] + terms[5] + terms[6]
-            hole = terms[2] + terms[4] + terms[7]
-            total = no_hole + charge * hole
-        except (FloatingPointError, OverflowError, ZeroDivisionError) as exc:
-            raise ValueError("fixed-depth calculation outside numerical range") from exc
+        except NumericalConvergenceError as exc:
+            raise FixedDepthConvergenceError(f"fixed-depth at {_loss_point(grid, (i,))}: {exc}") from exc
+        terms = np.empty((len(TERM_NAMES), grid.size))
+        error = np.empty(grid.size)
+        for i, t in enumerate(grid):
+            try:
+                with np.errstate(over="raise", divide="raise", invalid="raise"):
+                    terms[:, i], error[i] = _integrate_loss(
+                        material, t, energy, depth, omega[i], offsets[i], lower[i], upper[i],
+                        charge, epsabs, epsrel, limit)
+            except _PanelLimitError as exc:
+                raise ValueError(f"fixed-depth at {_loss_point(grid, (i,))}: {exc}") from exc
+            except (ArithmeticError, NumericalConvergenceError) as exc:
+                raise FixedDepthConvergenceError(f"fixed-depth oscillator sum at {_loss_point(grid, (i,))}: {exc}") from exc
+        no_hole = terms[0] + terms[1] + terms[3] + terms[5] + terms[6]
+        hole = terms[2] + terms[4] + terms[7]
+        total = no_hole + charge * hole
+        bad = ~(np.isfinite(total) & np.isfinite(hole) & np.isfinite(no_hole))
+        if np.any(bad):
+            raise FixedDepthConvergenceError(f"fixed-depth oscillator sum outside numerical range at {_first_loss(grid, bad)}")
     return FixedDepthResult(energy, depth, depth, theta, charge, epsilon_momentum,
                             grid, *terms, no_hole, hole, total, error)

@@ -10,12 +10,13 @@ from .dielectric import (
     DielectricConvergenceError, DielectricResponse, dielectric_response,
     negative_inverse_dielectric_function,
 )
-from .model import Material, Oscillator, bulk_diimfp, loss_function
+from .model import BulkConvergenceError, Material, NumericalConvergenceError, Oscillator, bulk_diimfp, loss_function
 from .xps_fixed_depth import (
     FixedDepthConvergenceError, FixedDepthResult, effective_cross_section_fixed_depth,
 )
 
 __all__ = [
+    "BulkConvergenceError", "NumericalConvergenceError",
     "DielectricConvergenceError", "DielectricResponse", "Material", "Oscillator",
     "bulk_diimfp", "dielectric_response", "loss_function", "negative_inverse_dielectric_function",
     "FixedDepthConvergenceError", "FixedDepthResult", "effective_cross_section_fixed_depth",
