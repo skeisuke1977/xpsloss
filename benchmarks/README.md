@@ -35,14 +35,20 @@ al, = source.materials
 
 `compare_queels_fixed_depth.py` は、利用者が手元で計算した QUEELS-XPS の出力を読み、[M2_FIRST_CASE.md](../docs/M2_FIRST_CASE.md) §4.2 で事前に固定した基準で M2-1 の結果と比べます。JSON には差の指標、合否、比較条件、参照ファイルの SHA-256 が入ります。参照ソフトの出力は同梱せず、公開もしません（[NOTICES.md](../NOTICES.md)）。
 
-6つの参照ファイルを同じフォルダーに置き、そのパスを環境変数 `QUEELS_EXPORT_DIR` に設定します。ファイル名は `K_XPS_{成分}_Al_1000_0_q1_n{点数}.m` です。成分は `T`、`e`、`h`、点数は `1000` と `2000` です。
+6つの参照ファイルを1つのフォルダーに置きます。ファイル名は `K_XPS_{成分}_Al_1000_0_q1_n{積分点数}.m` です。成分は `T`、`e`、`h`、積分点数（n_integr）は `1000` と `2000` です。
 
 ```powershell
 $env:PYTHONPATH = 'src'
+$env:QUEELS_EXPORT_DIR = 'C:\path\to\exports'
 python benchmarks/compare_queels_fixed_depth.py --reference-dir "$env:QUEELS_EXPORT_DIR" --out comparison.json
 ```
 
-`--out` には新しいファイル名を指定します。比較が完了すると終了コードは0です。各運動量指定の合否は JSON の `choices` にある `pass` で確認します。
+```sh
+export PYTHONPATH=src QUEELS_EXPORT_DIR=/path/to/exports
+python benchmarks/compare_queels_fixed_depth.py --reference-dir "$QUEELS_EXPORT_DIR" --out comparison.json
+```
+
+`--out` には新しいファイル名を指定します。既存のファイルを指定すると、終了コード1で止まります。比較が完了すると終了コードは0です。各運動量指定の合否は、標準出力と JSON の `choices` にある `pass` で確かめます。
 
 2026-11-20 の比較では、分散のあるAlで両方の運動量指定が不合格でした。合成入力3件で行った追試には、候補式が参照出力と一致した条件と許容幅を記録しています。[事前登録試験と結果](../docs/QUEELS_DISPERSION_TEST.md)
 

@@ -12,7 +12,7 @@ python benchmarks/queels_prereg/evaluate_prereg.py evaluate PATH_TO_YOUR_EXPORTS
 python -m unittest discover -s tests -p test_queels_prereg.py
 ```
 
-`predict` は深さ 10 Å の全予測を ASCII・CRLF で標準出力に書く。Windows PowerShell 5.1 の `>` はテキストを UTF-16 に変換するため、ファイル保存には `--out` を使う。`--out nominal.txt` は同名のファイルを上書きするため、既存の予測を残すには別名を指定する。`--check` は再計算したバイト列を同梱の凍結ファイルと照合し、JSON に一致の真偽と再計算値の SHA-256 を出す。一致すれば終了0、不一致なら1。 登録時の SHA-256 は `test_frozen_hash_and_recalculated_bytes` が照合する。
+`predict` は深さ 10 Å の全予測を ASCII・CRLF で標準出力に書く。Windows PowerShell 5.1 の `>` はテキストを UTF-16 に変換するため、ファイル保存には `--out` を使う。`--out nominal.txt` は同名のファイルを上書きするため、既存の予測を残すには別名を指定する。`--check` は再計算したバイト列を同梱の凍結ファイルと照合し、JSON に一致の真偽と再計算値の SHA-256 を出す。一致すれば終了0、不一致なら1。登録時の SHA-256 は `test_frozen_hash_and_recalculated_bytes` が照合する。
 
 `evaluate` は指定ディレクトリ直下に、QUEELS-XPS v2.1 で作成した `K_XPS_{T,e,h}_{入力名}_1000_0_q1_n2000.m` を計9個必要とする。ギャップ0、法線から0°、正孔電荷1、1000 eV での実行を使う。`@` 以降のヘッダのエネルギー・角度・IMFP・刻み・点数・ac/bc と、65深さ列の格子を検査する。先頭3行は深さ・固体内の経路長・深さごとの量、その後の500行の損失は行番号 i（1始まり）×0.2 eV で決まる。独立な損失軸の列はない。最終行は未計算のゼロ行。成分間で深さと経路長を照合し、実行ごとの格子を使う。
 
