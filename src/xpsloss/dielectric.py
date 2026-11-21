@@ -406,6 +406,11 @@ def dielectric_response(
         unresolved = (norm_error >= 1) | ~np.isfinite(epsilon)
         for part, numerator_error in ((epsilon.real, error), (epsilon.imag, imag_error)):
             estimate = ((numerator_error / radius) / radius + abs(part) * norm_error) / (1 - norm_error)
+            if material.gap_eV:
+                # The reciprocal difference is dF / (F * (F+dF)).
+                # Its modulus also bounds either Cartesian projection. Below
+                # the gap this avoids counting the same real perturbation thrice.
+                estimate = np.minimum(estimate, (relative / radius) / (1 - relative))
             estimate += FLOAT_EPSILON * abs(part)
             unresolved |= ~(estimate <= _accuracy(part, epsabs, epsrel))
         unresolved |= error > _accuracy(response.real, epsabs, epsrel)

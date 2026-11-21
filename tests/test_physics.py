@@ -30,6 +30,15 @@ class PhysicsTests(unittest.TestCase):
                 self.assertAlmostEqual(k / expected, 1, places=12)
                 self.assertGreaterEqual(error, 0)
 
+    def test_dimensionless_log_width_under_energy_scaling(self):
+        # At T=E/2 the momentum ratio is (sqrt(2)+1)^2 and this oscillator's ELF is 16/145.
+        for energy in (2.0**-335, 2.0**333):
+            mat = Material("synthetic", 0, (Oscillator(energy, energy**2, energy/8),))
+            value, err = bulk_diimfp(mat, energy, energy/2, epsabs=1e-260, epsrel=2e-15)
+            ref = (16/145) * math.log((math.sqrt(2)+1)**2) / (math.pi * BOHR_RADIUS_A * energy)
+            self.assertLessEqual(abs(value-ref), 2e-15*ref)
+            self.assertLessEqual(abs(value-ref), err + math.ulp(ref))
+
     def test_zero_strength_and_gap(self):
         zero = Material("zero", 0, (Oscillator(15, 0, 2, 0.5),))
         gap = Material("gapped", 3, (Oscillator(15, 180, 2, 0.5),))

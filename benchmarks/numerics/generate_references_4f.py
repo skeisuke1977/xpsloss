@@ -5,8 +5,10 @@ the uncontracted braces in Simonsen et al. (1997), Eqs. (13)-(16), directly in
 k_parallel. Eq. (17) is evaluated by subtracting squared momenta. Two different
 orders and working precisions must give identical rounded binary64 literals.
 No xpsloss or SciPy functions, package partitions, or error estimates are used.
+Use --follow-up-2 to reproduce the dispersive-node and bulk-edge regressions.
 """
 import math
+import sys
 
 import mpmath as mp
 
@@ -27,7 +29,7 @@ CASES = {
 }
 
 
-def fixed(loss, lines, total_momentum, rule):
+def fixed(loss, lines, total_momentum, rule, *, charge=1, resolve_poles=False):
     t, h, a0 = map(mp.mpf, (loss, 3.80998212, 0.529177210903))
     energy, depth = 1000, 10
     omega = t / (2 * mp.sqrt(h * energy))
@@ -64,18 +66,35 @@ def fixed(loss, lines, total_momentum, rule):
         )
         return [prefactor * k * z.real for z in terms]
 
+    edges = [low]
+    while edges[-1] < high:
+        edges.append(min(2 * edges[-1], high))
+    if resolve_poles:
+        # In these examples only one oscillator disperses. Its bulk pole
+        # has D=0 and the surface pole has D=A/(2-S_background). Work in
+        # complex k directly; |Im k_pole| sets the local integration scale.
+        (w, a, g, alpha), = [line for line in lines if line[3]]
+        background = mp.fsum(a0_ / (w0**2 - t**2 - mp.j*g0*t)
+                             for w0, a0_, g0, dispersion in lines if not dispersion)
+        for extra in (0, a / (2-background)):
+            center = mp.sqrt(t**2 + mp.j*g*t + extra)
+            pole = mp.sqrt((center-w) / (alpha*h) - (omega**2 if total_momentum else 0))
+            if low < pole.real < high:
+                edges.append(pole.real)
+                step = abs(pole.imag)
+                while step < high - low:
+                    edges.extend(k for k in (pole.real-step, pole.real+step) if low < k < high)
+                    step *= 2
+        edges = sorted(set(edges))
     terms = [mp.mpf(0)] * 8
-    left = low
-    while left < high:
-        right = min(2 * left, high)
+    for left, right in zip(edges, edges[1:]):
         for node, weight in zip(*rule):
             k = ((right-left)*node + right+left)/2
             for i, value in enumerate(densities(k)):
                 terms[i] += (right-left)*weight*value/2
-        left = right
     electron = mp.fsum(terms[i] for i in (0, 1, 3, 5, 6))
     hole = mp.fsum(terms[i] for i in (2, 4, 7))
-    return tuple(map(float, [*terms, electron, hole, electron+hole]))
+    return tuple(map(float, [*terms, electron, hole, electron + charge*hole]))
 
 
 def other_references():
@@ -115,7 +134,37 @@ def other_references():
         print("closed static", gap, gamma, float(f))
 
 
-if __name__ == "__main__":
+def follow_up_2():
+    line = (15, 180, 1e-6, 0.05)
+    cases = (
+        (52.24548795323831, [line], False, 1), (30., [line], True, 1), (30., [line], False, 0),
+        (11.717158173273155, [(15, 180, 5e-7, 1e-4)], True, -1),
+        (15.5, [(15, 120, 4e-7, 0.05), (25, 200, 6, 0)], False, -1),
+        (30., [(15, 180, 1e-3, 0.05)], True, 0.5),
+    )
+    previous = []
+    for digits, order in ((50, 32), (80, 48)):
+        mp.mp.dps = digits
+        rule = mp.gauss_quadrature(order, "legendre")
+        rows = [fixed(t, lines, total, rule, charge=charge, resolve_poles=True)
+                for t, lines, total, charge in cases]
+        if previous and rows != previous:
+            raise ArithmeticError("dispersive-node reference has not converged")
+        previous = rows
+    for case, row in zip(cases, rows):
+        print(case, row)
+    t = mp.mpf(1000 * (1 - 1.1e-5))
+    h, a0 = map(mp.mpf, (3.80998212, 0.529177210903))
+    bounds = [(mp.sqrt(1000) + sign*mp.sqrt(1000-t)) / mp.sqrt(h) for sign in (-1, 1)]
+    def density(q):
+        w = 15 + mp.mpf(1e-20)*h*q*q
+        return mp.im(180 / (w*w - t*t - mp.j*mp.mpf(0.1)*t)) / q
+    print("bulk", float(mp.quad(density, bounds) / (mp.pi*a0*1000)))
+
+
+if __name__ == "__main__" and sys.argv[1:] == ["--follow-up-2"]:
+    follow_up_2()
+elif __name__ == "__main__":
     previous = {}
     for digits, order in ((50, 32), (80, 48)):
         mp.mp.dps = digits

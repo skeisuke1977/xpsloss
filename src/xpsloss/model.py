@@ -23,6 +23,7 @@ HBAR2_OVER_2ME_EV_A2 = 3.80998212
 MODEL_ID = "bulk_drude_lindhard_v0"
 
 FLOAT_EPSILON = np.finfo(float).eps
+_LOG_MIN_NORMAL = math.log(np.finfo(float).tiny)
 DEFAULT_ABS = 1e-9  # Absolute floor for dimensionless response components.
 DEFAULT_REL = 1e-7  # Relative accuracy of the published numerical examples.
 SUM_ROUNDOFF = 4 * FLOAT_EPSILON  # Allow for additions and the normalization of a sum.
@@ -131,10 +132,10 @@ def _oscillator_energy(oscillator, q):
     return oscillator.energy_eV + oscillator.dispersion * HBAR2_OVER_2ME_EV_A2 * q**2
 
 
-def _exact_oscillator_sum(material, loss, q):
-    """Real and imaginary S at the supplied binary64 coordinates, before rounding."""
+def _exact_oscillator_sum(material, loss, q, *, q_squared=None):
+    """Exact rational S at binary64 q or at a reconstructed quadrature node."""
     t = Fraction(float(loss))
-    recoil = Fraction(HBAR2_OVER_2ME_EV_A2) * Fraction(float(q))**2
+    recoil = Fraction(HBAR2_OVER_2ME_EV_A2) * (Fraction(float(q))**2 if q_squared is None else q_squared)
     real = imag = Fraction(0)
     for osc in material.oscillators:
         if osc.strength_eV2:
@@ -249,11 +250,17 @@ def _bulk_line(osc, e, t, epsabs, epsrel, limit):
     if not 0 < damping < math.inf:
         raise ArithmeticError("damping outside numerical range")
     peak = t - osc.energy_eV
+
+    def log_momentum_ratio():
+        ratio = math.sqrt(e - t) / math.sqrt(t)
+        if math.isfinite(ratio):
+            return 2 * math.asinh(ratio)
+        # The log difference is well-conditioned for such a large ratio.
+        return 2 * math.log(plus) - math.log(t)
+
     if not osc.dispersion:
-        log_ratio = (2 * math.asinh(math.sqrt(e - t) / math.sqrt(t)) if t > e / NEARBY_FACTOR
-                     else 2 * math.log(plus) - math.log(t))
         delta = -peak * (osc.energy_eV + t)
-        value = (osc.strength_eV2 / complex(delta, -damping)).imag * log_ratio
+        value = (osc.strength_eV2 / complex(delta, -damping)).imag * log_momentum_ratio()
         return value, COORDINATE_ULPS * math.ulp(value)
 
     # s = alpha H q²; dq/q = ds/(2s). Away from the peak log(s) resolves
@@ -271,22 +278,26 @@ def _bulk_line(osc, e, t, epsabs, epsrel, limit):
         delta = detuning * ((osc.energy_eV + t) + shift)
         return (osc.strength_eV2 / complex(delta, -damping)).imag
 
-    def log_integrand(u):
-        shift = math.exp(u)
-        return 0.5 * elf(shift - peak, shift)
-
     def log_panel(left, right):
-        if left == lo and right == hi and e - t < BULK_EDGE_FRACTION * e:
+        if left >= right:
+            return
+        if left == lo and right == hi:
             # log(s_hi/s_lo) = 4 asinh(sqrt((E-T)/T)). Keep this span
             # independent of rounding of alpha and of the two endpoints.
-            span = 4 * math.asinh(math.sqrt(e - t) / math.sqrt(t))
-            def from_lower(u):
-                shift = lo * math.exp(u)
-                return 0.5 * elf(shift - peak, shift)
+            span = 2 * log_momentum_ratio()
+        else:
+            ratio = (right - left) / left
+            # If the ratio overflows, the log endpoints are at least 709
+            # apart and their difference is well-conditioned.
+            span = math.log1p(ratio) if math.isfinite(ratio) else math.log(right) - math.log(left)
 
-            parts.append((from_lower, 0.0, span))
-        elif left < right:
-            parts.append((log_integrand, math.log(left), math.log(right)))
+        # Anchor wide intervals at the upper end: exp(u) could overflow
+        # even when the shifted energy itself is representable.
+        def from_upper(u):
+            shift = right * math.exp(u) if u >= _LOG_MIN_NORMAL else math.exp(math.log(right) + u)
+            return 0.5 * elf(shift - peak, shift)
+
+        parts.append((from_upper, -span, 0.0))
 
     left, right = max(lo, peak / NEARBY_FACTOR), min(hi, NEARBY_FACTOR * peak)
     if left < right:

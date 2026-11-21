@@ -1,6 +1,8 @@
 """Simonsen, Yubero & Tougaard (1997), Eqs. (13)–(17), at normal emission."""
 
 from dataclasses import dataclass
+from decimal import Context, Decimal
+from fractions import Fraction
 import math
 
 import numpy as np
@@ -9,7 +11,7 @@ from scipy.special import roots_legendre
 
 from .dielectric import dielectric_response
 from .model import (
-    BOHR_RADIUS_A, DEFAULT_REL, DETUNING_REL, FLANK_RATIO, FLOAT_EPSILON, HBAR2_OVER_2ME_EV_A2, NEARBY_FACTOR,
+    BOHR_RADIUS_A, DECIMAL_DIGITS, DEFAULT_REL, DETUNING_REL, FLANK_RATIO, FLOAT_EPSILON, HBAR2_OVER_2ME_EV_A2, NEARBY_FACTOR,
     RECIPROCAL_ROUNDOFF,
     Material, NumericalConvergenceError, _PanelLimitError, _accuracy, _exact_oscillator_sum, _first_loss, _loss_point,
     _oscillator_response, finite_number,
@@ -138,18 +140,42 @@ def _bounded_sum(material, loss, q):
     return response, sr, si
 
 
-def _exact_points(material, loss, q, points, coefficients):
+def _node_squares(left, right, points, loss, energy, total_momentum):
+    """Reconstruct exp(2 log k) at the selected GL nodes of the actual panels."""
+    offset = 0
+    if total_momentum:
+        offset = Fraction(float(loss))**2 / (4 * Fraction(HBAR2_OVER_2ME_EV_A2) * Fraction(energy))
+    ctx = Context(prec=DECIMAL_DIGITS)
+    for i in np.flatnonzero(points.any(axis=1)):
+        lo, hi = Decimal(float(left[i])), Decimal(float(right[i]))
+        center, span = ctx.add(lo, hi), ctx.subtract(hi, lo)
+        for j in np.flatnonzero(points[i]):
+            log_z = ctx.fma(span, Decimal(float(_NODES[j])), center)
+            yield Fraction(ctx.exp(log_z)) + offset
+
+
+def _exact_points(material, loss, q, points, coefficients, *, node_squares=None):
     """Replace the selected Cartesian coefficients and their rounding bounds."""
     (s, r, c), errors = coefficients
     losses = np.broadcast_to(loss, q.shape)
     for row in np.argwhere(points):
         i = tuple(row)
-        x, y = _exact_oscillator_sum(material, losses[i], q[i])
-        norm = (2-x)**2 + y**2
+        z = next(node_squares) if node_squares is not None else None
+        x, y = _exact_oscillator_sum(material, losses[i], q[i], q_squared=z)
+        # Put Re S and Im S over one integer denominator. R and C are
+        # needed only as floats: leave their numerator/denominator pairs
+        # unreduced, and round once after the final subtraction in C.
+        den = math.lcm(x.denominator, y.denominator)
+        a = x.numerator * (den // x.denominator)
+        b = y.numerator * (den // y.denominator)
+        complement = 2 * den - a
+        norm = complement**2 + b**2
         if not norm:
             raise FixedDepthConvergenceError(f"surface pole at loss_eV={losses[i]:g}")
-        rx, ry = (x*(2-x) - y**2)/norm, 2*y/norm
-        s[i], r[i], c[i] = complex(x, y), complex(rx, ry), complex(2*x-rx, 2*y-ry)
+        rx, ry = a*complement - b**2, 2*b*den
+        common = den * norm
+        s[i], r[i] = complex(x, y), complex(rx / norm, ry / norm)
+        c[i] = complex((2*a*norm - rx*den) / common, (2*b*norm - ry*den) / common)
     for value, (er, ei) in zip((s, r, c), errors):
         er[points] = FLOAT_EPSILON * abs(value.real[points])
         ei[points] = FLOAT_EPSILON * abs(value.imag[points])
@@ -187,6 +213,42 @@ def _coefficients(material, loss, q, epsrel=None, *, bounded=False):
             return _coefficients(material, loss, q, epsrel)
         _exact_points(material, loss, q, uncertain, coefficients)
     return coefficients
+
+
+def _include_node_roundoff(material, loss, q, relative_z, coefficients):
+    """Propagate uncertainty in z=q², even after exact evaluation at rounded q."""
+    q2 = q*q
+    ds = np.zeros_like(q)
+    for osc in material.oscillators:
+        if not (osc.dispersion and osc.strength_eV2):
+            continue
+        shift = osc.dispersion * HBAR2_OVER_2ME_EV_A2 * q2
+        center = osc.energy_eV + shift
+        dshift = relative_z * shift
+        delta = ((osc.energy_eV - loss) + shift) * (center + loss)
+        # For D=(W+shift)^2-T^2-i*width*T, this bounds the finite
+        # change in D. Allow the same shift uncertainty when estimating
+        # the distance to the pole with a binary64 detuning.
+        change = dshift * (2*center + dshift)
+        distance = np.maximum(osc.width_eV*loss, abs(delta) - change) * (1 - REFLECTION_ROUNDOFF)
+        fraction = change / distance
+        if np.any(fraction >= 1):
+            raise FixedDepthConvergenceError("oscillator denominator unresolved at quadrature node")
+        # Bound the derivative over the entire coordinate interval. This
+        # same bound can be rescaled for a more accurately located node.
+        ds += (osc.strength_eV2 / (distance - change)) * (fraction / (1 - fraction))
+
+    (s, _, _), (se, re, ce) = coefficients
+    # R=2/(2-S)-1. Allow for the uncertainty already present at fixed q
+    # in both denominators of the finite reciprocal difference.
+    distance = abs(2 - s) - (se[0] + se[1])
+    if np.any(ds >= distance):
+        raise FixedDepthConvergenceError("surface denominator unresolved at quadrature node")
+    dr = (2 / (distance - ds)) * (ds / (distance - ds))
+    for (er, ei), change in zip((se, re, ce), (ds, dr, 2*ds + dr)):
+        er += change
+        ei += change
+    return ds, dr
 
 
 def _term_integrands(k, coefficients, energy, depth, omega, *, select_bounds=False):
@@ -343,7 +405,11 @@ def _log_breakpoints(material, loss, lower, upper, q_offset):
 def _panel_integrals(edges_left, edges_right, integrand):
     mid = (edges_left + edges_right) / 2
     half = (edges_right - edges_left) / 2
-    values, errors = integrand(np.exp(mid[:, None] + half[:, None] * _NODES))
+    # Roundoff in the affine log node becomes relative error after exp.
+    # Include squaring, the optional normal momentum offset and the shift.
+    log_size = np.maximum(abs(edges_left), abs(edges_right))
+    relative_z = MOMENTUM_ULPS * FLOAT_EPSILON * (2 + log_size[:, None])
+    values, errors = integrand(np.exp(mid[:, None] + half[:, None] * _NODES), relative_z, edges_left, edges_right)
     split = len(_LOW_RULE[0])
 
     def weighted(array, nodes, weights):
@@ -386,9 +452,11 @@ def _initial_panels(material, losses, energy, depth, omega, offsets, lower, uppe
     offset = offsets[owners, None]
     dispersive = any(o.dispersion and o.strength_eV2 for o in material.oscillators)
 
-    def integrand(k):
+    def integrand(k, relative_z, left, right):
         q = np.hypot(k, offset) if offset.any() else k
         coefficients = _coefficients(material, loss, q if dispersive else np.zeros_like(loss), bounded=True)
+        if dispersive:
+            _include_node_roundoff(material, loss, q, relative_z, coefficients)
         return _term_integrands(k, coefficients, energy, depth, frequency)
 
     panels = _panel_integrals(np.concatenate([e[:-1] for e in edges]),
@@ -406,18 +474,29 @@ def _integrate_loss(material, loss, energy, depth, omega, q_offset, lower, upper
     constant = None
     constant_exact = False
     density_budget = None
-    def integrand(k):
+    def integrand(k, relative_z, panel_left, panel_right):
         nonlocal constant, constant_exact
         if constant is None and not any(o.dispersion and o.strength_eV2 for o in material.oscillators):
             constant = _coefficients(material, loss, np.zeros(1))
         q = np.hypot(k, q_offset) if q_offset else k
         coefficients = constant or _coefficients(material, loss, q)
+        if constant is None:
+            ds, dr = _include_node_roundoff(material, loss, q, relative_z, coefficients)
         if density_budget is not None and not constant_exact:
             _, bounds = _term_integrands(k, coefficients, energy, depth, omega, select_bounds=True)
             points = (bounds > density_budget[:, None]).any(axis=-2)
             if np.any(points):
                 if constant is None:
-                    _exact_points(material, loss, q, points, coefficients)
+                    squares = _node_squares(panel_left, panel_right, points, loss, energy, bool(q_offset))
+                    _exact_points(material, loss, q, points, coefficients, node_squares=squares)
+                    # Rounding the GL abscissa now affects log(q²) only
+                    # through the panel width. Retain this and the residual
+                    # of the decimal exponential after replacing S, R and C.
+                    residual = 4*FLOAT_EPSILON*(panel_right-panel_left) + 10.0**(4-DECIMAL_DIGITS)
+                    scale = (residual / relative_z[:, 0])[np.nonzero(points)[0]]
+                    for (er, ei), bound in zip(coefficients[1], (ds, dr, 2*ds + dr)):
+                        er[points] += scale * bound[points]
+                        ei[points] += scale * bound[points]
                 else:
                     _exact_points(material, loss, np.zeros(1), np.ones(1, dtype=bool), constant)
                     constant_exact = True

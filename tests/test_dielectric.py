@@ -78,6 +78,14 @@ def tabulated_kk_quadrature(nodes, values, energy, low, high):
 
 
 class DielectricTests(unittest.TestCase):
+    def test_gapped_reciprocal_with_resolved_components(self):
+        # 50-digit independent KK integral over the removed band, then -1/F.
+        mat = Material("synthetic", 0.7029986625931424, (
+            Oscillator(5.197929478598387, 9.442706241380375, 2.8605473966101925e-7),))
+        epsilon = dielectric_response(mat, 4.192345912552668, epsrel=1e-7).epsilon
+        np.testing.assert_allclose([epsilon.real, epsilon.imag], [2230301.5219450784, 7181233.812930856],
+                                   rtol=1e-7, atol=0)
+
     def test_gapless_lorentz_reciprocal_and_broadcasting(self):
         mat = Material("synthetic", 0, (Oscillator(10, 60, 2, 0.5),))
         t = np.array([0.0, 7.0, 10.0, 16.0, 1e5])
