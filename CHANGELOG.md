@@ -17,7 +17,7 @@
 
 ### Changed (pre-release, phase 4f)
 
-- Fixed depth: each of the eight terms, `no_hole`, `hole` and `total` is checked against the requested accuracy separately. Near a surface resonance the real part of the reflection coefficient lost digits, so a decomposed term (e.g. `term_15_T1`) could be about 1 % off while reported as converged; `total` at hole charge 1 hid it because the component errors cancel. Rounding of the real and imaginary parts and of the node coordinates is now propagated to each term; where it could exceed the requested accuracy the coefficients are recomputed exactly from the binary64 inputs, otherwise `FixedDepthConvergenceError` is raised. The physical model is unchanged.
+- Fixed depth: each of the eight terms, `no_hole`, `hole` and `total` is checked against the requested accuracy separately. Near a surface resonance the real part of the reflection coefficient lost digits, so a decomposed term (e.g. `term_15_T1`) could be about 1 % off while reported as converged; `total` at hole charge 1 hid it because the component errors cancel. Rounding of the real and imaginary parts and of the node coordinates is now propagated to each term; where rounding could exceed the requested accuracy, the solver recomputes the coefficients exactly from the binary64 inputs. It raises `FixedDepthConvergenceError` only if the requested accuracy still cannot be met. The physical model is unchanged.
 - `quadrature_error` of fixed depth is a common bound over all terms and now includes the coefficient rounding, so it is larger than before.
 - The real and imaginary parts of ε = −1/F and of the gapped closed form are checked separately. Bulk DIIMFP computes the logarithmic width of the momentum interval without subtracting endpoint logarithms.
 
