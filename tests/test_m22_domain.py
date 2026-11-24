@@ -1,7 +1,7 @@
 """Preflight priority, structured CLI failures and the hard-gap manifest."""
 
 from contextlib import redirect_stderr, ExitStack
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from fractions import Fraction
 import io
 import json
@@ -60,6 +60,90 @@ def cli_args(folder, material, losses, mode="k_total", energy=1000.0, settings=S
 
 
 class DomainTests(unittest.TestCase):
+    def test_global_q_minimum_for_monotonicity_and_static_sign(self):
+        mono = synthetic("dispersive M1", 2, (3, 8.1, 1, 1))
+        static = synthetic("dispersive SP", 1, (5, 40, 1, 2))
+        for material in (mono, static):
+            result = run_fixed(material, 60.0, "k_total")
+            self.assertTrue(result.diagnostics["monotonicity"][0]["passed"])
+            self.assertEqual(result.diagnostics["static_sign"], "negative")
+        with self.assertRaises(FixedDepthGapDomainError) as failed:
+            run_fixed(mono, [2.5, 60.0], "k_total")
+        self.assertEqual(failed.exception.reason, "monotonicity_condition_failed")
+        with self.assertRaisesRegex(ValueError, "exceeds the static sign tolerance"):
+            run_fixed(static, [2.0, 60.0], "k_total")
+
+    def test_d7_equality_and_adjacent_exterior_floats(self):
+        # For Si the nominal g +/- delta rounds inside the boundary. In this
+        # synthetic material delta is exactly 2^-40, representable on either side.
+        exact_gap = math.ldexp(1e12, -40)
+        exact = replace(SI, name="synthetic exact D7 boundary", gap_eV=exact_gap)
+        for mat in (exact, SI):
+            g, d = mat.gap_eV, _gap_edge_exclusion_eV(mat)
+            inside = [g - d, g + d]
+            exterior = [math.nextafter(inside[0], -math.inf), math.nextafter(inside[1], math.inf)]
+            for t in inside:
+                if mat is exact:
+                    self.assertEqual(abs(t - g), d)
+                else:
+                    self.assertLess(abs(t - g), d)
+            self.assertTrue(all(abs(t - g) > d for t in exterior))
+            for mode in MODES:
+                with self.subTest(material=mat.name, mode=mode):
+                    with self.assertRaises(DielectricGapEdgeError) as caught:
+                        run_fixed(mat, inside, mode)
+                    self.assertEqual(caught.exception.offending_loss_eV, inside)
+                    result = run_fixed(mat, exterior, mode)
+                    self.assertTrue(np.all(np.isfinite(result.total)))
+                    self.assertTrue(result.diagnostics["subgap_proofs"][0]["proved"])
+
+    def test_proof_log_outward_at_acceptance_threshold(self):
+        # ln(2) = 2 atanh(1/3); its positive rational partial sum is strictly
+        # below ln(2), with tail < 1e-80. Put the true bound just ABOVE 2.
+        # Checking only the final binary64 bound far from 2 hides a decimal ulp.
+        ln2_lower = 2 * sum(Fraction(1, (2*k + 1) * 3**(2*k + 1)) for k in range(85))
+        for power in (2, 3):
+            loss = 1.0 - 2.0**(1 - power)
+            # Scale the coefficient for ln(8) to keep the constant part positive.
+            c = Fraction(1, 2)
+            p = 2 - c * power * ln2_lower
+            proof = _proof([(1.5, p, c)], 1.0, loss)
+            self.assertFalse(proof["proved"])
+            self.assertGreater(proof["S_upper"], 2.0)
+            self.assertLess(proof["margin_lower"], 0.0)
+
+    def test_uniform_edge_coefficient_bounds_pi_outward(self):
+        # Truncated decimal expansion, strictly less than pi. The exact
+        # rational M*g/pi_lower resolves the two adjacent binary64 pi values.
+        pi_lower = Fraction("3.14159265358979323846264338327950288")
+        line = P1.oscillators[0]
+        for u, _, coefficient in _uniform_bounds(P1):
+            moment = Fraction(line.strength_eV2) * Fraction(line.width_eV) / (
+                Fraction(line.energy_eV)**2 - Fraction(u)**2
+            )**2
+            self.assertGreaterEqual(coefficient, moment * Fraction(P1.gap_eV) / pi_lower)
+
+    def test_domain_details_keep_numeric_fields_separate_from_overflow_reason(self):
+        extreme = synthetic("extreme line", 1, (1e-100, 1, 1, 0))
+        with self.assertRaises(FixedDepthGapDomainError) as caught:
+            run_fixed(extreme, 2.0, "k_total")
+        row, = caught.exception.details["oscillators"]
+        self.assertIsNone(row["lhs_lower"])
+        self.assertEqual(row["lhs_lower_status"], "outside_binary64_range")
+        self.assertIsInstance(row["rhs_upper"], float)
+        json.dumps(caught.exception.details, allow_nan=False)
+
+    def test_epsilon_pole_diagnostic_failure_preserves_result(self):
+        normal = run_fixed(SI, [0.2, 4.0], "k_total")
+        for failure in (fixed.NumericalConvergenceError("D3"), RuntimeError("iterations"), ValueError("bracket")):
+            with self.subTest(failure=failure), patch("xpsloss._gap_domain._sub_gap_pole", side_effect=failure):
+                result = run_fixed(SI, [0.2, 4.0], "k_total")
+                self.assertEqual(result.diagnostics["sub_gap_pole_status"], "unresolved")
+                self.assertIsNone(result.diagnostics["sub_gap_pole_eV"])
+                self.assertEqual(result.diagnostics["ill_conditioned_D3_count"], 0)
+                for name in (*NAMES, "quadrature_error"):
+                    np.testing.assert_array_equal(getattr(result, name), getattr(normal, name))
+
     def test_v12_domain_and_cli_before_quadrature(self):
         g, delta = SI.gap_eV, _gap_edge_exclusion_eV(SI)
         for mat, t, kind, reason in [
@@ -161,7 +245,9 @@ class DomainTests(unittest.TestCase):
                 args = cli_args(folder, mat, [t], settings=settings)
                 proc = subprocess.run([sys.executable, "-m", "xpsloss", *args], capture_output=True, cwd=ROOT)
                 self.assertEqual(proc.returncode, 2)
-                self.assertEqual(json.loads(proc.stderr.decode("ascii"))["status"], "not_converged")
+                message = json.loads(proc.stderr.decode("ascii"))
+                self.assertEqual(message["status"], "not_converged")
+                self.assertEqual(message["diagnostics"]["ill_conditioned_D3_count"], int(mat is stiff))
                 self.assertFalse((Path(folder) / "output").exists())
 
     def test_monotonicity_true_endpoint_and_empty_U_above_gap(self):
@@ -235,6 +321,35 @@ class ManifestTests(unittest.TestCase):
                     self.assertTrue(np.all(ratios <= 1))
                 self.assertIn("gapped_checks", doc["applicability"])
                 self.assertNotIn("checked_envelope", doc["applicability"])
+                self.assertIs(doc["applicability"]["within_checked_envelope"], True)
+                self.assertEqual(diag["ill_conditioned_D3_count"], 0)
+                self.assertFalse(any("Outside the checked envelope" in w for w in doc["warnings"]))
         r = run_fixed(SI, [SI.gap_eV - 1e-6, SI.gap_eV + 1e-6], "k_total")
         self.assertEqual(len(r.diagnostics["near_gap_edge_points"]), 2)
         self.assertEqual(len(r.warnings), 4)
+
+    def test_hard_gap_envelope_departures_in_cli_manifest(self):
+        # A matching name alone does not establish the Si oscillator input.
+        altered = replace(SI, oscillators=(replace(SI.oscillators[0], strength_eV2=0.1), *SI.oscillators[1:]))
+        for mat, energy, depth, losses, departures in (
+            (SI, 1000, 2, [0.2, 99.8], []),
+            (SI, 1000, 200, [5.0], []),
+            (SI, 120, 10, [0.5, 60.5], ["electron_energy_eV", "max_loss_over_E0"]),
+            (SI, 4000, 1.9, [0.19], ["electron_energy_eV", "depth_A", "loss_eV"]),
+            (SI, 1000, 201, [99.9], ["depth_A", "loss_eV", "max_loss_over_E0"]),
+            (altered, 1000, 10, [5.0], ["material"]),
+        ):
+            with self.subTest(energy=energy, depth=depth, losses=losses), tempfile.TemporaryDirectory() as folder:
+                args = cli_args(folder, mat, losses, energy=energy)
+                args[args.index("--depth-A") + 1] = str(depth)
+                proc = subprocess.run([sys.executable, "-m", "xpsloss", *args], capture_output=True, cwd=ROOT)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                doc = json.loads((Path(folder) / "output/run.json").read_text(encoding="utf8"))
+                app = doc["applicability"]
+                self.assertIs(app["within_checked_envelope"], not departures)
+                self.assertEqual(app["gapped_checks"]["theta_deg_from_normal"], 0.0)
+                warnings = [w for w in doc["warnings"] if "Outside the checked envelope" in w]
+                self.assertEqual(len(warnings), len(departures))
+                for field in departures:
+                    self.assertTrue(any(field in w for w in warnings), field)
+                self.assertEqual(json.loads(proc.stdout)["warning_count"], len(doc["warnings"]))

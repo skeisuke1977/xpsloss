@@ -134,10 +134,15 @@ def compare_release(folder):
 
 class MigrationTests(unittest.TestCase):
     def test_gapless_binary64_csv_and_failure_states(self):
-        if not (ROOT / ".git").exists() or not shutil.which("git"):
+        if not (ROOT / ".git").exists():
             self.skipTest("release-object comparison requires a Git checkout")
-        if subprocess.run(["git", "cat-file", "-e", RELEASE], cwd=ROOT, capture_output=True).returncode:
-            self.skipTest("release object unavailable in this checkout")
+        if not shutil.which("git") or subprocess.run(
+            ["git", "cat-file", "-e", RELEASE], cwd=ROOT, capture_output=True
+        ).returncode:
+            message = f"V16 requires release {RELEASE} in this checkout"
+            if "CI" in os.environ:
+                self.fail(message)
+            self.skipTest(message)
         with tempfile.TemporaryDirectory() as folder:
             release, current = compare_release(Path(folder))
         self.assertEqual(len([k for k in release if k.startswith("ELF/")]), 30)

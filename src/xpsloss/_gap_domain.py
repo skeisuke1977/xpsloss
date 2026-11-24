@@ -71,9 +71,12 @@ def _directed_float(x, upward):
     return rounded
 
 
-def _record_number(x, upward):
+def _record_number(name, x, upward):
+    """Keep JSON bounds numeric or null; the exact rational still decides acceptance."""
     rounded = _directed_float(x, upward)
-    return rounded if math.isfinite(rounded) else str(_CTX.divide(Decimal(x.numerator), Decimal(x.denominator)))
+    if math.isfinite(rounded):
+        return {name: rounded}
+    return {name: None, name + "_status": "outside_binary64_range"}
 
 
 def _monotonicity(material, q2_lower):
@@ -88,8 +91,8 @@ def _monotonicity(material, q2_lower):
         rows.append(
             {
                 "oscillator_index": i,
-                "lhs_lower": _record_number(lhs, False),
-                "rhs_upper": _record_number(rhs, True),
+                **_record_number("lhs_lower", lhs, False),
+                **_record_number("rhs_upper", rhs, True),
                 "passed": center > gap and lhs > rhs,
             }
         )
@@ -133,8 +136,8 @@ def _proof(candidates, gap, loss):
     bound, u = min((p + c * log_upper, u) for u, p, c in candidates)
     return {
         "U_eV": u,
-        "S_upper": _record_number(bound, True),
-        "margin_lower": _record_number(2 - bound, False),
+        **_record_number("S_upper", bound, True),
+        **_record_number("margin_lower", 2 - bound, False),
         "proved": bound < 2,
     }
 
@@ -177,7 +180,12 @@ def gap_preflight(material, energy, grid, qlo, qhi, total_momentum):
     if sign == "marginal":
         status = "marginal_static"
     elif exclusion:
-        pole, status = _sub_gap_pole(material, np.asarray(qmin), exclusion, (DEFAULT_ABS, DEFAULT_REL, 200))
+        # F=0 is an epsilon pole, regular in the fixed-depth integrand.
+        # This diagnostic is independent of the required surface-pole proof above.
+        try:
+            pole, status = _sub_gap_pole(material, np.asarray(qmin), exclusion, (DEFAULT_ABS, DEFAULT_REL, 200))
+        except (ArithmeticError, RuntimeError, ValueError):
+            status = "unresolved"
     distances = abs(grid - gap)
     near = []
     warnings = []
@@ -205,7 +213,7 @@ def gap_preflight(material, energy, grid, qlo, qhi, total_momentum):
         "static_sign": sign,
         "static_negative_inverse_epsilon": float(static),
         "static_sign_tolerance": float(tol),
-        "q_min_squared_lower_inv_A2": _record_number(q2_lower, False),
+        **_record_number("q_min_squared_lower_inv_A2", q2_lower, False),
         "monotonicity": rows,
         "subgap_proofs": proofs,
         "sub_gap_pole_eV": pole,
@@ -215,5 +223,4 @@ def gap_preflight(material, energy, grid, qlo, qhi, total_momentum):
         "broadening_eV": 0.0,
         "real_part_method": "closed_form_D3_retained_band",
         "dielectric_model_id": "causal_oscillator_elf_v1",
-        "ill_conditioned_D3_count": 0,
     }, tuple(warnings)

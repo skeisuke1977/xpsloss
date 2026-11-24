@@ -10,7 +10,7 @@ from scipy.optimize import brentq
 from scipy.special import roots_legendre
 
 from ._gap_domain import FixedDepthGapDomainError, check_edges, gap_preflight
-from ._gap_response import gapped_sum, resolve_surface
+from ._gap_response import _D3ConditionError, gapped_sum, resolve_surface
 from .dielectric import _checked_static_response
 from .model import (
     BOHR_RADIUS_A, DECIMAL_DIGITS, DEFAULT_REL, DETUNING_REL, FLANK_RATIO, FLOAT_EPSILON, HBAR2_OVER_2ME_EV_A2, NEARBY_FACTOR,
@@ -42,6 +42,10 @@ _MIN_NORMAL = np.finfo(float).tiny
 
 class FixedDepthConvergenceError(NumericalConvergenceError):
     """Quadrature could not resolve the requested absolute or relative accuracy."""
+
+    def __init__(self, message, *, diagnostics=None):
+        super().__init__(message)
+        self.diagnostics = {} if diagnostics is None else diagnostics
 
 
 @dataclass(frozen=True)
@@ -700,7 +704,12 @@ def effective_cross_section_fixed_depth(
     losses for the selected epsilon_momentum. For a positive gap, the retarded
     point value requires a proved sub-gap surface-mode exclusion. component_errors
     contains absolute estimates for all eleven outputs and quadrature_error is
-    their pointwise maximum. The gapless common-error contract is unchanged.
+    their pointwise maximum. Only a unit hole uses the direct sub-gap sum.
+    For charges close to but different from one, cancellation can leave the
+    component error above the total budget and raise FixedDepthConvergenceError.
+    ill_conditioned_D3_count counts failed D3 evaluations, including a batched
+    attempt and any individual replay. A failure also exposes the count in
+    the exception's diagnostics. The gapless common-error contract is unchanged.
     """
     if not isinstance(material, Material):
         raise ValueError("material must be a Material")
@@ -762,6 +771,7 @@ def effective_cross_section_fixed_depth(
         terms = np.empty((len(TERM_NAMES), grid.size))
         error = np.empty(grid.size)
         output_errors = np.empty((grid.size, 11)) if gapped else None
+        d3_failures = 0
         batch = None
         for i, t in enumerate(grid):
             try:
@@ -771,8 +781,10 @@ def effective_cross_section_fixed_depth(
                         try:
                             batch = _initial_panels(material, grid[block], energy, depth, omega[block],
                                                     offsets[block], lower[block], upper[block], limit, charge)
-                        except (ArithmeticError, NumericalConvergenceError, _PanelLimitError):
+                        except (ArithmeticError, NumericalConvergenceError, _PanelLimitError) as exc:
                             # Replay individually to report the original loss and grid index.
+                            if isinstance(exc, _D3ConditionError):
+                                d3_failures += exc.count
                             batch = None
                     integrate = _integrate_gap if gapped else _integrate_loss
                     terms[:, i], estimate = integrate(
@@ -786,13 +798,19 @@ def effective_cross_section_fixed_depth(
             except _PanelLimitError as exc:
                 raise ValueError(f"fixed-depth at {_loss_point(grid, (i,))}: {exc}") from exc
             except (ArithmeticError, NumericalConvergenceError) as exc:
-                raise FixedDepthConvergenceError(f"fixed-depth oscillator sum at {_loss_point(grid, (i,))}: {exc}") from exc
+                if isinstance(exc, _D3ConditionError):
+                    d3_failures += exc.count
+                raise FixedDepthConvergenceError(
+                    f"fixed-depth oscillator sum at {_loss_point(grid, (i,))}: {exc}",
+                    diagnostics={"ill_conditioned_D3_count": d3_failures} if gapped else None,
+                ) from exc
         no_hole, hole, total = _component_sums(terms.T, charge).T
         bad = ~(np.isfinite(total) & np.isfinite(hole) & np.isfinite(no_hole))
         if np.any(bad):
             raise FixedDepthConvergenceError(f"fixed-depth oscillator sum outside numerical range at {_first_loss(grid, bad)}")
     component_errors = {}
     if gapped:
+        diagnostics["ill_conditioned_D3_count"] = d3_failures
         names = (*TERM_NAMES, "no_hole", "hole", "total")
         component_errors = dict(zip(names, output_errors.T))
         values = np.column_stack((*terms, no_hole, hole, total))

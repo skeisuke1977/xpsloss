@@ -17,6 +17,12 @@ from .model import (
 )
 
 
+class _D3ConditionError(NumericalConvergenceError):
+    def __init__(self, message, failed):
+        super().__init__(message)
+        self.count = int(np.count_nonzero(failed))
+
+
 def _closed_band(t, gap, center, strength, width):
     """Array form of D3; coalescing poles use the analytic divided difference."""
     half = width / 2
@@ -69,10 +75,9 @@ def _closed_band(t, gap, center, strength, width):
     error = RECIPROCAL_ROUNDOFF * (
         np.maximum(1.0, center**2 / np.sqrt(denominator)) * magnitude + scale * abs(coefficient) * jd_scale
     )
-    if not np.all(
-        np.isfinite(value) & np.isfinite(error) & (error <= _accuracy(value, CLOSED_ABS, CLOSED_REL))
-    ):
-        raise NumericalConvergenceError("closed-form D3 is ill-conditioned")
+    valid = np.isfinite(value) & np.isfinite(error) & (error <= _accuracy(value, CLOSED_ABS, CLOSED_REL))
+    if not np.all(valid):
+        raise _D3ConditionError("closed-form D3 is ill-conditioned", ~valid)
     return value, np.array(error), denominator
 
 
@@ -99,11 +104,11 @@ def gapped_sum(material, loss, q, relative_z):
             raise NumericalConvergenceError("hard-gap oscillator damping unresolved")
         shift = o.dispersion * HBAR2_OVER_2ME_EV_A2 * q**2
         center = o.energy_eV + shift
-        if np.any(
-            (shift > 0)
-            & (COORDINATE_ULPS * np.spacing(center) > CLOSED_CENTER_REL * np.maximum(width, abs(g - center)))
-        ):
-            raise NumericalConvergenceError("closed-form D3 dispersed center unresolved at the gap")
+        unresolved = (shift > 0) & (
+            COORDINATE_ULPS * np.spacing(center) > CLOSED_CENTER_REL * np.maximum(width, abs(g - center))
+        )
+        if np.any(unresolved):
+            raise _D3ConditionError("closed-form D3 dispersed center unresolved at the gap", unresolved)
         value, err, den = _closed_band(t, g, center, a, width)
         d3_error += err + active * SUM_ROUNDOFF * abs(value)
         # Undispersed centers are exact inputs. Otherwise include the addition
@@ -131,8 +136,9 @@ def gapped_sum(material, loss, q, relative_z):
             si[above] += imag_change + (RECIPROCAL_ROUNDOFF + active * SUM_ROUNDOFF) * imag
         s.real += value
         sr += err + active * SUM_ROUNDOFF * abs(value)
-    if np.any(d3_error + active * SUM_ROUNDOFF > _accuracy(s.real - 1.0)):
-        raise NumericalConvergenceError("closed-form D3 oscillator sum is ill-conditioned")
+    ill_conditioned = d3_error + active * SUM_ROUNDOFF > _accuracy(s.real - 1.0)
+    if np.any(ill_conditioned):
+        raise _D3ConditionError("closed-form D3 oscillator sum is ill-conditioned", ill_conditioned)
     if not np.all(np.isfinite(s) & np.isfinite(sr) & np.isfinite(si)):
         raise NumericalConvergenceError("hard-gap response outside numerical range")
     return s, sr, si

@@ -21,10 +21,10 @@ from .dielectric import (
     dielectric_diagnostics, dielectric_response,
 )
 from .model import (BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, MODEL_ID, FIXED_DEPTH_UNSUPPORTED_PHYSICS,
-                    NumericalConvergenceError, UNSUPPORTED_PHYSICS, bulk_diimfp, finite_number, loss_function)
+                    Material, NumericalConvergenceError, Oscillator, UNSUPPORTED_PHYSICS, bulk_diimfp, finite_number, loss_function)
 from .xps_fixed_depth import (
     EPSILON_MOMENTA, FIXED_DEPTH_MODEL_ID, TERM_NAMES,
-    FixedDepthGapDomainError, FixedDepthResult, effective_cross_section_fixed_depth,
+    FixedDepthConvergenceError, FixedDepthGapDomainError, FixedDepthResult, effective_cross_section_fixed_depth,
 )
 
 
@@ -48,6 +48,13 @@ FIXED_DEPTH_CHECKED_ENVELOPE = {
                          "test_i8_energy_and_depth_scaling_and_unit_conversion",
     },
 }
+
+# Unscaled ELF_Si.txt, Pauly, Yubero & Tougaard (2022), Zenodo 6024064, CC BY 4.0.
+# Compare the actual model inputs even when the run has no provenance block.
+_CHECKED_SI = Material("Si", 1.12, (
+    Oscillator(10, 6.08458, 5, 0.5), Oscillator(14, 30.4229, 5, 0.5),
+    Oscillator(16.8, 212.9603, 3.8, 0.5),
+))
 
 
 class JSONParser(argparse.ArgumentParser):
@@ -144,20 +151,10 @@ def build_parser():
     return p
 
 
-def _fixed_depth_applicability(result: FixedDepthResult):
+def _fixed_depth_applicability(result: FixedDepthResult, material: Material):
     energy = result.electron_energy_eV
     ratio = float(result.loss_eV.max()) / energy
-    ratio_limit = FIXED_DEPTH_CHECKED_ENVELOPE["max_loss_over_E0"]["max"]
-    energy_limits = FIXED_DEPTH_CHECKED_ENVELOPE["electron_energy_eV"]
-    low, high = energy_limits["min"], energy_limits["max"]
     departures = []
-    if ratio > ratio_limit:
-        departures.append(f"max_loss_over_E0={ratio} exceeds {ratio_limit:g} by {ratio - ratio_limit:.9g}")
-    if energy < low:
-        departures.append(f"electron_energy_eV={energy} is below {low:g} eV by {low - energy:.9g} eV")
-    elif energy > high:
-        departures.append(f"electron_energy_eV={energy} exceeds {high:g} eV by {energy - high:.9g} eV")
-
     applicability = {
         "max_loss_over_E0": ratio, "electron_energy_eV": energy, "epsilon_momentum": result.epsilon_momentum,
         "assumptions": {
@@ -167,22 +164,13 @@ def _fixed_depth_applicability(result: FixedDepthResult):
             "surface": "specular_reflection_model",
             "source": "Simonsen et al. (1997) p. 1613 and Eq. (3); docs/M1_EQUATION_MAP.md section 2",
         },
-        "checked_envelope": FIXED_DEPTH_CHECKED_ENVELOPE,
-        "within_checked_envelope": not departures,
-        "note": "Only max(T)/E0 and E0 are compared with the bounds. Depth, material, line widths, "
-                "dispersion, hole charge and the lower end of the loss grid are not part of this envelope, "
-                "and for k_total with dispersive oscillators no independent check covers all finite-depth "
-                "terms. The bounds summarize numerical checks at discrete inputs. Being inside them "
-                "establishes neither accuracy for arbitrary inputs nor physical validity.",
     }
-    if result.diagnostics.get("gap_eV", 0.) > 0:
-        applicability.pop("checked_envelope")
-        applicability.pop("within_checked_envelope")
+    if material.gap_eV:
         applicability["assumptions"].update(gap="hard_step", real_part="causal_Kramers_Kronig",
                                              prescription="retarded_limit", broadening_eV=0.)
         applicability["gapped_checks"] = {
             "material": "Si, ELF data set v1.0 (unscaled)", "electron_energy_eV": 1000.,
-            "depths_A": [2., 10., 50., 200.], "momenta": list(EPSILON_MOMENTA),
+            "theta_deg_from_normal": 0., "depths_A": [2., 10., 50., 200.], "momenta": list(EPSILON_MOMENTA),
             "loss_grid_eV": {"first": 0.2, "last": 99.8, "step": 0.2},
             "charge": [0., 0.5, 1.], "outputs": {
                 "11_output_budgets": "Estimated numerical errors, all terms and components.",
@@ -192,9 +180,47 @@ def _fixed_depth_applicability(result: FixedDepthResult):
                 "V9": "Mesh and grid refinement at 10 angstrom for all terms and components.",
             },
         }
-        applicability["note"] = "These checks apply to the listed inputs. The gapless I3 energy envelope does not characterize hard-gap materials."
-        return applicability, list(result.warnings)
-    warnings = [f"Outside the checked envelope: {departure}. The numerical checks in this repository "
+        checks = applicability["gapped_checks"]
+        low, high = checks["depths_A"][0], checks["depths_A"][-1]
+        first, last = checks["loss_grid_eV"]["first"], checks["loss_grid_eV"]["last"]
+        # G499 is specified as 0.2*i. Its binary64 last point is one ulp above float(99.8).
+        last_binary = 499 * checks["loss_grid_eV"]["step"]
+        if material != _CHECKED_SI:
+            departures.append("material differs from unscaled ELF data set v1.0 Si")
+        if energy != checks["electron_energy_eV"]:
+            departures.append(f"electron_energy_eV={energy:g} differs from 1000 eV")
+        if result.theta_deg != checks["theta_deg_from_normal"]:
+            departures.append(f"theta_deg={result.theta_deg:g} differs from normal emission")
+        if not low <= result.depth_A <= high:
+            departures.append(f"depth_A={result.depth_A:g} is outside [{low:g}, {high:g}] angstrom")
+        if result.loss_eV.min() < first or result.loss_eV.max() > last_binary:
+            departures.append(f"loss_eV extends outside [{first:g}, {last:g}] eV")
+        if ratio > last_binary / checks["electron_energy_eV"]:
+            departures.append(f"max_loss_over_E0={ratio:g} exceeds the G499 upper endpoint ratio")
+        applicability["note"] = (
+            "Envelope membership uses the Si material parameters, energy, normal emission and the listed "
+            "depth and loss bounds. The numerical checks used the listed discrete depths, losses and charges."
+        )
+    else:
+        ratio_limit = FIXED_DEPTH_CHECKED_ENVELOPE["max_loss_over_E0"]["max"]
+        energy_limits = FIXED_DEPTH_CHECKED_ENVELOPE["electron_energy_eV"]
+        low, high = energy_limits["min"], energy_limits["max"]
+        if ratio > ratio_limit:
+            departures.append(f"max_loss_over_E0={ratio} exceeds {ratio_limit:g} by {ratio - ratio_limit:.9g}")
+        if energy < low:
+            departures.append(f"electron_energy_eV={energy} is below {low:g} eV by {low - energy:.9g} eV")
+        elif energy > high:
+            departures.append(f"electron_energy_eV={energy} exceeds {high:g} eV by {energy - high:.9g} eV")
+        applicability["checked_envelope"] = FIXED_DEPTH_CHECKED_ENVELOPE
+        applicability["note"] = (
+            "Only max(T)/E0 and E0 are compared with the bounds. Depth, material, line widths, "
+            "dispersion, hole charge and the lower end of the loss grid are not part of this envelope, "
+            "and for k_total with dispersive oscillators no independent check covers all finite-depth "
+            "terms. The bounds summarize numerical checks at discrete inputs. Being inside them "
+            "establishes neither accuracy for arbitrary inputs nor physical validity."
+        )
+    applicability["within_checked_envelope"] = not departures
+    warnings = list(result.warnings) + [f"Outside the checked envelope: {departure}. The numerical checks in this repository "
                 "do not cover this input, and physical applicability is not verified."
                 for departure in departures]
     return applicability, warnings
@@ -242,7 +268,7 @@ def run(args):
             hole_charge=args.hole_charge, epsilon_momentum=args.epsilon_momentum,
             epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
         )
-        applicability, warnings = _fixed_depth_applicability(result)
+        applicability, warnings = _fixed_depth_applicability(result, config.material)
         columns = ("loss_eV", "total", "no_hole", "hole", *TERM_NAMES, "quadrature_error")
         table = np.column_stack([getattr(result, name) for name in columns])
         header, output_name = ",".join(columns), "xps_fixed_depth.csv"
@@ -369,7 +395,10 @@ def main(argv=None):
               "message": str(exc), "offending_loss_eV": exc.offending_loss_eV, "details": exc.details}, sys.stderr)
         return 2
     except NumericalConvergenceError as exc:
-        emit({"status": "not_converged", "error_type": type(exc).__name__, "message": str(exc)}, sys.stderr)
+        message = {"status": "not_converged", "error_type": type(exc).__name__, "message": str(exc)}
+        if isinstance(exc, FixedDepthConvergenceError) and exc.diagnostics:
+            message["diagnostics"] = exc.diagnostics
+        emit(message, sys.stderr)
         return 2
     except (ValueError, OSError, OverflowError, RuntimeError) as exc:
         emit({"status": "error", "error_type": type(exc).__name__, "message": str(exc)}, sys.stderr)

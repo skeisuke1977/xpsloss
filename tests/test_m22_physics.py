@@ -21,6 +21,7 @@ from xpsloss.model import BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2
 ROOT = Path(__file__).resolve().parents[1]
 SI = load_config(ROOT / "benchmarks/inputs/si_elfdb_v1.0.bulk.json").material
 S0 = Material("synthetic S0", SI.gap_eV, tuple(replace(o, dispersion=0.0) for o in SI.oscillators))
+NARROW = Material("synthetic resolved surface line", 2.0, (Oscillator(3, 6, 0.025, 0.5),))
 MODES = ("k_parallel", "k_total")
 GRID = 0.2 * np.arange(1, 500)
 REF_POINTS = [
@@ -111,6 +112,13 @@ def retained(material, t, q, *, uncertainty=False):
 
 
 class NodeResponseTests(unittest.TestCase):
+    def test_d3_counts_only_ill_conditioned_nodes(self):
+        # The dispersionless resonance fails twice, the off-resonance center passes.
+        _closed_band(4.0, 2.0, np.array([8.0]), 4.0, 1e-6)
+        with self.assertRaisesRegex(fixed.NumericalConvergenceError, "D3 is ill-conditioned") as caught:
+            _closed_band(4.0, 2.0, np.array([4.0, 8.0, 4.0]), 4.0, 1e-6)
+        self.assertEqual(caught.exception.count, 2)
+
     def test_v5_all_d3_branches_against_scalar_and_retained_pv(self):
         # Same array on either side of the divided-difference cut and critical damping.
         width = 4.0
@@ -210,6 +218,74 @@ class NodeResponseTests(unittest.TestCase):
 
 
 class FixedDepthHardGapTests(unittest.TestCase):
+    def test_narrow_line_adaptive_refinement_and_surface_search(self):
+        # The dense comparison starts on the oscillator mesh alone, so a
+        # mistaken surface breakpoint is not shared by the two meshes.
+        def dense(material, loss, edges, offset, limit):
+            return np.r_[np.linspace(edges[:-1], edges[1:], 32, endpoint=False).T.ravel(), edges[-1]]
+
+        for mode in MODES:
+            with self.subTest(mode=mode):
+                with patch.object(fixed, "_panel_integrals", wraps=fixed._panel_integrals) as panels:
+                    searched = run_fixed(NARROW, 4.0, mode)
+                if mode == "k_parallel":
+                    # Single loss: the first call is the initial mesh, subsequent
+                    # calls integrate the two children of an adaptive split.
+                    self.assertGreater(panels.call_count, 1)
+                    for call in panels.call_args_list[1:]:
+                        self.assertEqual(len(call.args[0]), 2)
+                with patch.object(fixed, "resolve_surface", side_effect=lambda m, t, edges, off, lim: edges):
+                    unsearched = run_fixed(NARROW, 4.0, mode)
+                with patch.object(fixed, "resolve_surface", side_effect=dense):
+                    reference = values(run_fixed(NARROW, 4.0, mode, limit=4000))
+                for result in (searched, unsearched):
+                    diff = abs(values(result) - reference)
+                    self.assertTrue(np.all(diff <= budget(reference)))
+                    self.assertTrue(np.all(diff <= [result.component_errors[name] for name in NAMES]))
+
+    def test_surface_search_resolves_a_crossing_created_by_the_removed_band(self):
+        # On this descending flank the bare Lorentzian is already below 2.
+        # E4a independently locates a crossing in the corrected Re S, and
+        # the complex variation exceeds half the minimum Im S on the panel.
+        t = 4.0
+        q = np.array([0.844475, 0.849475])
+        w = 3.0 + 0.5 * HBAR2_OVER_2ME_EV_A2 * q**2
+        detuning = w**2 - t**2
+        damping = 0.025 * t
+        self.assertTrue(np.all(detuning > damping))
+        self.assertTrue(np.all(6.0 * detuning / (detuning**2 + damping**2) < 2))
+        s = np.array([retained(NARROW, t, qi) for qi in q]) + 1j * e1(NARROW, t, q)
+        self.assertGreater(s[0].real, 2)
+        self.assertLess(s[1].real, 2)
+        self.assertGreater(abs(s[1] - s[0]), 0.5 * min(s.imag))
+        edges = np.log(q)
+        self.assertGreater(len(fixed.resolve_surface(NARROW, t, edges, 0.0, 200)), len(edges))
+
+    def test_direct_total_error_includes_group_discrepancy(self):
+        # One exact synthetic panel. The returned eight terms cancel; only
+        # the separately integrated ninth column carries an offset.
+        offset, uncertainty = 2.0**-42, 2.0**-44
+        v = np.zeros((1, 9))
+        v[0, [0, 2, 8]] = (1.0, -1.0, offset)
+        err = np.zeros_like(v)
+        err[0, 8] = uncertainty
+        mesh = (np.array([0.0, 1.0]), (v, err, np.zeros_like(v)))
+        terms, estimates = fixed._integrate_gap(
+            SI, 0.2, 1000.0, 10.0, 1.0, 0.0, 1.0, math.e, 1.0, 1e-12, 1e-9, 1, mesh
+        )
+        self.assertEqual(terms[0] + terms[2], 0.0)
+        self.assertGreaterEqual(estimates[-1], offset + uncertainty)
+        self.assertLessEqual(estimates[-1], 1e-12)
+
+    def test_near_unit_charge_subgap_arithmetic_floor(self):
+        for mode in MODES:
+            self.assertLessEqual(abs(run_fixed(SI, 0.2, mode).total[0]), SETTINGS["epsabs"])
+            for charge in (0.999999, 1.0 + 1e-12):
+                with self.subTest(mode=mode, charge=charge), self.assertRaisesRegex(
+                    fixed.FixedDepthConvergenceError, "arithmetic error exceeds an output budget"
+                ):
+                    run_fixed(SI, 0.2, mode, charge=charge)
+
     def test_v1_bulk_and_dispersionless_analytic(self):
         for mat in (S0, SI):
             result = si_10("k_total") if mat is SI else run_fixed(mat, GRID, "k_total")
@@ -319,10 +395,16 @@ class FixedDepthHardGapTests(unittest.TestCase):
             groups = values(si_10(mode))
             indices = np.array([0, 3, 4, 5, 24, 83, 149, 498])
             for charge in (-0.5, 0.0, 0.5, 1.0, 1.5):
-                output = values(run_fixed(SI, GRID[indices], mode, charge=charge))
+                result = run_fixed(SI, GRID[indices], mode, charge=charge)
+                output = values(result)
                 expected = groups[:, indices].copy()
                 expected[-1] = expected[-3] + charge * expected[-2]
                 self.assertTrue(np.all(abs(output - expected) <= budget(expected)))
+                if charge in (-0.5, 1.5):
+                    errors = result.component_errors
+                    required = errors["no_hole"] + abs(charge) * errors["hole"]
+                    # Allow for the different order of positive panel reductions.
+                    self.assertTrue(np.all(errors["total"] >= (1 - 2e-14) * required))
 
     def test_preregistered_dispersionless_points_and_v16_zero_strength(self):
         zero = replace(
