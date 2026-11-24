@@ -1,0 +1,37 @@
+{
+  "title": "xpsloss: dielectric-response electron energy losses in XPS",
+  "upload_type": "software",
+  "version": "0.1.0",
+  "language": "eng",
+  "creators": [
+    {
+      "name": "Sato, Keisuke"
+    }
+  ],
+  "description": "<p>xpsloss is an independent Python library and command-line tool that implements published dielectric-response models of electron energy loss in X-ray photoelectron spectroscopy (XPS). Version 0.1.0 covers oscillator energy-loss functions, bulk differential inverse inelastic mean free paths, causal dielectric response including hard gaps, and the fixed-depth XPS effective cross section of Simonsen, Yubero and Tougaard (1997), Eqs. (13)-(17), for normal emission from a positive depth in a gapless material.</p><p>Scope and limits are stated in the repository: the two momentum choices are verified differently; the comparison with QUEELS-XPS v2.1 is limited to the tested inputs; there is no comparison with measured spectra and no human peer review. xpsloss is not an official, endorsed or compatibility-guaranteed version of QUEELS-XPS.</p><p>Licences: the code is MIT. The project's own documentation is CC BY 4.0. Third-party ELF data in benchmarks/sources and benchmarks/inputs/*elfdb* keep the CC BY 4.0 licence of N. Pauly, F. Yubero and S. Tougaard (doi:10.5281/zenodo.6024064). Values read from figures of the cited paper are quotations. See NOTICES.md.</p>",
+  "license": "mit",
+  "keywords": [
+    "X-ray photoelectron spectroscopy",
+    "dielectric response",
+    "electron energy loss",
+    "inelastic mean free path",
+    "surface excitations"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/skeisuke1977/xpsloss",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    },
+    {
+      "identifier": "10.1103/PhysRevB.56.1612",
+      "relation": "references",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "10.5281/zenodo.6024064",
+      "relation": "references",
+      "scheme": "doi"
+    }
+  ]
+}

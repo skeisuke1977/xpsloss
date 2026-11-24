@@ -43,6 +43,6 @@ xpsloss uses the published Eq. (32) of Yubero et al. (1996). The comparison test
 
 Keisuke Sato licenses the code under MIT and the project's own documentation under CC BY 4.0. Third-party quotations retain their owners' terms. Both grants exclude third-party data in `benchmarks/sources/**` and `benchmarks/inputs/*elfdb*`. Those files retain the original CC BY 4.0 license of N. Pauly, F. Yubero and S. Tougaard, *ELF dielectric functions for various materials*, v1.0 (2022). [MIT license](LICENSE) · [Notices and attribution](NOTICES.md) · [ELF data set](https://doi.org/10.5281/zenodo.6024064) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
-Cite Keisuke Sato, *xpsloss*, version 0.1.0. The software DOI will be added at release. When using the ELF data set, cite its authors separately. [Software citation](CITATION.cff)
+Cite Keisuke Sato, *xpsloss*, version 0.1.0. The software DOI will be added after the release is archived on Zenodo. When using the ELF data set, cite its authors separately. [Software citation](CITATION.cff)
 
 The Japanese documentation gives the [benchmark inputs and provenance](docs/BENCHMARK_INPUTS.md), [dielectric-response design](docs/DIELECTRIC_DESIGN.md), and [equation-to-implementation map](docs/M1_EQUATION_MAP.md).

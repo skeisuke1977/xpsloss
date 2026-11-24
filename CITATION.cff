@@ -2,6 +2,7 @@ cff-version: 1.2.0
 message: "If you use xpsloss in your research, please cite this software."
 title: xpsloss
 version: "0.1.0"
+date-released: "2026-11-24"
 authors:
   - family-names: Sato
     given-names: Keisuke
