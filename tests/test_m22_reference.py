@@ -351,6 +351,39 @@ class M22Reference(unittest.TestCase):
     def test_V14_error_coverage(self):
         self._coverage(self._required(), "V14")
 
+    def test_either_si_strict_tolerance(self):
+        """Pre-registered 'either' case (docs/M2_2_PREREG.md section 3): Si, 10 A, k_total,
+        1.2/5/17/60 eV, epsabs 1e-14, epsrel 1e-11.  Success must meet the stricter budgets
+        B_j = max(1e-14, 1e-11 |K_ref|) and be covered by the published estimates; otherwise
+        only FixedDepthConvergenceError is accepted.  Added at integration (review item m9)."""
+        epsabs, epsrel = 1e-14, 1e-11
+        losses = np.array([1.2, 5.0, 17.0, 60.0])
+        for charge in CHARGES:
+            with self.subTest(hole_charge=charge):
+                try:
+                    out = effective_cross_section_fixed_depth(
+                        self.materials["Si"], self.energy, losses, 10.0, hole_charge=charge,
+                        epsilon_momentum="k_total", epsabs=epsabs, epsrel=epsrel, limit=200)
+                except FixedDepthConvergenceError:
+                    continue
+                errors = per_output_errors(out)
+                self.assertIsNotNone(errors, f"FixedDepthResult.{ERROR_FIELD} missing")
+                bad = []
+                for i, loss in enumerate(losses):
+                    point = self.points["Si", "k_total", 10.0, float(loss)]
+                    for name in FIELDS:
+                        ref = self._reference(point, name, charge)
+                        budget = max(epsabs, epsrel * abs(ref["value"]))
+                        self.assertLessEqual(ref["u"], 0.01 * budget, f"reference too coarse for {name}")
+                        got = float(getattr(out, name)[i])
+                        miss = abs(got - ref["value"]) + ref["u"]
+                        if not miss <= budget:
+                            bad.append(f"{loss:g} eV {name}: |diff|+u {miss:.3e} > B {budget:.3e}")
+                        if not miss <= errors[name][i]:
+                            bad.append(f"{loss:g} eV {name}: |diff|+u {miss:.3e} > estimate "
+                                       f"{errors[name][i]:.3e}")
+                self._report(bad, f"strict Si q_h={charge:g}")
+
     def test_V14_N1_narrow_surface_resonance_either_outcome(self):
         """Pre-registered as 'either': success must agree with the reference under the V14
         conditions, otherwise the only accepted outcome is FixedDepthConvergenceError."""
