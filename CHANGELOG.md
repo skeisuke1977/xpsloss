@@ -16,7 +16,7 @@
 
 ### Verification
 
-- Two independent design proposals were merged and reviewed; the checks were pre-registered before any reference value or implementation existed. A reference author separate from the implementer computed 194 points in multiple precision without the package code and froze them before comparison. All pre-registered checks pass. An independent reviewer's 39 deliberate faults are all detected after the review fixes. One reference check that could not fail (it read estimate/budget ratios instead of the estimates) was found by a deliberate fault and fixed without changing any tolerance. [Validation record](docs/VALIDATION.md)
+- Two independent design proposals were merged and reviewed; the checks were pre-registered before any reference value or implementation existed. A reference author separate from the implementer computed 194 points in multiple precision without the package code and froze them before comparison. All pre-registered checks pass. An independent reviewer's 39 deliberate faults are all detected after the review fixes. One reference check that could not fail (it read estimate/budget ratios instead of the estimates) was found by a deliberate fault and fixed without changing any tolerance. At commit `fd31dcd` all 208 tests and both benchmark checks passed in all five CI jobs (run 45481433276); the comparison with 0.1.0 ran in the four test jobs and was skipped only in the unpacked sdist, which has no Git history. [Validation record](docs/VALIDATION.md)
 
 ## [0.1.0] - 2026-11-24
 
