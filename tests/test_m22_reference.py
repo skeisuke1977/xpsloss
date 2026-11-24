@@ -8,9 +8,15 @@ public API only and does not import mpmath.
 
 Budget of output j: B_j = max(epsabs, epsrel*|K_j,ref|), u_j is the reference uncertainty.
 V14 has two parts.  The budget part uses only the returned values.  The coverage part
-needs a published error estimate per output; the name of that field was not fixed when
-this file was written, so it is discovered by per_output_errors() and the coverage tests
-are skipped ("not judged") when no such field exists.
+needs the published error estimate per output, which the implementation returns as
+FixedDepthResult.component_errors (a mapping from each of the 11 output names to an
+array over the loss grid).
+
+Integration note (orchestrator, 2026-11-24): the first version of this file discovered
+the field heuristically and picked diagnostics["error_budget_ratios"] (estimate/budget,
+dimensionless, about 1e-3), so the coverage checks could not fail.  A deliberate
+mutation (all estimates x 1e-6) exposed it.  The lookup now reads component_errors
+only, and a missing field is a failure, not a skip.  No tolerance was changed.
 """
 from collections.abc import Mapping
 import dataclasses
@@ -38,10 +44,8 @@ HOLE_GROUP = ("term_14", "term_15_T2", "term_16_h")
 FIELDS = TERMS + ("no_hole", "hole", "total")
 CHARGES = {0.0: "total_q0", 0.5: "total_q0.5", 1.0: "total_q1"}
 SPECS = ("k_parallel", "k_total")
-# Candidate names of the per-output error estimate, tried in this order; see per_output_errors().
-ERROR_FIELD_CANDIDATES = ("output_errors", "output_error", "estimated_errors", "error_estimates",
-                          "per_output_error", "per_output_errors", "quadrature_errors", "errors")
-ERROR_SUFFIXES = ("_error", "_quadrature_error", "_estimated_error")
+# Field of FixedDepthResult that holds the published per-output error estimates.
+ERROR_FIELD = "component_errors"
 
 
 def _load():
@@ -67,32 +71,9 @@ def _as_error_map(value, size):
 
 
 def per_output_errors(result):
-    """Published error estimate of each of the 11 outputs, or None when the result has none.
-
-    Accepted layouts: a mapping field (one of ERROR_FIELD_CANDIDATES, or any dataclass field)
-    keyed by the 11 output names; the same mapping one level inside a mapping field such as
-    diagnostics; or eleven array fields named <output><suffix> with one of ERROR_SUFFIXES.
-    """
+    """Published error estimate of each of the 11 outputs (result.component_errors), or None."""
     size = np.atleast_1d(np.asarray(result.loss_eV)).size
-    names = list(ERROR_FIELD_CANDIDATES) + ["diagnostics"]
-    if dataclasses.is_dataclass(result):
-        names += [f.name for f in dataclasses.fields(result) if f.name not in names]
-    for name in names:
-        value = getattr(result, name, None)
-        found = _as_error_map(value, size)
-        if found is not None:
-            return found
-        if isinstance(value, Mapping):
-            for key in list(ERROR_FIELD_CANDIDATES) + [k for k in value if k not in ERROR_FIELD_CANDIDATES]:
-                found = _as_error_map(value.get(key), size)
-                if found is not None:
-                    return found
-    for suffix in ERROR_SUFFIXES:
-        if all(hasattr(result, name + suffix) for name in FIELDS):
-            found = _as_error_map({name: getattr(result, name + suffix) for name in FIELDS}, size)
-            if found is not None:
-                return found
-    return None
+    return _as_error_map(getattr(result, ERROR_FIELD, None), size)
 
 
 class M22Reference(unittest.TestCase):
@@ -360,9 +341,7 @@ class M22Reference(unittest.TestCase):
                 result = self._result(material, spec, depth, charge)
                 errors = per_output_errors(result)
                 if errors is None:
-                    self.skipTest(f"{label} coverage NOT JUDGED: FixedDepthResult has no per-output error "
-                                  "estimate recognised by per_output_errors() (only the common "
-                                  "quadrature_error); add the field name to ERROR_FIELD_CANDIDATES")
+                    self.fail(f"{label} coverage: FixedDepthResult.{ERROR_FIELD} is missing or malformed")
                 judged += 1
                 bad += [f"{material} {spec} {depth:g} A {point['loss_label']} q_h={charge:g} {b}"
                         for b in self._coverage_failures(result, errors, point, i, charge)]
@@ -386,9 +365,9 @@ class M22Reference(unittest.TestCase):
                         continue
                     self._report(self._budget_failures(out, point, 0, charge), f"N1 {spec} budget")
                     errors = per_output_errors(out)
-                    if errors is not None:
-                        self._report(self._coverage_failures(out, errors, point, 0, charge),
-                                     f"N1 {spec} coverage")
+                    self.assertIsNotNone(errors, f"N1 {spec}: FixedDepthResult.{ERROR_FIELD} missing")
+                    self._report(self._coverage_failures(out, errors, point, 0, charge),
+                                 f"N1 {spec} coverage")
 
     # ------------------------------------------------------------------ V15
     PI_LOWER = Fraction(314159265358979, 10 ** 14)       # pi = 3.14159265358979323... > this
@@ -457,22 +436,20 @@ class PerOutputErrorDiscovery(unittest.TestCase):
     """Self-test of per_output_errors() on stand-in results."""
 
     def test_layouts(self):
-        class Flat:
+        class Missing:
             loss_eV = np.array([1.0, 2.0])
-        flat = Flat()
-        self.assertIsNone(per_output_errors(flat))
-        for name in FIELDS:
-            setattr(flat, name + "_error", np.array([1e-13, 2e-13]))
-        self.assertEqual(set(per_output_errors(flat)), set(FIELDS))
+            diagnostics = {"error_budget_ratios": {name: [1e-3, 2e-3] for name in FIELDS}}
+        # A ratio table elsewhere must not be mistaken for the error estimates.
+        self.assertIsNone(per_output_errors(Missing()))
 
         class Mapped:
             loss_eV = np.array([1.0, 2.0])
-            diagnostics = {"output_errors": {name: [1e-13, 2e-13] for name in FIELDS}}
+            component_errors = {name: [1e-13, 2e-13] for name in FIELDS}
         self.assertEqual(per_output_errors(Mapped())["total"][1], 2e-13)
 
         class Short:
             loss_eV = np.array([1.0, 2.0])
-            output_errors = {name: [1e-13] for name in FIELDS}
+            component_errors = {name: [1e-13] for name in FIELDS}
         self.assertIsNone(per_output_errors(Short()))
 
 
