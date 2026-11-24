@@ -78,6 +78,7 @@ class Config:
 
     def grid(self):
         grid = np.linspace(self.loss_min_eV, self.loss_max_eV, self.point_count)
+        # Direct Config construction can bypass parse_config's interval-count checks.
         if not grid.size or grid[0] != self.loss_min_eV or grid[-1] != self.loss_max_eV:
             raise ValueError("generated loss grid does not include both requested endpoints")
         return grid

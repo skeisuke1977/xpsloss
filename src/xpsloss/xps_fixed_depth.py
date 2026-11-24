@@ -575,6 +575,8 @@ def effective_cross_section_fixed_depth(
     coefficient rounding and excludes material and model uncertainties.
     Every nonzero line must be resolved on the momentum grid. Strength alone
     cannot bound its peak or its effect on the coupled surface denominator.
+    The static sign is checked at the smallest q reached across all supplied
+    losses for the selected epsilon_momentum.
     """
     if not isinstance(material, Material):
         raise ValueError("material must be a Material")

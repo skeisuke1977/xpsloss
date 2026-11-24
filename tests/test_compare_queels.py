@@ -35,6 +35,22 @@ def write_run(folder, n, depths, curves):
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_existing_output_is_an_input_error(self):
+        with TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            out = folder / "verdict.json"
+            original = b'{"previous": true}\n'
+            out.write_bytes(original)
+            run = subprocess.run(
+                [sys.executable, str(ROOT / "benchmarks/compare_queels_fixed_depth.py"),
+                 "--reference-dir", str(folder), "--out", str(out)],
+                env=dict(os.environ, PYTHONPATH=str(ROOT / "src")), capture_output=True, text=True,
+            )
+            self.assertEqual(run.returncode, 2, run.stderr)
+            self.assertEqual(json.loads(run.stderr), {"status": "error", "message": f"output exists: {out}"})
+            self.assertEqual(run.stdout, "")
+            self.assertEqual(out.read_bytes(), original)
+
     def test_rejects_invalid_comparison_inputs(self):
         with TemporaryDirectory() as tmp:
             folder = Path(tmp)

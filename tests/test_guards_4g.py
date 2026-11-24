@@ -13,7 +13,7 @@ from xpsloss import (BulkConvergenceError, DielectricConvergenceError, FixedDept
                      Material, NumericalConvergenceError, Oscillator, bulk_diimfp, dielectric_response,
                      effective_cross_section_fixed_depth as fixed_depth, loss_function,
                      negative_inverse_dielectric_function as inverse)
-from xpsloss.config import parse_config
+from xpsloss.config import Config, parse_config
 from xpsloss.dielectric import (negative_inverse_dielectric_closed_form as closed,
                                 optical_elf_first_moment, optical_sum_rule_lhs, tabulated_elf_kk)
 from xpsloss.xps_fixed_depth import _coefficients, _include_node_roundoff, _integrate_loss, _log_breakpoints
@@ -22,18 +22,29 @@ from xpsloss.xps_fixed_depth import _coefficients, _include_node_roundoff, _inte
 class InputGuardTests(unittest.TestCase):
     def test_complex_coordinates_and_parameters(self):
         mat = Material("synthetic", 0, (Oscillator(15, 180, 2),))
-        for z in (2+9j, np.complex128(2+9j), np.array([2+9j]), np.array([np.complex128(2+9j)], dtype=object)):
-            calls = [lambda: bulk_diimfp(mat, z, 1), lambda: bulk_diimfp(mat, 1000, z),
-                     lambda: fixed_depth(mat, z, 1, 10, epsilon_momentum="k_total"),
-                     lambda: fixed_depth(mat, 1000, z, 10, epsilon_momentum="k_total"),
-                     lambda: fixed_depth(mat, 1000, 1, z, epsilon_momentum="k_total")]
-            for function in (loss_function, inverse, dielectric_response, closed):
-                calls.extend((lambda f=function: f(mat, z, 0), lambda f=function: f(mat, 1, z)))
+        scalars = (2+9j, np.complex128(2+9j))
+        grids = (*scalars, np.array([2+9j]))
+        for z in scalars:
+            with self.subTest(z=z, field="bulk energy"), self.assertRaisesRegex(ValueError, "real"):
+                bulk_diimfp(mat, z, 1)
+            with self.subTest(z=z, field="bulk loss"), self.assertRaisesRegex(ValueError, "real"):
+                bulk_diimfp(mat, 1000, z)
+            with self.subTest(z=z, field="fixed-depth energy"), self.assertRaisesRegex(ValueError, "real"):
+                fixed_depth(mat, z, 1, 10, epsilon_momentum="k_total")
+            with self.subTest(z=z, field="depth"), self.assertRaisesRegex(ValueError, "real"):
+                fixed_depth(mat, 1000, 1, z, epsilon_momentum="k_total")
             for key in ("energy_eV", "strength_eV2", "width_eV", "dispersion"):
-                calls.append(lambda k=key: replace(mat.oscillators[0], **{k: z}))
-            for index, call in enumerate(calls):
-                with self.subTest(z=z, boundary=index), self.assertRaises(ValueError):
-                    call()
+                with self.subTest(z=z, field=key), self.assertRaisesRegex(ValueError, "real"):
+                    replace(mat.oscillators[0], **{key: z})
+        for z in grids:
+            with self.subTest(z=z, field="fixed-depth loss"), self.assertRaisesRegex(ValueError, "real"):
+                fixed_depth(mat, 1000, z, 10, epsilon_momentum="k_total")
+        for z in (*grids, np.array([np.complex128(2+9j)], dtype=object)):
+            for function in (loss_function, inverse, dielectric_response, closed):
+                with self.subTest(z=z, function=function.__name__, field="loss"), self.assertRaisesRegex(ValueError, "real"):
+                    function(mat, z, 0)
+                with self.subTest(z=z, function=function.__name__, field="q"), self.assertRaisesRegex(ValueError, "real"):
+                    function(mat, 1, z)
 
         # With the imaginary part discarded, these tables would have valid
         # shapes, increasing nodes and a finite transform at a point outside the table.
@@ -56,6 +67,15 @@ class InputGuardTests(unittest.TestCase):
                 else:
                     np.testing.assert_array_equal(parse_config(config).grid(), expected)
 
+    def test_direct_config_requires_both_grid_endpoints(self):
+        mat = Material("synthetic", 0, (Oscillator(15, 180, 2),))
+        for count in (0, 1):
+            config = Config(material=mat, electron_energy_eV=1000, loss_min_eV=1,
+                            loss_max_eV=2, loss_step_eV=1, point_count=count,
+                            epsabs=1e-9, epsrel=1e-7, limit=200, input_sha256="")
+            with self.subTest(count=count), self.assertRaisesRegex(ValueError, "both requested endpoints"):
+                config.grid()
+
     def test_positive_damping_underflow(self):
         t = 5e-101
         material = Material("synthetic", 0, (Oscillator(1e-100, 1e-30, 1e-240),))
@@ -72,6 +92,16 @@ class InputGuardTests(unittest.TestCase):
             with self.subTest(loss=loss), self.assertRaises(FixedDepthConvergenceError):
                 fixed_depth(mat, 1000, loss, 10, epsilon_momentum="k_parallel")
 
+    def test_positive_subnormal_damping(self):
+        width, loss = 1e-300, 1e-11
+        self.assertGreater(width * loss, 0)
+        self.assertLess(width * loss, np.finfo(float).tiny)
+        mat = Material("synthetic", 0, (Oscillator(1, 0.5, width),))
+        with self.assertRaisesRegex(BulkConvergenceError, "damping outside numerical range"):
+            bulk_diimfp(mat, 1000, loss)
+        with self.assertRaisesRegex(NumericalConvergenceError, "oscillator response outside numerical range"):
+            loss_function(mat, [2, loss])
+
     def test_fixed_depth_static_sign(self):
         material = Material("synthetic", 0, (Oscillator(10, 110, 1, 0.5),))
         with self.assertRaisesRegex(ValueError, "static sign"):
@@ -84,6 +114,22 @@ class InputGuardTests(unittest.TestCase):
         self.assertTrue(np.isfinite(r.total[0]))
         self.assertGreater(r.term_13a[0], 0)
 
+    def test_fixed_depth_static_sign_at_smallest_kinematic_q(self):
+        # F(q,0) = 100.002 / (10 + 0.5 H q^2)^2 - 1 crosses zero at q ~ 0.00725/A.
+        # At 5 eV the two lower bounds straddle it (0.00203 and 0.04055/A).
+        mat = Material("Pd-like synthetic", 0, (Oscillator(10, 100.002, 2, 0.5),))
+        for minimum, parallel_ok, total_ok in ((20, True, True), (5, False, True), (0.5, False, False)):
+            for choice, accepted in (("k_parallel", parallel_ok), ("k_total", total_ok)):
+                losses = [30, minimum]
+                with self.subTest(minimum=minimum, choice=choice):
+                    if accepted:
+                        result = fixed_depth(mat, 1000, losses, 10, epsilon_momentum=choice)
+                        self.assertEqual(result.total.shape, (2,))
+                        self.assertTrue(np.isfinite(result.total).all())
+                    else:
+                        with self.assertRaisesRegex(ValueError, "static sign"):
+                            fixed_depth(mat, 1000, losses, 10, epsilon_momentum=choice)
+
     def test_gapless_optical_moments_at_tight_quadrature_tolerance(self):
         mat = Material("synthetic", 0, (Oscillator(3, 1, 1),))
         self.assertEqual(optical_sum_rule_lhs(mat, epsabs=1e-30, epsrel=1e-30), 1 / 9)
@@ -93,7 +139,8 @@ class InputGuardTests(unittest.TestCase):
 class BudgetGuardTests(unittest.TestCase):
     def test_bulk_line_and_combined_budgets(self):
         mat = Material("synthetic", 0, tuple(Oscillator(15, a, 2) for a in (289.4511329707871, 77.6947777974218)))
-        # Compare errors before the 1/(pi*a0*E) normalization applied to both returned fields.
+        # The current roundoff estimates exceed the line and sum budgets respectively
+        # before 1/(pi*a0*E) normalization. Revisit if these estimates tighten.
         for ea, er, message in ((1e-30, 1.2e-15, "oscillator 1"), (1.78e-15, 1e-15, "combined")):
             with self.subTest(epsabs=ea), self.assertRaisesRegex(BulkConvergenceError, message):
                 bulk_diimfp(mat, 1000, 20, epsabs=ea, epsrel=er)
@@ -106,6 +153,7 @@ class BudgetGuardTests(unittest.TestCase):
         self.assertAlmostEqual(r.term_15_T1[0], 6.102412759438351e-17, delta=1e-23)
 
     def test_cancelling_fixed_depth_total(self):
+        # Revisit this rejection if the total after cancellation can be certified to epsabs.
         mat = Material("synthetic", 0, (Oscillator(15, 180, 3e-7),))
         with self.assertRaises(FixedDepthConvergenceError):
             fixed_depth(mat, 1000, 14, 10, hole_charge=1.0000077546411514,
@@ -125,6 +173,7 @@ class BudgetGuardTests(unittest.TestCase):
     def test_bulk_quadpack_roundoff_message(self):
         # The panel's halved relative tolerance is below the roundoff floor.
         # The returned error would pass both subsequent (looser) budgets.
+        # Revisit if the integrator can meet the panel tolerance without a roundoff warning.
         mat = Material("synthetic", 0, (Oscillator(15, 180, 2, 0.01),))
         with self.assertRaisesRegex(BulkConvergenceError, "roundoff"):
             bulk_diimfp(mat, 1000, 1, epsabs=1e-30, epsrel=1.2e-14)
@@ -178,6 +227,8 @@ class BudgetGuardTests(unittest.TestCase):
                 self.assertAlmostEqual(closed(mat, t).real, ref, delta=max(1e-9, 1e-7 * abs(ref)))
 
     def test_unresolved_frozen_points(self):
+        # These rejections track current precision limits. If a case becomes resolvable,
+        # compare its returned value with the independent reference for that case.
         for strength, ref in frozen_4a.FIXED:
             mat = frozen_4a.material(1e-24, strength, mixed=True)
             with self.subTest(strength=strength):

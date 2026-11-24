@@ -130,21 +130,26 @@ def main(argv=None):
     parser.add_argument("--reference-dir", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
-    if args.out.exists():
-        raise SystemExit(f"output exists: {args.out}")
-
     try:
-        with np.errstate(over="raise", invalid="raise", divide="raise"):
-            result = compare(args.reference_dir)
-        report = json.dumps(result, indent=2, allow_nan=False)
-        summary = {c: v["pass"] for c, v in result["choices"].items()}
-        code = 0 if any(summary.values()) else 1
-    except (OSError, ValueError, ArithmeticError, NumericalConvergenceError) as exc:
-        summary = {"status": "error", "message": str(exc)}
-        report = json.dumps(summary, indent=2)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        with args.out.open("x", encoding="utf-8") as output:
+            try:
+                with np.errstate(over="raise", invalid="raise", divide="raise"):
+                    result = compare(args.reference_dir)
+                report = json.dumps(result, indent=2, allow_nan=False)
+                summary = {c: v["pass"] for c, v in result["choices"].items()}
+                code = 0 if any(summary.values()) else 1
+            except (OSError, ValueError, ArithmeticError, NumericalConvergenceError) as exc:
+                summary = {"status": "error", "message": str(exc)}
+                report = json.dumps(summary, indent=2)
+                code = 2
+            output.write(report + "\n")
+    except OSError as exc:
+        message = str(exc)
+        if isinstance(exc, FileExistsError) and exc.filename == str(args.out):
+            message = f"output exists: {args.out}"
+        summary = {"status": "error", "message": message}
         code = 2
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(report + "\n", encoding="utf-8")
     print(json.dumps(summary), file=sys.stderr if code == 2 else sys.stdout)
     return code
 
