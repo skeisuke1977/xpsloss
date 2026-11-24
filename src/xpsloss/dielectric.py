@@ -12,7 +12,7 @@ from scipy.optimize import brentq
 from .model import (COORDINATE_ULPS, DEFAULT_ABS, DEFAULT_REL, FLANK_RATIO, FLOAT_EPSILON, NEARBY_FACTOR,
                     RECIPROCAL_ROUNDOFF, SUM_ROUNDOFF, Material, NumericalConvergenceError,
                     _PanelLimitError, _accuracy, _exact_oscillator_sum, _first_loss, _loss_coordinates, _loss_point, _oscillator_energy,
-                    _oscillator_response, finite_number, loss_function)
+                    _oscillator_response, _real_array, _scalar_damping, finite_number, loss_function)
 
 
 DIELECTRIC_MODEL_ID = "causal_oscillator_elf_v1"
@@ -149,7 +149,7 @@ def _breakpoints(start, stop, scale):
 def _removed_kk_band(energy, gap, resonance, strength, width, settings):
     """KK contribution from [0, gap], with analytic principal-value subtraction."""
     def denominator(u):
-        return ((resonance - u) * (resonance + u))**2 + (width * u)**2
+        return ((resonance - u) * (resonance + u))**2 + _scalar_damping(width, u)**2
 
     prefactor = 2 * strength * width / math.pi
     if 0 < energy < gap or 0 < energy - gap <= min(gap / NEARBY_FACTOR, max(width, resonance - gap)):
@@ -343,9 +343,15 @@ def _static_response(material, q, epsabs, epsrel, limit):
     return real, tolerance
 
 
+def _checked_static_response(material, q, epsabs=DEFAULT_ABS, epsrel=DEFAULT_REL, limit=200):
+    static, tolerance = _static_response(material, q, epsabs, epsrel, limit)
+    if np.any(static > tolerance):
+        raise ValueError("Re[-1/epsilon(q, 0)] exceeds the static sign tolerance: "
+                         "epsilon of the oscillator representation has a pole in the upper half-plane")
+    return static, tolerance
+
+
 def _response_inputs(loss_eV, q_inv_A, epsabs, epsrel, limit):
-    if np.iscomplexobj(loss_eV) or np.iscomplexobj(q_inv_A):
-        raise ValueError("loss and q must be real")
     t, q = _loss_coordinates(loss_eV, q_inv_A)
     epsabs = finite_number(epsabs, "epsabs")
     epsrel = finite_number(epsrel, "epsrel")
@@ -385,10 +391,7 @@ def dielectric_response(
     t, q, epsabs, epsrel = _response_inputs(loss_eV, q_inv_A, epsabs, epsrel, limit)
     _check_gap_edge(material, t)
     unique_q, q_indices = np.unique(q, return_inverse=True)
-    static, tolerance = _static_response(material, unique_q, epsabs, epsrel, limit)
-    if np.any(static > tolerance):
-        raise ValueError("Re[-1/epsilon(q, 0)] exceeds the static sign tolerance: "
-                         "epsilon of the oscillator representation has a pole in the upper half-plane")
+    static, tolerance = _checked_static_response(material, unique_q, epsabs, epsrel, limit)
     marginal = (abs(static) <= tolerance)[q_indices].reshape(t.shape)
     if np.any((t == 0) & marginal):
         raise ValueError("epsilon has a pole at zero energy for a marginal static response")
@@ -483,8 +486,6 @@ def dielectric_diagnostics(
     _, q, epsabs, epsrel = _response_inputs(0, q_inv_A, epsabs, epsrel, limit)
     if q.ndim:
         raise ValueError("dielectric diagnostics require a single q_inv_A value")
-    if np.iscomplexobj(loss_eV):
-        raise ValueError("loss must be real")
     energies, _ = _loss_coordinates(loss_eV, 0)
     exclusion = _gap_edge_exclusion_eV(material)
     band = GAP_EDGE_WARNING_FRACTION * material.gap_eV if exclusion else 0.0
@@ -544,7 +545,7 @@ def _closed_kk_band(t, gap, center, strength, width):
         j_divided = (j_b - j_p) / (width * difference)
         divided_scale = (abs(j_b) + abs(j_p)) / (width * abs(difference))
 
-    denominator = ((center - t) * (center + t))**2 + (width * t)**2
+    denominator = ((center - t) * (center + t))**2 + _scalar_damping(width, t)**2
     scale = (2 / math.pi) * strength * width / denominator
     coefficient = center**4 + (t * p)**2
     regular = coefficient * j_divided
@@ -616,16 +617,14 @@ def _optical_moment(material, first_moment, settings):
         return math.fsum((osc.strength_eV2 / osc.energy_eV) / osc.energy_eV
                          for osc in material.oscillators)
 
-    # Transform the positive retained integral on [gap, infinity) with x=gap/u.
-    oscillators = tuple(osc for osc in material.oscillators if osc.strength_eV2 > 0)
+    # Narrow retained lines use a closed form. Integrate the other lines in x=gap/u.
+    oscillators = [(i, osc) for i, osc in enumerate(material.oscillators) if osc.strength_eV2 > 0]
     if not oscillators:
         return 0.0
     epsabs, epsrel, limit = settings
     settings = (epsabs / len(oscillators), epsrel, limit)
     total = 0.0
-    for i, osc in enumerate(material.oscillators):
-        if not osc.strength_eV2:
-            continue
+    for i, osc in oscillators:
         center, width = osc.energy_eV, osc.width_eV
         if width < center and gap <= NEARBY_FACTOR * center:
             # z = u - center²/u, theta = atan(z/width) maps the Lorentzian
@@ -680,7 +679,12 @@ def _optical_moment(material, first_moment, settings):
 
 
 def optical_sum_rule_lhs(material: Material, *, epsabs=DEFAULT_ABS, epsrel=DEFAULT_REL, limit=200):
-    """Return the dimensionless retained optical sum-rule integral (Eq. D4)."""
+    """Return the dimensionless retained optical sum-rule integral (Eq. D4).
+
+    At zero gap the analytic moment is evaluated in binary64. epsabs and
+    epsrel control the per-line integration or roundoff checks for a positive
+    gap only. They do not bound the final rounding of the gapless formula.
+    """
     _, _, epsabs, epsrel = _response_inputs(0, 0, epsabs, epsrel, limit)
     return _checked_optical_moment(material, False, (epsabs, epsrel, limit))
 
@@ -688,13 +692,21 @@ def optical_sum_rule_lhs(material: Material, *, epsabs=DEFAULT_ABS, epsrel=DEFAU
 def optical_sum_rule_residual(
     material: Material, reference_inverse_epsilon, *, epsabs=DEFAULT_ABS, epsrel=DEFAULT_REL, limit=200,
 ):
-    """Return the sum-rule LHS minus (1 - reference Re[1/epsilon(0)])."""
+    """Return the sum-rule LHS minus (1 - reference Re[1/epsilon(0)]).
+
+    epsabs and epsrel apply to the positive-gap LHS as in optical_sum_rule_lhs.
+    """
     reference = finite_number(reference_inverse_epsilon, "reference_inverse_epsilon")
     return optical_sum_rule_lhs(material, epsabs=epsabs, epsrel=epsrel, limit=limit) - (1 - reference)
 
 
 def optical_elf_first_moment(material: Material, *, epsabs=DEFAULT_ABS, epsrel=DEFAULT_REL, limit=200):
-    """Return the retained ELF first moment in eV**2 (Eq. D4)."""
+    """Return the retained ELF first moment in eV**2 (Eq. D4).
+
+    At zero gap the analytic moment is evaluated in binary64. epsabs and
+    epsrel control the per-line integration or roundoff checks for a positive
+    gap only. They do not bound the final rounding of the gapless formula.
+    """
     _, _, epsabs, epsrel = _response_inputs(0, 0, epsabs, epsrel, limit)
     return _checked_optical_moment(material, True, (epsabs, epsrel, limit))
 
@@ -808,16 +820,12 @@ def tabulated_elf_kk(sample_eV, elf, loss_eV, *, low_energy, high_energy):
     The analytic quadrature error is zero. An independent roundoff check
     applies the dimensionless component tolerance to the final Re F.
     """
-    if np.iscomplexobj(loss_eV):
-        raise ValueError("loss must be real")
     t, _ = _loss_coordinates(loss_eV, 0)
     if low_energy not in ("zero", "linear_to_origin"):
         raise ValueError("low_energy must be 'zero' or 'linear_to_origin'")
     if high_energy not in ("hard_cut", "power_law_3"):
         raise ValueError("high_energy must be 'hard_cut' or 'power_law_3'")
-    if np.iscomplexobj(sample_eV) or np.iscomplexobj(elf):
-        raise ValueError("sample energies and ELF must be real")
-    nodes, values = np.asarray(sample_eV, dtype=float), np.asarray(elf, dtype=float)
+    nodes, values = _real_array(sample_eV, "sample energies"), _real_array(elf, "ELF")
     if nodes.ndim != 1 or nodes.shape != values.shape or nodes.size < 2:
         raise ValueError("sample energies and ELF must be matching 1-D arrays with at least two points")
     if not np.all(np.isfinite(nodes)) or not np.all(np.isfinite(values)):

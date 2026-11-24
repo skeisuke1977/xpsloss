@@ -31,7 +31,7 @@ def raw_gapless_rows(raw):
     """Read the published decimal tokens directly as exact rational numbers."""
     body = raw.decode("iso-8859-1").split("\nReferences", 1)[0]
     blocks = re.split(r"(?m)^([^\n]+?)[ \t]+\[[0-9,]+\][ \t\r]*$", body)
-    for name, block in zip(blocks[1::2], blocks[2::2]):
+    for name, block in zip(blocks[1::2], blocks[2::2], strict=True):
         rows = [line.split() for line in block.splitlines() if line.strip() not in ("", "@")]
         index = Fraction(rows[2][0])
         moment = sum(Fraction(strength) / Fraction(energy)**2 for energy, strength, _, _ in rows[3:])
@@ -203,7 +203,9 @@ class BenchmarkRecordTests(unittest.TestCase):
                     self.assertEqual(getattr(entry, field), material[field])
                 self.assertEqual(list(map(asdict, entry.oscillators)), material["oscillators"])
                 self.assertEqual(record["strength_basis"], "absolute_eV2")
-                self.assertTrue(all(value is None for value in record["source_run_conditions"].values()))
+                self.assertEqual(record["source_run_conditions"], dict.fromkeys((
+                    "electron_energy_eV", "emission_angle", "depth_A", "loss_grid_eV",
+                    "lower_loss_limit_eV", "normalization")))
 
     def test_relative_strengths_cannot_be_used_in_bulk(self):
         candidate = json.loads((ROOT / "examples/synthetic_bulk.json").read_text(encoding="utf-8"))

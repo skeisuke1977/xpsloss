@@ -140,14 +140,17 @@ class DielectricTests(unittest.TestCase):
                                 (1e7, 30., -0.3633802276341375), (1e7, 100., 1.1220659077703434)):
             with self.subTest(gap=gap, width=width):
                 mat = Material("synthetic", gap, (Oscillator(15, gap**3 / 10, width),))
-                try:
+                budget = max(1e-9, 1e-7 * abs(ref))
+                numerical = negative_inverse_dielectric_function(mat, 0)
+                self.assertAlmostEqual(numerical.real, ref, delta=budget)
+                self.assertEqual(numerical.imag, 0)
+                if gap == 100.:
                     value = negative_inverse_dielectric_closed_form(mat, 0)
-                except DielectricConvergenceError:
-                    if gap == 100.:
-                        raise
-                else:
-                    self.assertAlmostEqual(value.real, ref, delta=max(1e-9, 1e-7 * abs(ref)))
+                    self.assertAlmostEqual(value.real, ref, delta=budget)
                     self.assertEqual(value.imag, 0)
+                else:
+                    with self.assertRaises(DielectricConvergenceError):
+                        negative_inverse_dielectric_closed_form(mat, 0)
 
     def test_overdamped_oscillator_recovers_static_normalization(self):
         mat = Material("synthetic", 1, (Oscillator(2, 10, 1e9),))

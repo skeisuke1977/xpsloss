@@ -62,8 +62,8 @@ def capabilities():
         "supported": ["strict_json_validation", "drude_lindhard_elf", "bulk_diimfp",
                       "causal_dielectric_response", "xps_fixed_depth"],
         "dielectric_model_id": DIELECTRIC_MODEL_ID,
-        "unsupported_physics": list(UNSUPPORTED_PHYSICS),
-        "unsupported_physics_model_id": MODEL_ID,
+        "bulk_unsupported_physics": list(UNSUPPORTED_PHYSICS),
+        "bulk_unsupported_physics_model_id": MODEL_ID,
         "xps_fixed_depth": {
             "model_id": FIXED_DEPTH_MODEL_ID,
             "scope": "positive fixed depth, 0 degrees from the surface normal, gapless material",

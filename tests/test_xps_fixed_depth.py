@@ -119,8 +119,11 @@ class FixedDepthPhysicsTests(unittest.TestCase):
         q = np.array([0, 1e-5, 0.1, 1.7, 5, 32])
         for loss in (0.2, 11, 15.6, 30, 90):
             expected = negative_inverse_dielectric_function(material, loss, q)
-            np.testing.assert_allclose(fixed._oscillator_sum(material, loss, q) - 1,
-                                       expected, rtol=2e-14, atol=1e-15)
+            # The scalar/refinement path shares its line evaluator with dielectric.
+            # The batch evaluator forms its own bounded real-arithmetic denominator.
+            for evaluate in (fixed._oscillator_sum, fixed._bounded_sum):
+                response, _, _ = evaluate(material, loss, q)
+                np.testing.assert_allclose(response - 1, expected, rtol=2e-14, atol=1e-15)
 
     def test_surface_line_for_sum_of_narrow_oscillators(self):
         # Partitioning a strength between coincident oscillators gives the

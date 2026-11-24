@@ -30,6 +30,8 @@ SUM_ROUNDOFF = 4 * FLOAT_EPSILON  # Allow for additions and the normalization of
 COORDINATE_ULPS = 8  # Products, squares and endpoint arithmetic in a dispersed coordinate.
 RECIPROCAL_ROUNDOFF = 16 * FLOAT_EPSILON  # Products and complex division in an oscillator response.
 DETUNING_REL = 1e-10  # Relative detuning target for an individual line in ELF and fixed-depth integrands.
+# Below this product, even half a subnormal ulp exceeds the response roundoff allowance.
+_MIN_DAMPING = (math.ulp(0.0) / RECIPROCAL_ROUNDOFF) / 2
 DECIMAL_DIGITS = 80  # Guard digits for differences of nearly equal binary64 energies.
 NEARBY_FACTOR = 2  # Within a factor of two, switch coordinates to resolve nearby features.
 BULK_EDGE_FRACTION = 1e-5  # Reconstruct the endpoint when subtraction loses five decimal digits.
@@ -76,8 +78,8 @@ class BulkConvergenceError(NumericalConvergenceError):
 
 
 def finite_number(value, label):
-    if isinstance(value, bool) or not isinstance(value, (int, float, np.number)):
-        raise ValueError(f"{label} must be a finite number")
+    if isinstance(value, bool) or not isinstance(value, (int, float, np.integer, np.floating)):
+        raise ValueError(f"{label} must be a finite real number")
     result = float(value)
     if not math.isfinite(result):
         raise ValueError(f"{label} must be finite")
@@ -119,8 +121,15 @@ class Material:
         object.__setattr__(self, "oscillators", tuple(self.oscillators))
 
 
+def _real_array(value, label):
+    array = np.asarray(value)
+    if np.iscomplexobj(array) or (array.dtype == object and any(np.iscomplexobj(v) for v in array.flat)):
+        raise ValueError(f"{label} must be real")
+    return np.asarray(array, dtype=float)
+
+
 def _loss_coordinates(loss_eV, q_inv_A):
-    t, q = np.broadcast_arrays(np.asarray(loss_eV, dtype=float), np.asarray(q_inv_A, dtype=float))
+    t, q = np.broadcast_arrays(_real_array(loss_eV, "loss"), _real_array(q_inv_A, "q"))
     if not np.all(np.isfinite(t)) or not np.all(np.isfinite(q)):
         raise ValueError("loss and q must be finite")
     if np.any(t < 0) or np.any(q < 0):
@@ -180,7 +189,7 @@ def _oscillator_response(osc, t, q, *, for_real_sum=False, with_detuning_error=F
             cancelled = np.minimum(shift, np.maximum(t - osc.energy_eV, 0.0))
             delta_error = (RECIPROCAL_ROUNDOFF * cancelled) * ((osc.energy_eV + shift) + t)
             relative = np.where(uncertain, 0.0, delta_error / np.hypot(delta, damping))
-    bad = ~(np.isfinite(delta) & np.isfinite(damping) & np.isfinite(response))
+    bad = ((t > 0) & (damping < _MIN_DAMPING)) | ~(np.isfinite(delta) & np.isfinite(damping) & np.isfinite(response))
     if np.any(bad):
         raise NumericalConvergenceError(f"oscillator response outside numerical range at {_first_loss(t, bad)}")
     if with_detuning_error:
@@ -211,25 +220,6 @@ def loss_function(material: Material, loss_eV, q_inv_A=0.0):
     return float(result) if result.ndim == 0 else result
 
 
-def momentum_limits(electron_energy_eV: float, loss_eV: float):
-    """Kinematic q bounds in inverse Å; require 0 < T < E.
-
-    q_minus is rationalized to avoid cancellation when T/E is small.
-    These are direct dielectric-scattering bounds; exchange corrections and
-    full-IMFP integration limits are outside this starter's scope.
-    """
-    e = finite_number(electron_energy_eV, "electron_energy_eV")
-    t = finite_number(loss_eV, "loss_eV")
-    if not 0 < t < e:
-        raise ValueError("require 0 < loss_eV < electron_energy_eV")
-    s = math.sqrt(e) + math.sqrt(e - t)
-    root_h = math.sqrt(HBAR2_OVER_2ME_EV_A2)
-    qmin, qmax = t / (s * root_h), s / root_h
-    if not 0 < qmin < qmax or not math.isfinite(qmax):
-        raise ValueError("momentum limits outside numerical range")
-    return qmin, qmax
-
-
 def _edge_detuning(e, t, osc, upper, shift, peak):
     distance = shift - peak
     if abs(distance) > BULK_EDGE_FRACTION * shift:
@@ -244,11 +234,16 @@ def _edge_detuning(e, t, osc, upper, shift, peak):
         return float(Decimal(osc.energy_eV) - loss + Decimal(osc.dispersion) * bound**2)
 
 
+def _scalar_damping(width, loss):
+    damping = width * loss
+    if loss > 0 and not _MIN_DAMPING <= damping < math.inf:
+        raise ArithmeticError("damping outside numerical range")
+    return damping
+
+
 def _bulk_line(osc, e, t, epsabs, epsrel, limit):
     plus = math.sqrt(e) + math.sqrt(e - t)
-    damping = osc.width_eV * t
-    if not 0 < damping < math.inf:
-        raise ArithmeticError("damping outside numerical range")
+    damping = _scalar_damping(osc.width_eV, t)
     peak = t - osc.energy_eV
 
     def log_momentum_ratio():

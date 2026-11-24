@@ -75,6 +75,15 @@ class FixedDepthApplicabilityTests(unittest.TestCase):
                 self.assertEqual((energies["min"], energies["max"]), (1000, 4000))
                 self.assertIn("test_i8_energy_and_depth_scaling_and_unit_conversion", energies["supplementary"])
 
+    def test_just_outside_checked_bounds(self):
+        for energy, last_loss, warning in ((1000, 101, "max_loss_over_E0="),
+                                           (999, 50, "electron_energy_eV=")):
+            with self.subTest(energy=energy):
+                manifest = self.manifest(energy, 20, last_loss, "k_parallel")
+                self.assertFalse(manifest["applicability"]["within_checked_envelope"])
+                message, = manifest["warnings"]
+                self.assertIn(warning, message)
+
     def test_energy_departures_and_simultaneous_loss_departure(self):
         cases = ((800, 40, "below 1000 eV by 200 eV", 1),
                  (4500, 400, "exceeds 4000 eV by 500 eV", 1),

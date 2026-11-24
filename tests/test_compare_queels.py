@@ -1,5 +1,7 @@
 """Exercise the section 4.2 verdicts with synthetic depth tables only."""
 
+from contextlib import redirect_stderr
+from io import StringIO
 import json
 import os
 from pathlib import Path
@@ -11,6 +13,7 @@ import unittest
 import numpy as np
 from scipy.integrate import trapezoid
 
+from benchmarks import compare_queels_fixed_depth as comparison
 from xpsloss import effective_cross_section_fixed_depth
 from xpsloss.config import load_config
 
@@ -32,6 +35,46 @@ def write_run(folder, n, depths, curves):
 
 
 class ComparisonTests(unittest.TestCase):
+    def test_rejects_invalid_comparison_inputs(self):
+        with TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            levels = {"total": 1., "no_hole": 0.75, "hole": 0.25}
+            for points in (1000, 2000):
+                write_run(folder, points, DEPTHS, levels)
+            for case, points, component in (("infinite", 1000, "e"), ("path", 2000, "T"),
+                                            ("depth", 1000, "h"), ("depth", 2000, "e"),
+                                            ("zero_scale", 2000, "T"), ("negative_area", 2000, "T"),
+                                            ("overflow", 1000, "e"), ("nonfinite_header", 2000, "e")):
+                with self.subTest(case=case, points=points):
+                    path = folder / f"K_XPS_{component}_Al_1000_0_q1_n{points}.m"
+                    original = path.read_bytes()
+                    header = original.decode("ascii").splitlines()[:8]
+                    table = np.loadtxt(path, skiprows=8)
+                    if case == "infinite":
+                        table[17, COLUMN] = np.inf
+                    elif case == "path":
+                        table[1, COLUMN] += 0.1
+                    elif case == "depth":
+                        table[:2, COLUMN] += 0.1
+                    elif case == "zero_scale":
+                        table[3:, COLUMN] = 0
+                    elif case == "negative_area":
+                        table[20:-1, COLUMN] = -1
+                    elif case == "overflow":
+                        table[17, COLUMN] = 1e308
+                    else:
+                        header[4] = "nan"
+                    np.savetxt(path, table, fmt="%.8g", comments="", header="\n".join(header))
+                    out = folder / f"invalid_{case}_{points}.json"
+                    errors = StringIO()
+                    with redirect_stderr(errors):
+                        code = comparison.main(["--reference-dir", str(folder), "--out", str(out)])
+                    self.assertEqual(code, 2)
+                    report = json.loads(out.read_text(encoding="utf-8"))
+                    self.assertEqual(report["status"], "error")
+                    self.assertEqual(report, json.loads(errors.getvalue()))
+                    path.write_bytes(original)
+
     def test_synthetic_pass_and_perturbed_failure(self):
         losses = 0.2 * np.arange(1, 500)
         material = load_config(ROOT / "benchmarks/inputs/al_elfdb_v1.0.bulk.json").material
@@ -71,9 +114,10 @@ class ComparisonTests(unittest.TestCase):
                     [sys.executable, str(ROOT / "benchmarks/compare_queels_fixed_depth.py"),
                      "--reference-dir", str(folder), "--out", str(out)],
                     cwd=folder, env=dict(os.environ, PYTHONPATH=str(ROOT / "src")),
-                    capture_output=True, text=True, check=True,
+                    capture_output=True, text=True,
                 )
                 expected = {"k_parallel": False, "k_total": case == "within"}
+                self.assertEqual(run.returncode, 0 if case == "within" else 1, run.stderr)
                 self.assertEqual(json.loads(run.stdout), expected)
                 report = json.loads(out.read_text(encoding="utf-8"))
                 self.assertEqual(report["depth_A"], DEPTHS[COLUMN])

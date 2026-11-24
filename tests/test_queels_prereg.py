@@ -55,12 +55,16 @@ class DecisionTests(unittest.TestCase):
         cls.addClassCleanup(cls.temp.cleanup)
         cls.folder = Path(cls.temp.name)
         cls.expected_columns = {}
+        cls.depth_grids = {}
         for index, name in enumerate(("Alg075", "Ala025", "Al2osc")):
-            depths = (1 + np.arange(65)) * (1 + 0.2 * index)
+            depths = (1 + np.arange(65)) * (10 + 2 * index) / 10
+            cls.depth_grids[name] = depths
             column = int(np.argmin(abs(depths - 10)))
             cls.expected_columns[name] = column
-            for letter, level in zip("Teh", [10000, 11000, -1000]):
+            for letter, level in zip("Teh", [10000, 11000, -1000], strict=True):
                 table = np.full((503, 65), level, dtype=float)
+                if letter == "e":
+                    table += np.rint(10 * depths)  # Depth-sensitive, with exact threshold arithmetic.
                 table[:2] = depths
                 table[2] = table[-1] = 0
                 table[3:27] = 5e5  # Through 4.8 eV, outside the window.
@@ -80,6 +84,7 @@ class DecisionTests(unittest.TestCase):
             self.assertAlmostEqual(losses[-1], 99.8)
             self.assertIn(panels, (400, 800))
             values = np.tile([10000., 11000., -1000.], (len(losses), 1))
+            values[:, 1] += round(10 * depth)
             if oscs == prereg.RUNS["Al2osc"]:
                 if scenario == "candidate":
                     values[-1, 1] += 31
@@ -93,13 +98,28 @@ class DecisionTests(unittest.TestCase):
             return values
 
         stdout = StringIO()
-        with patch.object(prereg, "candidate", curves), patch.object(prereg, "published", published):
-            with redirect_stdout(stdout):
-                code = prereg.main(["evaluate", str(self.folder)])
+        with (patch.object(prereg, "candidate", side_effect=curves) as candidate_calls,
+              patch.object(prereg, "published", side_effect=published) as published_calls,
+              redirect_stdout(stdout)):
+            code = prereg.main(["evaluate", str(self.folder)])
+        expected_calls = []
+        fine_calls = []
+        for name, grid in self.depth_grids.items():
+            lines = prereg.RUNS[name]
+            criterion = grid[self.expected_columns[name]]
+            expected_calls.extend((lines, depth) for depth in (criterion, grid[1], grid[64]))
+            fine_calls.append((lines, criterion))
+        for solver, panels, expected in ((published_calls, 400, expected_calls),
+                                         (candidate_calls, 400, expected_calls), (candidate_calls, 800, fine_calls)):
+            actual = [(c.args[0], c.args[2]) for c in solver.call_args_list if c.kwargs.get("panels", 400) == panels]
+            self.assertEqual(actual, expected)
         result = json.loads(stdout.getvalue())
         self.assertEqual(code, 0 if scenario == "pass" else 1)
         self.assertIs(result["confirmed"], scenario == "pass")
+        self.assertEqual(set(result["runs"]), {"Alg075", "Ala025", "Al2osc"})
         for name, rows in result["runs"].items():
+            for row in rows.values():
+                self.assertAlmostEqual(row["depth_A"], self.depth_grids[name][row["column"]])
             self.assertEqual(rows["criterion"]["column"], self.expected_columns[name])
             self.assertEqual(rows["diagnostic_shallow"]["column"], 1)
             self.assertEqual(rows["diagnostic_deep"]["column"], 64)

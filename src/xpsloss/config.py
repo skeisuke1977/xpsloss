@@ -77,7 +77,10 @@ class Config:
     provenance: Provenance | None = None
 
     def grid(self):
-        return np.linspace(self.loss_min_eV, self.loss_max_eV, self.point_count)
+        grid = np.linspace(self.loss_min_eV, self.loss_max_eV, self.point_count)
+        if not grid.size or grid[0] != self.loss_min_eV or grid[-1] != self.loss_max_eV:
+            raise ValueError("generated loss grid does not include both requested endpoints")
+        return grid
 
     def public_dict(self):
         result = {
@@ -123,6 +126,10 @@ def parse_config(obj, input_sha256=""):
     if not math.isfinite(intervals) or intervals > 999_999:
         raise ValueError("loss grid must contain at most 1,000,000 points")
     count = round(intervals)
+    # linspace includes both endpoints for two or more points. With one
+    # point it returns only lo, even when a tiny interval count rounded to zero.
+    if count == 0 and lo != hi:
+        raise ValueError("a single-point grid requires grid.min == grid.max")
     if not math.isclose(intervals, count, rel_tol=1e-10, abs_tol=1e-10):
         raise ValueError("(grid.max - grid.min) must be an integer multiple of grid.step")
     integ = obj.get("integration", {})

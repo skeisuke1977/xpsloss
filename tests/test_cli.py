@@ -1,4 +1,6 @@
 import copy
+import csv
+import math
 import hashlib
 import json
 import os
@@ -30,7 +32,7 @@ class CLITests(unittest.TestCase):
         cap = json.loads(r.stdout)
         self.assertEqual(cap["package"], "xpsloss")
         self.assertFalse(cap["queels_xps_equivalence"])
-        self.assertIn("core_hole", cap["unsupported_physics"])
+        self.assertIn("core_hole", cap["bulk_unsupported_physics"])
         r = self.call("validate", EXAMPLE)
         self.assertEqual(r.returncode, 0, r.stderr)
         result = json.loads(r.stdout)
@@ -70,6 +72,55 @@ class CLITests(unittest.TestCase):
             data = np.loadtxt(output / "elf.csv", delimiter=",", skiprows=1)
             self.assertEqual(data.shape, (160, 2))
 
+    def test_optical_line_csv_at_resonance(self):
+        obj = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+        obj["material"]["oscillators"][0]["dispersion"] = 0
+        obj["loss_grid_eV"] = {"min": 15, "max": 15, "step": 1}
+        # At resonance L=A/(Gamma*T)=6. Without dispersion the q integral
+        # factors into L times the logarithm of the kinematic bound ratio.
+        log_ratio = 2 * math.log(math.sqrt(1000) + math.sqrt(985)) - math.log(15)
+        bulk = 6 * log_ratio / (math.pi * 0.529177210903 * 1000)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "synthetic.json"
+            path.write_text(json.dumps(obj), encoding="utf-8")
+            for cmd, field, expected in (("elf", "elf_dimensionless", 6.),
+                                         ("bulk", "diimfp_per_A_eV", bulk)):
+                with self.subTest(cmd=cmd):
+                    out = Path(tmp) / cmd
+                    proc = self.call(cmd, path, "--out", out)
+                    self.assertEqual(proc.returncode, 0, proc.stderr)
+                    with (out / f"{cmd}.csv").open(encoding="utf-8") as stream:
+                        row, = csv.DictReader(stream)
+                    self.assertEqual(float(row["loss_eV"]), 15.)
+                    self.assertAlmostEqual(float(row[field]), expected, delta=1e-13 * expected)
+                    if cmd == "bulk":
+                        self.assertGreater(float(row["quadrature_error_per_A_eV"]), 0)
+
+    def test_static_sign_and_underflow_failure_status(self):
+        cases = (
+            ("xps-fixed-depth", (10, 110, 1, 0.5), 3., 0, {}, "error",
+             ("--depth-A", "10", "--epsilon-momentum", "k_parallel")),
+            ("elf", (1e-100, 1e-30, 1e-240, 0), 5e-101, 0, {}, "not_converged", ()),
+            ("dielectric", (15, 1, 1e-6, 0), 1., 15.01,
+             {"epsabs": 1e-6, "epsrel": 1e-5, "limit": 5}, "not_converged", ()),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "synthetic.json"
+            for cmd, line, loss, gap, integration, status, extra in cases:
+                with self.subTest(cmd=cmd):
+                    obj = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+                    obj["material"]["oscillators"] = [
+                        dict(zip(("energy_eV", "strength_eV2", "width_eV", "dispersion"), line, strict=True))]
+                    obj["material"]["gap_eV"] = gap
+                    obj["loss_grid_eV"] = {"min": loss, "max": loss, "step": 1}
+                    obj["integration"] = integration
+                    path.write_text(json.dumps(obj), encoding="utf-8")
+                    out = Path(tmp) / cmd
+                    proc = self.call(cmd, path, *extra, "--out", out)
+                    self.assertEqual(proc.returncode, 2, proc.stderr)
+                    self.assertEqual(json.loads(proc.stderr)["status"], status)
+                    self.assertFalse(out.exists())
+
     def test_dielectric_end_to_end(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -106,7 +157,8 @@ class CLITests(unittest.TestCase):
             self.assertEqual(data.shape, (160, 6))
             self.assertTrue(np.all(np.isfinite(data)))
             np.testing.assert_allclose((data[:, 1] + 1j * data[:, 2]) * (data[:, 3] + 1j * data[:, 4]), -1)
-            self.assertTrue(np.all(data[data[:, 0] < 14.25, 2] == 0))
+            np.testing.assert_array_equal(data[:, 0], np.arange(0.5, 80.01, 0.5))
+            np.testing.assert_array_equal(data[data[:, 0] < 14.25, 2], np.zeros(28))
             self.assertGreater(data[-1, 2], 0)
 
     def test_dielectric_distinguishes_invalid_settings_from_quad_failure(self):

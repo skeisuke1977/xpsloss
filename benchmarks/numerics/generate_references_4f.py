@@ -6,6 +6,9 @@ k_parallel. Eq. (17) is evaluated by subtracting squared momenta. Two different
 orders and working precisions must give identical rounded binary64 literals.
 No xpsloss or SciPy functions, package partitions, or error estimates are used.
 Use --follow-up-2 to reproduce the dispersive-node and bulk-edge regressions.
+The frozen fu2 test describes the original review calculation in ref_fixed.py.
+This distributed reproduction instead uses orders 32 and 48 at 50 and 80
+decimal digits, locating complex poles directly to partition the integral.
 """
 import math
 import sys

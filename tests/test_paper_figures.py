@@ -81,7 +81,7 @@ class PaperFigureTests(unittest.TestCase):
         with (generate.HERE / "comparison.csv").open(encoding="utf-8") as src:
             saved = list(filter(peak, csv.DictReader(src)))
         self.assertEqual([float(r["width_eV"]) for r in saved], [3.4, 2.8, 3.28, 2.1])
-        for row, expected in zip(generate.compare_point(point), saved):
+        for row, expected in zip(generate.compare_point(point), saved, strict=True):
             for choice in ("k_parallel", "k_total"):
                 self.assertAlmostEqual(float(row[choice]), float(expected[choice]), delta=1e-10)
             self.assertNotEqual(row["k_parallel"], row["k_total"])
@@ -111,8 +111,11 @@ class PaperFigureTests(unittest.TestCase):
             for row in reader:
                 key = tuple(row[k] for k in keys)
                 statuses = tuple(row[k] for k in ("status", "k_parallel_status", "k_total_status"))
+                # Store the first classification, then require it at every width for this reading.
                 self.assertEqual(outcomes.setdefault(key, statuses), statuses)
+        self.assertEqual(len(readings), 84)
         self.assertEqual(readings, set(outcomes))
-        for statuses, expected in zip(zip(*outcomes.values()), ((36, 18, 30), (37, 19, 28), (37, 18, 29))):
+        for statuses, expected in zip(zip(*outcomes.values(), strict=True),
+                                      ((36, 18, 30), (37, 19, 28), (37, 18, 29)), strict=True):
             self.assertEqual(Counter(statuses), dict(zip((generate.WITHIN, generate.OUTSIDE, generate.DEPENDENT),
-                                                        expected)))
+                                                        expected, strict=True)))

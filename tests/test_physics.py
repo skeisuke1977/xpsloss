@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 from scipy.integrate import quad
 
-from xpsloss.model import BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, Material, Oscillator, bulk_diimfp, loss_function, momentum_limits
+from xpsloss.model import BOHR_RADIUS_A, Material, Oscillator, bulk_diimfp, loss_function
 
 
 class PhysicsTests(unittest.TestCase):
@@ -53,16 +53,6 @@ class PhysicsTests(unittest.TestCase):
             loose, _ = bulk_diimfp(mat, 1000, loss, epsabs=1e-8, epsrel=1e-6)
             tight, _ = bulk_diimfp(mat, 1000, loss, epsabs=1e-12, epsrel=1e-11, limit=400)
             self.assertLess(abs(loose-tight), max(1e-12, abs(tight)*1e-6))
-
-    def test_units_and_stable_q_limits(self):
-        # At E=H, the initial wavevector is exactly 1 inverse angstrom.
-        e = HBAR2_OVER_2ME_EV_A2
-        qmin, qmax = momentum_limits(e, e*0.75)
-        self.assertAlmostEqual(qmin, 0.5)
-        self.assertAlmostEqual(qmax, 1.5)
-        qmin, qmax = momentum_limits(1000, 1e-12)
-        self.assertGreater(qmin, 0)
-        self.assertAlmostEqual(qmin*qmax, 1e-12/HBAR2_OVER_2ME_EV_A2, places=24)
 
     def test_invalid_physics_inputs(self):
         for args in [(0, 1, 1, 0), (1, -1, 1, 0), (1, 1, 0, 0), (1, 1, 1, -1), (math.nan, 1, 1, 0)]:

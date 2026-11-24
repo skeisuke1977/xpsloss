@@ -9,7 +9,7 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy.special import roots_legendre
 
-from .dielectric import dielectric_response
+from .dielectric import _checked_static_response
 from .model import (
     BOHR_RADIUS_A, DECIMAL_DIGITS, DEFAULT_REL, DETUNING_REL, FLANK_RATIO, FLOAT_EPSILON, HBAR2_OVER_2ME_EV_A2, NEARBY_FACTOR,
     RECIPROCAL_ROUNDOFF,
@@ -77,7 +77,7 @@ def _parallel_limits(energy, loss):
             plus * np.sqrt(plus * (3*s - r)) / scale)
 
 
-def _oscillator_sum(material, loss, q, *, with_error=False):
+def _oscillator_sum(material, loss, q):
     """E4b: compute S = 1 − 1/ε directly, retaining weak responses near ε = 1."""
     response = np.zeros_like(q, dtype=complex)
     real_error = np.zeros_like(q, dtype=float)
@@ -93,7 +93,7 @@ def _oscillator_sum(material, loss, q, *, with_error=False):
             # evaluator reconstructs D before its relative error reaches 1e-10.
             real_error += rounding * abs(term.real) + 2 * detuning_error * abs(term)
             imag_error += (rounding + 3 * detuning_error) * term.imag
-    return (response, real_error, imag_error) if with_error else response
+    return response, real_error, imag_error
 
 
 def _bounded_sum(material, loss, q):
@@ -123,7 +123,7 @@ def _bounded_sum(material, loss, q):
         if (relative >= DETUNING_REL or lower < _MIN_NORMAL or not math.isfinite(upper)
                 or osc.strength_eV2 / upper < _MIN_NORMAL
                 or not math.isfinite(osc.strength_eV2 / lower)):
-            return _oscillator_sum(material, loss, q, with_error=True)
+            return _oscillator_sum(material, loss, q)
         shift = slope * q2
         delta = ((w - loss) + shift) * ((w + shift) + loss)
         damping = width * loss
@@ -170,6 +170,8 @@ def _exact_points(material, loss, q, points, coefficients, *, node_squares=None)
         b = y.numerator * (den // y.denominator)
         complement = 2 * den - a
         norm = complement**2 + b**2
+        # With positive loss and width, Im S > 0 for any active line.
+        # With no active lines S = 0. Retain a defensive pole check.
         if not norm:
             raise FixedDepthConvergenceError(f"surface pole at loss_eV={losses[i]:g}")
         rx, ry = a*complement - b**2, 2*b*den
@@ -186,7 +188,7 @@ def _coefficients(material, loss, q, epsrel=None, *, bounded=False):
     if bounded:
         s, sr, si = _bounded_sum(material, loss, q)
     else:
-        s, sr, si = _oscillator_sum(material, loss, q, with_error=True)
+        s, sr, si = _oscillator_sum(material, loss, q)
     rounding = REFLECTION_ROUNDOFF * len(material.oscillators)
     d = abs(2 - s)
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
@@ -204,7 +206,7 @@ def _coefficients(material, loss, q, epsrel=None, *, bounded=False):
         ci = 2*si + ri + rounding*abs(c.imag)
         uncertain = ~((relative < 1) & np.isfinite(cr) & np.isfinite(ci))
         if epsrel is not None:
-            # Standalone coefficient requests have no geometry or integral.
+            # Coefficient-only tests supply epsrel here. Integration uses its weighted budgets.
             for value, error in ((s.real, sr), (s.imag, si), (r.real, rr), (r.imag, ri), (c.real, cr), (c.imag, ci)):
                 uncertain |= ~(error <= epsrel * abs(value))
     coefficients = (s, r, c), ((sr, si), (rr, ri), (cr, ci))
@@ -428,7 +430,7 @@ def _panel_integrals(edges_left, edges_right, integrand):
 
 
 def _component_sums(terms, charge_weight):
-    """Sum termwise bounds for the two unit components and their common bound."""
+    """Combine signed terms with charge, or their absolute errors with a positive charge weight."""
     electron = terms[..., _ELECTRON].sum(axis=-1)
     hole = terms[..., _HOLE].sum(axis=-1)
     return np.stack((electron, hole, electron + charge_weight * hole), axis=-1)
@@ -452,7 +454,7 @@ def _initial_panels(material, losses, energy, depth, omega, offsets, lower, uppe
     offset = offsets[owners, None]
     dispersive = any(o.dispersion and o.strength_eV2 for o in material.oscillators)
 
-    def integrand(k, relative_z, left, right):
+    def integrand(k, relative_z, _left, _right):
         q = np.hypot(k, offset) if offset.any() else k
         coefficients = _coefficients(material, loss, q if dispersive else np.zeros_like(loss), bounded=True)
         if dispersive:
@@ -561,12 +563,6 @@ def _integrate_loss(material, loss, energy, depth, omega, q_offset, lower, upper
         arithmetic = np.vstack((arithmetic, child_arithmetic[1]))
 
 
-def _finite_real(value, label):
-    if np.iscomplexobj(value):
-        raise ValueError(f"{label} must be real")
-    return finite_number(value, label)
-
-
 def effective_cross_section_fixed_depth(
     material: Material, electron_energy_eV, loss_eV, depth_A, *, theta_deg=0.0,
     hole_charge=1.0, epsilon_momentum, epsabs=FIXED_ABS, epsrel=FIXED_REL, limit=200,
@@ -586,12 +582,12 @@ def effective_cross_section_fixed_depth(
         raise ValueError("fixed-depth gapped materials are deferred to M2-2")
     if not isinstance(epsilon_momentum, str) or epsilon_momentum not in EPSILON_MOMENTA:
         raise ValueError("epsilon_momentum must be 'k_parallel' or 'k_total'")
-    theta = _finite_real(theta_deg, "theta_deg")
+    theta = finite_number(theta_deg, "theta_deg")
     if theta != 0:
         raise ValueError("only normal emission (theta_deg=0) is supported; see Q3/Q15")
-    energy = _finite_real(electron_energy_eV, "electron_energy_eV")
-    depth = _finite_real(depth_A, "depth_A")
-    charge = _finite_real(hole_charge, "hole_charge")
+    energy = finite_number(electron_energy_eV, "electron_energy_eV")
+    depth = finite_number(depth_A, "depth_A")
+    charge = finite_number(hole_charge, "hole_charge")
     if depth <= 0 or energy <= 0:
         raise ValueError("depth_A and electron_energy_eV must be positive")
     grid = np.atleast_1d(loss_eV)
@@ -600,7 +596,7 @@ def effective_cross_section_fixed_depth(
     grid = np.array(grid, dtype=float)
     if not np.all((grid > 0) & (grid < energy)):
         raise ValueError("require 0 < loss_eV < electron_energy_eV; the zero-loss delta term is excluded")
-    epsabs, epsrel = _finite_real(epsabs, "epsabs"), _finite_real(epsrel, "epsrel")
+    epsabs, epsrel = finite_number(epsabs, "epsabs"), finite_number(epsrel, "epsrel")
     if epsabs <= 0 or epsrel <= 0:
         raise ValueError("epsabs and epsrel must be positive")
     if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
@@ -616,7 +612,7 @@ def effective_cross_section_fixed_depth(
         # For nonnegative dispersions static F is largest at the smallest q.
         i = int(np.hypot(lower, offsets).argmin())
         try:
-            dielectric_response(material, grid[i], np.hypot(lower[i], offsets[i]))
+            _checked_static_response(material, np.hypot(lower[i], offsets[i]))
         except NumericalConvergenceError as exc:
             raise FixedDepthConvergenceError(f"fixed-depth at {_loss_point(grid, (i,))}: {exc}") from exc
         terms = np.empty((len(TERM_NAMES), grid.size))
@@ -640,9 +636,7 @@ def effective_cross_section_fixed_depth(
                 raise ValueError(f"fixed-depth at {_loss_point(grid, (i,))}: {exc}") from exc
             except (ArithmeticError, NumericalConvergenceError) as exc:
                 raise FixedDepthConvergenceError(f"fixed-depth oscillator sum at {_loss_point(grid, (i,))}: {exc}") from exc
-        no_hole = terms[0] + terms[1] + terms[3] + terms[5] + terms[6]
-        hole = terms[2] + terms[4] + terms[7]
-        total = no_hole + charge * hole
+        no_hole, hole, total = _component_sums(terms.T, charge).T
         bad = ~(np.isfinite(total) & np.isfinite(hole) & np.isfinite(no_hole))
         if np.any(bad):
             raise FixedDepthConvergenceError(f"fixed-depth oscillator sum outside numerical range at {_first_loss(grid, bad)}")

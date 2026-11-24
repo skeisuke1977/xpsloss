@@ -44,12 +44,12 @@ jobs:
       - name: Run the test suite against the source tree
         env:
           PYTHONPATH: src
-        run: python -m unittest discover -s tests -v
+        run: python tests/run_suite.py
       - name: Check preregistered predictions
         env:
           PYTHONPATH: src
         run: python benchmarks/queels_prereg/evaluate_prereg.py predict --check
-      - name: Check paper figure comparisons
+      - name: Reproduce reference-side paper figure calculations
         run: python benchmarks/paper_figures/generate.py --check
 
   package:
@@ -75,11 +75,11 @@ jobs:
           /tmp/wheelenv/bin/xpsloss bulk examples/synthetic_bulk.json --out runs/bulk
           /tmp/wheelenv/bin/xpsloss xps-fixed-depth examples/synthetic_bulk.json --depth-A 10 --epsilon-momentum k_total --out runs/fixed-depth
           /tmp/wheelenv/bin/python -m pip check
-      - name: Run the full test suite and benchmark checks from the unpacked sdist
+      - name: Test unpacked sdist, check predictions and reproduce reference-side figures
         run: |
           mkdir /tmp/sdist && tar -xzf dist/*.tar.gz -C /tmp/sdist
           cd /tmp/sdist/xpsloss-*
           python -m pip install numpy scipy
-          PYTHONPATH=src python -m unittest discover -s tests -v
+          PYTHONPATH=src python tests/run_suite.py
           PYTHONPATH=src python benchmarks/queels_prereg/evaluate_prereg.py predict --check
           python benchmarks/paper_figures/generate.py --check
