@@ -197,9 +197,12 @@ def _fixed_depth_applicability(result: FixedDepthResult, material: Material):
             departures.append(f"loss_eV extends outside [{first:g}, {last:g}] eV")
         if ratio > last_binary / checks["electron_energy_eV"]:
             departures.append(f"max_loss_over_E0={ratio:g} exceeds the G499 upper endpoint ratio")
-        applicability["note"] = (
-            "Envelope membership uses the Si material parameters, energy, normal emission and the listed "
-            "depth and loss bounds. The numerical checks used the listed discrete depths, losses and charges."
+        note = (
+            "Envelope membership uses the Si material name and parameters (including oscillator order), "
+            "energy, normal emission and the listed depth and loss bounds. The numerical checks used the "
+            "listed discrete depths and losses. Hole charge does not affect within_checked_envelope. "
+            "The checked hole charges were 0, 0.5 and 1. V11 also checked -0.5 and 1.5. "
+            "All other hole charges are outside the checked values."
         )
     else:
         ratio_limit = FIXED_DEPTH_CHECKED_ENVELOPE["max_loss_over_E0"]["max"]
@@ -212,7 +215,7 @@ def _fixed_depth_applicability(result: FixedDepthResult, material: Material):
         elif energy > high:
             departures.append(f"electron_energy_eV={energy} exceeds {high:g} eV by {energy - high:.9g} eV")
         applicability["checked_envelope"] = FIXED_DEPTH_CHECKED_ENVELOPE
-        applicability["note"] = (
+        note = (
             "Only max(T)/E0 and E0 are compared with the bounds. Depth, material, line widths, "
             "dispersion, hole charge and the lower end of the loss grid are not part of this envelope, "
             "and for k_total with dispersive oscillators no independent check covers all finite-depth "
@@ -220,6 +223,7 @@ def _fixed_depth_applicability(result: FixedDepthResult, material: Material):
             "establishes neither accuracy for arbitrary inputs nor physical validity."
         )
     applicability["within_checked_envelope"] = not departures
+    applicability["note"] = note
     warnings = list(result.warnings) + [f"Outside the checked envelope: {departure}. The numerical checks in this repository "
                 "do not cover this input, and physical applicability is not verified."
                 for departure in departures]

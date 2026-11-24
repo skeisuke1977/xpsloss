@@ -123,6 +123,18 @@ class DomainTests(unittest.TestCase):
             )**2
             self.assertGreaterEqual(coefficient, moment * Fraction(P1.gap_eV) / pi_lower)
 
+    def test_monotonicity_rhs_bounds_pi_outward_at_threshold(self):
+        # With gap 1 and a dispersionless center at 2, lhs = 27/64 and rhs = width/pi.
+        # Pick the first binary64 width above the exact threshold 27*pi/64.
+        width = 1.3253594007331941
+        material = synthetic("monotonicity threshold", 1, (2, 1, width, 0))
+        pi_upper = Fraction("3.14159265358979323846264338327950289")
+        rhs_lower = Fraction(width) / pi_upper
+        self.assertGreater(rhs_lower, Fraction(27, 64))
+        row, = _monotonicity(material, 0)
+        self.assertFalse(row["passed"])
+        self.assertGreaterEqual(row["rhs_upper"], rhs_lower)
+
     def test_domain_details_keep_numeric_fields_separate_from_overflow_reason(self):
         extreme = synthetic("extreme line", 1, (1e-100, 1, 1, 0))
         with self.assertRaises(FixedDepthGapDomainError) as caught:
@@ -293,6 +305,21 @@ class DomainTests(unittest.TestCase):
 
 
 class ManifestTests(unittest.TestCase):
+    def test_unchecked_hole_charge_in_gapped_manifest(self):
+        with tempfile.TemporaryDirectory() as folder:
+            args = cli_args(folder, SI, [5.0]) + ["--hole-charge", "5"]
+            proc = subprocess.run([sys.executable, "-m", "xpsloss", *args], capture_output=True, cwd=ROOT)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            doc = json.loads((Path(folder) / "output/run.json").read_text(encoding="utf8"))
+        app = doc["applicability"]
+        self.assertIs(app["within_checked_envelope"], True)
+        note = app["note"]
+        self.assertTrue(note.isascii())
+        self.assertIn("Hole charge does not affect within_checked_envelope", note)
+        self.assertIn("0, 0.5 and 1", note)
+        self.assertIn("V11 also checked -0.5 and 1.5", note)
+        self.assertIn("outside the checked values", note)
+
     def test_required_cli_grid_and_budget_manifest(self):
         for mode in MODES:
             with tempfile.TemporaryDirectory() as folder:
