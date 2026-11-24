@@ -91,7 +91,7 @@
 | 項目 | 内容 |
 | --- | --- |
 | 参照値 | `benchmarks/numerics/m22/references_m22.json` の SHA-256: `fa535737038b478a26cc57a200ede5db5aa8119d12ab9285aafbdb2fb7d32eeb`（LF、ASCII、1,037,434 バイト） |
-| コミット | 基点は main の `ca9b34a`（ブランチ `m22-ref`）。参照値を含むコミットは統括担当が作り、ここに追記する |
+| コミット | 基点は main の `ca9b34a`（ブランチ `m22-ref`）。参照値を含むコミットは `bf4991b`（統括担当が作成。実装との比較の前） |
 | 生成 | `PYTHONPATH=src python benchmarks/numerics/m22/generate_references_m22.py`（12 プロセス） |
 | 環境 | Windows 11（`Windows-11-10.0.26300-SP0`）、Python 3.12.10、mpmath 1.4.1、NumPy 2.5.5（I3 型の経路だけが使う） |
 | 所要時間 | 実時間 491 秒。多倍長の経路の CPU 時間の合計は 2663 秒 |
