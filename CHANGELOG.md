@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0] - unreleased
+
+### Added
+
+- M2-2: the fixed-depth cross section at normal emission now accepts materials with a hard band gap. It returns retarded-limit point values of Eqs. (13)–(16) with the causal hard-gap response (step ELF, Kramers–Kronig real part) and no extra broadening. Losses within the gap-edge exclusion width are rejected (`DielectricGapEdgeError`). Below the gap a loss is computed only if an outward-rounded analytic bound proves that no undamped surface mode (ε = −1) lies in its momentum range; otherwise `FixedDepthGapDomainError` with reason `surface_pole_not_excluded`. Gapped inputs must satisfy a per-oscillator monotonicity condition (`monotonicity_condition_failed`). Below the gap the unit-hole `total` vanishes; `no_hole` and `hole` are reactive terms, reported with a warning. [Design](docs/M2_2_DESIGN.md) · [Pre-registration](docs/M2_2_PREREG.md)
+- `FixedDepthGapDomainError` (a `ValueError`) is exported with `reason`, `offending_loss_eV` and `details`. `FixedDepthResult` gains `component_errors` (per-output error estimates), `diagnostics` and `warnings`, with defaults.
+- The `xps-fixed-depth` `run.json` records the gap diagnostics, the sub-gap proofs, per-output error budgets and a separate checked envelope for gapped inputs (Si from the ELF data set, 1000 eV, depths 2–200 Å, losses 0.2–99.8 eV), with warnings outside it.
+
+### Changed
+
+- `capabilities`: the fixed-depth scope includes hard-gap materials; `unsupported_physics` lists `sub_gap_surface_mode_delta_terms` and `gap_broadening` instead of `gapped_materials`.
+- For gapped inputs the CSV `quadrature_error` is the maximum of the 11 per-output estimates. Gapless results (values, `quadrature_error`, CSV and failure states) are unchanged from 0.1.0; they were byte-identical in 40 comparison cases.
+- CI checks out the full history, and the comparison with 0.1.0 fails instead of being skipped in CI.
+
+### Verification
+
+- Two independent design proposals were merged and reviewed; the checks were pre-registered before any reference value or implementation existed. A reference author separate from the implementer computed 194 points in multiple precision without the package code and froze them before comparison. All pre-registered checks pass. An independent reviewer's 39 deliberate faults are all detected after the review fixes. One reference check that could not fail (it read estimate/budget ratios instead of the estimates) was found by a deliberate fault and fixed without changing any tolerance. [Validation record](docs/VALIDATION.md)
+
 ## [0.1.0] - 2026-11-24
 
 ### Added
