@@ -3,6 +3,14 @@ message: "If you use xpsloss in your research, please cite this software."
 title: xpsloss
 version: "0.1.0"
 date-released: "2026-11-24"
+doi: 10.5281/zenodo.24490458
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.24490458
+    description: "Version 0.1.0"
+  - type: doi
+    value: 10.5281/zenodo.24490457
+    description: "All versions; resolves to the latest version"
 authors:
   - family-names: Sato
     given-names: Keisuke

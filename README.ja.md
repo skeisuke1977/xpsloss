@@ -88,7 +88,7 @@ API の数値未収束では `NumericalConvergenceError` またはその派生�
 
 Keisuke Sato がコードを MIT、自作文書を CC BY 4.0 で提供します。文書中の第三者の引用は各権利者の条件に従います。第三者データ（`benchmarks/sources/**` と `benchmarks/inputs/*elfdb*`）は両方の適用範囲から除外され、N. Pauly、F. Yubero、S. Tougaard による *ELF dielectric functions for various materials*, v1.0（2022）の CC BY 4.0 が適用されます。[MITライセンス](LICENSE)・[帰属表示](NOTICES.md)・[ELFデータ集](https://doi.org/10.5281/zenodo.6024064)・[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
-ソフトウェアの引用には Keisuke Sato、xpsloss、バージョン 0.1.0 を記載してください。ソフトウェア DOI は、リリースが Zenodo に保存された後に追加します。データ集を使用した場合はその出典も引用してください。[引用情報](CITATION.cff)
+ソフトウェアの引用には Keisuke Sato、xpsloss、バージョン 0.1.0、doi:[10.5281/zenodo.24490458](https://doi.org/10.5281/zenodo.24490458) を記載してください。DOI [10.5281/zenodo.24490457](https://doi.org/10.5281/zenodo.24490457) はすべての版をまとめたもので、最新版を指します。データ集を使用した場合はその出典も引用してください。[引用情報](CITATION.cff)
 
 ## 検証と資料
 

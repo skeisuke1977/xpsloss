@@ -155,6 +155,20 @@ CI にかける前に、段階4cと4dで見つけた点を直した。実装は 
 - README・CHANGELOG・CITATION・capabilities・VALIDATION・ROADMAP の主張は根拠の範囲内だった（8件を独立に照合した）。ライセンスと帰属表示は、すべての文書で一致する。
 - 公開の時に直すこと（公開日、DOI の書き方、段階の状態）は、ROADMAP §5 の段階5に従う。
 
+## 段階5 公開（2026-11-24）
+
+利用者の決定により、v0.1.0 を 2026-11-24 に公開した（[ROADMAP](ROADMAP.md) §5）。
+
+| 対象 | 条件と結果 |
+| --- | --- |
+| 公開用のコミット | `0167e38`。段階4gの公開候補 `9b29e01` に、公開日、`CITATION.cff` の `date-released`、Zenodo の記述 `.zenodo.json` などの文書だけの変更を加えた。コード、テスト、CI の設定は変えていない |
+| 公開用のコミットの CI | GitHub Actions の run 45328058895 で全5ジョブが合格した。Linux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）、配布物のジョブ（wheel、展開した sdist）のすべてで、157件のテスト、`predict --check`、`generate.py --check` が合格した |
+| 公開 | 利用者がリポジトリを公開した。Zenodo の GitHub 連携を有効にした後、`0167e38` に注釈付きタグ `v0.1.0` を付け、GitHub の Release「xpsloss 0.1.0」を作った |
+| Zenodo | Release から記録が作られた。版の DOI は 10.5281/zenodo.24490458、すべての版をまとめた DOI は 10.5281/zenodo.24490457。題名、作成者、ライセンス（MIT）、キーワード、関連する識別子は `.zenodo.json` のとおり |
+| 公開したタグからの再現 | GitHub と同じタグオブジェクトの `v0.1.0` から `git archive` で取り出したツリーだけを、新しい仮想環境（Windows、Python 3.12.10、NumPy 2.5.5、SciPy 1.18.1、UTF-8 モードなし）に `pip install .` で導入した。README の5つのコマンド（`capabilities`、`validate`、`bulk`、`dielectric`、`xps-fixed-depth`）が成功し（警告0件）、157件のテスト、`predict --check`、`generate.py --check` が合格した |
+
+DOI の追記は、タグの後の main のコミットで行った（タグは動かしていない）。
+
 ## 段階4g 常に通る検査の点検と補強（2026-11-24）
 
 AI が書いた大規模な証明で、入力によらず真を返す関数や不要な枠組みが見つかった件を受けて、利用者の依頼で同じ種類の問題がないかを点検した（[ROADMAP](ROADMAP.md) §3.6）。Codex と別のエージェント（Claude Opus）が、互いの結果を見ずに `68a364e` を調べた。実装は Codex、レビューは Opus のエージェントが行った（判定は修正後に承認。指摘は反映した）。物理モデルは変えていない。
