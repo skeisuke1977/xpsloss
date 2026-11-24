@@ -85,3 +85,19 @@
 ## 付録　参照値の凍結
 
 （参照値を作った担当が、実装と比べる前に記入する: コミット、`references_m22.json` の SHA-256、生成の環境。）
+
+記入: 参照担当、2026-11-24。実装の結果と比べる前に記入した。
+
+| 項目 | 内容 |
+| --- | --- |
+| 参照値 | `benchmarks/numerics/m22/references_m22.json` の SHA-256: `fa535737038b478a26cc57a200ede5db5aa8119d12ab9285aafbdb2fb7d32eeb`（LF、ASCII、1,037,434 バイト） |
+| コミット | 基点は main の `ca9b34a`（ブランチ `m22-ref`）。参照値を含むコミットは統括担当が作り、ここに追記する |
+| 生成 | `PYTHONPATH=src python benchmarks/numerics/m22/generate_references_m22.py`（12 プロセス） |
+| 環境 | Windows 11（`Windows-11-10.0.26300-SP0`）、Python 3.12.10、mpmath 1.4.1、NumPy 2.5.5（I3 型の経路だけが使う） |
+| 所要時間 | 実時間 491 秒。多倍長の経路の CPU 時間の合計は 2663 秒 |
+| 点数 | 194 点（Si と S0: 2 指定 × 3 深さ × 16 損失。N1: 2 指定、10 Å、4 eV）。各点に8項、`no_hole`、`hole`、電子群、正孔群、正孔電荷 0、0.5、1 の `total` |
+| 参照の不確かさ | \(u_j/B_j\) の最大は \(1.08\times10^{-7}\)（Si、`k_parallel`、2 Å、0.2 eV、`term_14`）。50 桁と 80 桁、分割の倍増の差は \(10^{-40}\) 以下で、\(u_j\) は保存した binary64 の丸めで決まる |
+| I3 型の経路 | 再細分による変化は V3 の幅の \(3.8\times10^{-8}\) 倍以下 |
+| V13 用の点 | JSON の `v13_points` の 46 点（Si。両方の指定の `no_hole` と `hole` の差が \(10^3B_j\) 以上。うち 33 点はギャップより上で、正孔電荷 1 の `total` も \(10^3B_j\) 以上離れる） |
+| 比較の試験 | `tests/test_m22_reference.py`（この SHA-256 と JSON の一致も確かめる） |
+
