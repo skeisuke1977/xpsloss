@@ -60,7 +60,7 @@ UNSUPPORTED_PHYSICS = (
     "primary_spectrum_convolution", "full_imfp",
 )
 FIXED_DEPTH_UNSUPPORTED_PHYSICS = (
-    "oblique_emission", "gapped_materials", "depth_averaging", "elastic_scattering",
+    "oblique_emission", "sub_gap_surface_mode_delta_terms", "gap_broadening", "depth_averaging", "elastic_scattering",
     "multiple_inelastic_scattering", "primary_spectrum_convolution", "full_imfp",
 )
 

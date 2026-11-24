@@ -24,7 +24,7 @@ from .model import (BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, MODEL_ID, FIXED_DEPTH_U
                     NumericalConvergenceError, UNSUPPORTED_PHYSICS, bulk_diimfp, finite_number, loss_function)
 from .xps_fixed_depth import (
     EPSILON_MOMENTA, FIXED_DEPTH_MODEL_ID, TERM_NAMES,
-    FixedDepthResult, effective_cross_section_fixed_depth,
+    FixedDepthGapDomainError, FixedDepthResult, effective_cross_section_fixed_depth,
 )
 
 
@@ -66,7 +66,7 @@ def capabilities():
         "bulk_unsupported_physics_model_id": MODEL_ID,
         "xps_fixed_depth": {
             "model_id": FIXED_DEPTH_MODEL_ID,
-            "scope": "positive fixed depth, 0 degrees from the surface normal, gapless material",
+            "scope": "positive fixed depth, 0 degrees from the surface normal, gapless or an accepted hard gap; sub-gap epsilon=-1 delta terms excluded",
             "supported": ["surface_losses", "vacuum_losses", "core_hole", "electron_hole_interference"],
             "unsupported_physics": list(FIXED_DEPTH_UNSUPPORTED_PHYSICS),
             "implements": "Based on Eqs. (13)-(17) of Simonsen, Yubero & Tougaard (1997) with the causal "
@@ -85,6 +85,7 @@ def capabilities():
                                "charge and potential equations. For dispersionless inputs the two momentum "
                                "choices coincide, so I3 covers both.",
                 },
+                "hard_gap": "Si ELF v1.0, 1000 eV, normal emission. See applicability.gapped_checks and docs/M2_2_PREREG.md.",
                 "checked_envelope": "See applicability.checked_envelope in the xps-fixed-depth run.json.",
                 "independent_reviews": "Separate agents reviewed the equations and implementation. "
                                        "There has been no human peer review.",
@@ -174,6 +175,25 @@ def _fixed_depth_applicability(result: FixedDepthResult):
                 "terms. The bounds summarize numerical checks at discrete inputs. Being inside them "
                 "establishes neither accuracy for arbitrary inputs nor physical validity.",
     }
+    if result.diagnostics.get("gap_eV", 0.) > 0:
+        applicability.pop("checked_envelope")
+        applicability.pop("within_checked_envelope")
+        applicability["assumptions"].update(gap="hard_step", real_part="causal_Kramers_Kronig",
+                                             prescription="retarded_limit", broadening_eV=0.)
+        applicability["gapped_checks"] = {
+            "material": "Si, ELF data set v1.0 (unscaled)", "electron_energy_eV": 1000.,
+            "depths_A": [2., 10., 50., 200.], "momenta": list(EPSILON_MOMENTA),
+            "loss_grid_eV": {"first": 0.2, "last": 99.8, "step": 0.2},
+            "charge": [0., 0.5, 1.], "outputs": {
+                "11_output_budgets": "Estimated numerical errors, all terms and components.",
+                "V1": "Bulk identity of term 13a for k_total.",
+                "V2": "Deep electron and hole residuals at 10000 and 100000 angstrom.",
+                "V4_V10": "Sub-gap unit-hole cancellation and positive above-gap total.",
+                "V9": "Mesh and grid refinement at 10 angstrom for all terms and components.",
+            },
+        }
+        applicability["note"] = "These checks apply to the listed inputs. The gapless I3 energy envelope does not characterize hard-gap materials."
+        return applicability, list(result.warnings)
     warnings = [f"Outside the checked envelope: {departure}. The numerical checks in this repository "
                 "do not cover this input, and physical applicability is not verified."
                 for departure in departures]
@@ -246,6 +266,14 @@ def run(args):
             "quadrature_error_interpretation": "Sum of estimated panel and term errors, "
                 "with hole terms weighted by max(1, abs(hole_charge)).",
         }
+        if result.diagnostics:
+            diagnostics.update(result.diagnostics)
+            diagnostics["component_errors"] = {k: v.tolist() for k, v in result.component_errors.items()}
+            diagnostics["quadrature_error_interpretation"] = (
+                "Maximum of eleven absolute output error estimates per loss (angstrom^-1 eV^-1). "
+                "component_errors and error_budget_ratios are in loss-grid order. Budgets are "
+                "max(epsabs, epsrel*abs(output)); the certified sub-gap unit-hole total uses the "
+                "direct node sum and its discrepancy with the returned group sum.")
     else:
         model_id = DIELECTRIC_MODEL_ID
         q = finite_number(args.q_inv_A, "q_inv_A")
@@ -331,9 +359,14 @@ def main(argv=None):
     except DielectricGapEdgeError as exc:
         emit({
             "status": "error", "error_type": type(exc).__name__, "message": str(exc),
+            **({"offending_indices": exc.offending_indices} if hasattr(exc, "offending_indices") else {}),
             "gap_eV": exc.gap_eV, "gap_edge_exclusion_eV": exc.exclusion_eV,
             "offending_loss_eV": exc.offending_loss_eV, "remedy": exc.remedy,
         }, sys.stderr)
+        return 2
+    except FixedDepthGapDomainError as exc:
+        emit({"status": "error", "error_type": type(exc).__name__, "reason": exc.reason,
+              "message": str(exc), "offending_loss_eV": exc.offending_loss_eV, "details": exc.details}, sys.stderr)
         return 2
     except NumericalConvergenceError as exc:
         emit({"status": "not_converged", "error_type": type(exc).__name__, "message": str(exc)}, sys.stderr)

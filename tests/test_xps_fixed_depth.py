@@ -179,8 +179,9 @@ class FixedDepthPhysicsTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             calculate(**args)
         args["epsilon_momentum"] = "k_total"
+        self.assertTrue(np.isfinite(calculate(**(args | {"material": replace(AL, gap_eV=1)})).total[0]))
         for key, value, message in (
-            ("material", replace(AL, gap_eV=1), "M2-2"), ("theta_deg", 1e-12, "Q3/Q15"),
+            ("theta_deg", 1e-12, "Q3/Q15"),
             ("theta_deg", float("inf"), "finite"), ("epsilon_momentum", None, "epsilon_momentum"),
             ("epsilon_momentum", "optical", "epsilon_momentum"), ("depth_A", 0, "positive"),
             ("depth_A", -1, "positive"), ("depth_A", float("nan"), "finite"),
@@ -261,7 +262,9 @@ class FixedDepthCLITests(unittest.TestCase):
         scope = cap["xps_fixed_depth"]
         for name in ("surface_losses", "core_hole", "vacuum_losses"):
             self.assertIn(name, scope["supported"])
-        for name in ("oblique_emission", "depth_averaging", "elastic_scattering", "gapped_materials",
+        self.assertNotIn("gapped_materials", scope["unsupported_physics"])
+        for name in ("oblique_emission", "depth_averaging", "elastic_scattering",
+                     "sub_gap_surface_mode_delta_terms", "gap_broadening",
                      "multiple_inelastic_scattering", "primary_spectrum_convolution"):
             self.assertIn(name, scope["unsupported_physics"])
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:

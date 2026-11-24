@@ -1,6 +1,6 @@
 """Simonsen, Yubero & Tougaard (1997), Eqs. (13)–(17), at normal emission."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Context, Decimal
 from fractions import Fraction
 import math
@@ -9,6 +9,8 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy.special import roots_legendre
 
+from ._gap_domain import FixedDepthGapDomainError, check_edges, gap_preflight
+from ._gap_response import gapped_sum, resolve_surface
 from .dielectric import _checked_static_response
 from .model import (
     BOHR_RADIUS_A, DECIMAL_DIGITS, DEFAULT_REL, DETUNING_REL, FLANK_RATIO, FLOAT_EPSILON, HBAR2_OVER_2ME_EV_A2, NEARBY_FACTOR,
@@ -65,6 +67,9 @@ class FixedDepthResult:
     hole: np.ndarray
     total: np.ndarray
     quadrature_error: np.ndarray
+    component_errors: dict = field(default_factory=dict)
+    diagnostics: dict = field(default_factory=dict)
+    warnings: tuple = ()
 
 
 def _parallel_limits(energy, loss):
@@ -183,13 +188,16 @@ def _exact_points(material, loss, q, points, coefficients, *, node_squares=None)
         ei[points] = FLOAT_EPSILON * abs(value.imag[points])
 
 
-def _coefficients(material, loss, q, epsrel=None, *, bounded=False):
+def _coefficients(material, loss, q, epsrel=None, *, bounded=False, relative_z=0.):
     """Return S, R and C and absolute errors of their Cartesian components."""
-    if bounded:
+    if material.gap_eV:
+        s, sr, si = gapped_sum(material, loss, q, relative_z)
+    elif bounded:
         s, sr, si = _bounded_sum(material, loss, q)
     else:
         s, sr, si = _oscillator_sum(material, loss, q)
-    rounding = REFLECTION_ROUNDOFF * len(material.oscillators)
+    count = sum(o.strength_eV2 > 0 for o in material.oscillators) if material.gap_eV else len(material.oscillators)
+    rounding = REFLECTION_ROUNDOFF * count
     d = abs(2 - s)
     with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
         r = s / (2 - s)
@@ -211,6 +219,8 @@ def _coefficients(material, loss, q, epsrel=None, *, bounded=False):
                 uncertain |= ~(error <= epsrel * abs(value))
     coefficients = (s, r, c), ((sr, si), (rr, ri), (cr, ci))
     if np.any(uncertain):
+        if material.gap_eV:
+            raise FixedDepthConvergenceError("hard-gap surface coefficient unresolved")
         if bounded:
             return _coefficients(material, loss, q, epsrel)
         _exact_points(material, loss, q, uncertain, coefficients)
@@ -253,7 +263,7 @@ def _include_node_roundoff(material, loss, q, relative_z, coefficients):
     return ds, dr
 
 
-def _term_integrands(k, coefficients, energy, depth, omega, *, select_bounds=False):
+def _term_integrands(k, coefficients, energy, depth, omega, *, select_bounds=False, direct_total=False):
     """Eight real densities in d ln(k_parallel), in the order of M1 §4.2."""
     (response, reflection, surface), (ds, dr, dc) = coefficients
     bulk = -response
@@ -314,6 +324,27 @@ def _term_integrands(k, coefficients, energy, depth, omega, *, select_bounds=Fal
         pref * projected(w16e, reflection_size, dr),
         pref * projected(w16h, reflection_size, dr) / omega,
     ), axis=-2)
+    if direct_total:
+        # Real S,R below g. Bound roundoff before cancellation in each real
+        # projection, including the construction of C, diff, mixed and w16e.
+        # |Im u| and |Im diff| scale together even at very small omega.
+        real_u, imag_u = abs(u.real), abs(u.imag)
+        real_diff, imag_diff = abs(diff.real), abs(diff.imag)
+        mixed_re = real_u*real_diff + imag_u*imag_diff
+        mixed_im = imag_u*real_diff + real_u*imag_diff
+        real14 = plus.real*(real_diff + mixed_re) + plus.imag*(imag_diff + mixed_im)
+        real15b = plus.real*mixed_re + plus.imag*mixed_im
+        real15c = (plus.real**2 + plus.imag**2)*real_diff + 2*plus.real*plus.imag*imag_diff
+        real16e = (2*plus.imag**2 + (plus.real**2+plus.imag**2)*real_u
+                   + 2*plus.real*plus.imag*imag_u)
+        real16h = plus.real*real_u + plus.imag*imag_u
+        c_size = 2*abs(response.real) + abs(reflection.real)
+        scale = pref*(abs(response.real)*(norm + real14/omega)
+                      + c_size*(norm + real15b/omega)
+                      + abs(reflection.real)*(real15c + real16e + real16h/omega))
+        direct = terms.sum(axis=-2, keepdims=True)
+        terms = np.concatenate((terms, direct), axis=-2)
+        errors = np.concatenate((errors, (PANEL_ROUNDOFF*scale)[..., None, :]), axis=-2)
     return terms, errors
 
 
@@ -332,7 +363,7 @@ def _line_positions(material, loss, q_offset, upper_squared):
         else:
             fixed += osc.strength_eV2 / complex((osc.energy_eV-loss)*(osc.energy_eV+loss),
                                                 -osc.width_eV*loss)
-    if not dispersive:
+    if material.gap_eV or not dispersive:
         return
     if len(dispersive) == 1 and fixed == 0:
         # For one oscillator the surface denominator is 2(Ω²-T²-iΓT) − A.
@@ -440,11 +471,24 @@ def _initial_edges(material, loss, lower, upper, q_offset, limit):
     edges = _log_breakpoints(material, loss, lower, upper, q_offset)
     if len(edges) - 1 > limit:
         raise _PanelLimitError(f"integration limit too small for {len(edges) - 1} initial oscillator panels")
+    if material.gap_eV:
+        edges = resolve_surface(material, loss, edges, q_offset, limit)
     return edges
 
 
-def _initial_panels(material, losses, energy, depth, omega, offsets, lower, upper, limit):
+def _initial_panels(material, losses, energy, depth, omega, offsets, lower, upper, limit, charge=1.):
     """Evaluate both rules for a batch of loss grids; each grid keeps its own panel boundaries."""
+    if material.gap_eV and charge == 1:
+        subgap = losses < material.gap_eV
+        if subgap.any() and not subgap.all():
+            # Only certified sub-gap rows get a ninth (direct total) density.
+            ordered = [None] * len(losses)
+            for mask in (subgap, ~subgap):
+                group = _initial_panels(material, losses[mask], energy, depth, omega[mask], offsets[mask],
+                                        lower[mask], upper[mask], limit, charge)
+                for i, panels in zip(np.flatnonzero(mask), group):
+                    ordered[i] = panels
+            return ordered
     edges = [_initial_edges(material, t, lo, hi, off, limit)
              for t, lo, hi, off in zip(losses, lower, upper, offsets)]
     counts = [len(e) - 1 for e in edges]
@@ -456,6 +500,11 @@ def _initial_panels(material, losses, energy, depth, omega, offsets, lower, uppe
 
     def integrand(k, relative_z, _left, _right):
         q = np.hypot(k, offset) if offset.any() else k
+        if material.gap_eV:
+            coefficients = _coefficients(material, loss, q if dispersive else np.zeros_like(loss),
+                                         relative_z=relative_z if dispersive else 0.)
+            return _term_integrands(k, coefficients, energy, depth, frequency,
+                                    direct_total=charge == 1 and np.any(loss < material.gap_eV))
         coefficients = _coefficients(material, loss, q if dispersive else np.zeros_like(loss), bounded=True)
         if dispersive:
             _include_node_roundoff(material, loss, q, relative_z, coefficients)
@@ -563,6 +612,78 @@ def _integrate_loss(material, loss, energy, depth, omega, q_offset, lower, upper
         arithmetic = np.vstack((arithmetic, child_arithmetic[1]))
 
 
+def _integrate_gap(material, loss, energy, depth, omega, q_offset, lower, upper,
+                   charge, epsabs, epsrel, limit, initial):
+    """Assess all eleven budgets on the same mesh, including the direct I9 sum."""
+    direct = charge == 1 and loss < material.gap_eV
+    dispersive = any(o.strength_eV2 and o.dispersion for o in material.oscillators)
+
+    def integrand(k, relative_z, _left, _right):
+        q = np.hypot(k, q_offset) if dispersive else np.zeros(1)
+        coeff = _coefficients(material, loss, q, relative_z=relative_z if dispersive else 0.)
+        return _term_integrands(k, coeff, energy, depth, omega, direct_total=direct)
+
+    if initial is None:
+        edges = _initial_edges(material, loss, lower, upper, q_offset, limit)
+        panels = _panel_integrals(edges[:-1], edges[1:], integrand)
+    else:
+        edges, panels = initial
+    left, right = edges[:-1].copy(), edges[1:].copy()
+    columns = 9 if direct else 8
+    values, errors, arithmetic = (a[:, :columns].copy() for a in panels)
+    while True:
+        sums = np.array([math.fsum(col) for col in values.T])
+        terms = sums[:8]
+        components = _component_sums(terms, charge)
+        outputs = np.concatenate((terms, components))
+        budgets = _accuracy(outputs, epsabs, epsrel)
+        # Round the panel reduction and the final signed group additions.
+        panel_errors = errors + FLOAT_EPSILON*abs(values)
+        term_errors = panel_errors[:, :8]
+        group_errors = _component_sums(term_errors, abs(charge))
+        group_errors += 8*FLOAT_EPSILON*_component_sums(abs(values[:, :8]), abs(charge))
+        if direct:
+            # The exact unit-charge density vanishes for every real S,R.
+            # Coefficient errors cancel here only. Keep the discrepancy with
+            # the API's independently grouped returned value in its budget.
+            group_errors[:, 2] = panel_errors[:, 8]
+        contributions = np.column_stack((term_errors, group_errors))
+        estimates = contributions.sum(axis=0)
+        if direct:
+            discrepancy = abs(components[-1] - sums[8])
+            estimates[-1] += discrepancy
+        if np.all(estimates <= budgets):
+            return terms, estimates
+        if len(left) >= limit or not np.all(np.isfinite(estimates)):
+            raise FixedDepthConvergenceError(f"hard-gap quadrature did not converge with {len(left)} panels")
+        # D3 has no exact-point fallback. Subdivision cannot improve a mesh
+        # whose positive arithmetic floor alone already exhausts a budget.
+        floors = arithmetic.sum(axis=0)
+        floor_groups = _component_sums(floors[:8], abs(charge))
+        if direct:
+            floor_groups[-1] = floors[8]
+        if np.any(np.concatenate((floors[:8], floor_groups)) > budgets):
+            raise FixedDepthConvergenceError("hard-gap arithmetic error exceeds an output budget")
+        priority = np.max(contributions/budgets, axis=1)
+        if direct:
+            # Allocate only the budget left by the observed reconstruction
+            # discrepancy. If it consumes the budget, localize the mismatch.
+            local_mismatch = abs(_component_sums(values[:, :8], 1.)[:, 2] - values[:, 8])
+            priority = np.maximum(priority, (panel_errors[:, 8] + local_mismatch) /
+                                  max(budgets[-1] - discrepancy, FLOAT_EPSILON*budgets[-1], math.ulp(0.)))
+        panel = priority.argmax()
+        midpoint = (left[panel] + right[panel])/2
+        a = np.array([left[panel], midpoint])
+        b = np.array([midpoint, right[panel]])
+        children = _panel_integrals(a, b, integrand)
+        for array, child in zip((values, errors, arithmetic), children):
+            array[panel] = child[0]
+        values, errors, arithmetic = (np.vstack((array, child[1]))
+                                      for array, child in zip((values, errors, arithmetic), children))
+        right[panel] = midpoint
+        left, right = np.append(left, midpoint), np.append(right, b[1])
+
+
 def effective_cross_section_fixed_depth(
     material: Material, electron_energy_eV, loss_eV, depth_A, *, theta_deg=0.0,
     hole_charge=1.0, epsilon_momentum, epsabs=FIXED_ABS, epsrel=FIXED_REL, limit=200,
@@ -576,12 +697,13 @@ def effective_cross_section_fixed_depth(
     Every nonzero line must be resolved on the momentum grid. Strength alone
     cannot bound its peak or its effect on the coupled surface denominator.
     The static sign is checked at the smallest q reached across all supplied
-    losses for the selected epsilon_momentum.
+    losses for the selected epsilon_momentum. For a positive gap, the retarded
+    point value requires a proved sub-gap surface-mode exclusion. component_errors
+    contains absolute estimates for all eleven outputs and quadrature_error is
+    their pointwise maximum. The gapless common-error contract is unchanged.
     """
     if not isinstance(material, Material):
         raise ValueError("material must be a Material")
-    if material.gap_eV > 0:
-        raise ValueError("fixed-depth gapped materials are deferred to M2-2")
     if not isinstance(epsilon_momentum, str) or epsilon_momentum not in EPSILON_MOMENTA:
         raise ValueError("epsilon_momentum must be 'k_parallel' or 'k_total'")
     theta = finite_number(theta_deg, "theta_deg")
@@ -596,8 +718,12 @@ def effective_cross_section_fixed_depth(
     if grid.dtype.kind not in "fiu" or grid.ndim != 1 or not grid.size:
         raise ValueError("loss_eV must be a real scalar or a nonempty one-dimensional grid")
     grid = np.array(grid, dtype=float)
-    if not np.all((grid > 0) & (grid < energy)):
-        raise ValueError("require 0 < loss_eV < electron_energy_eV; the zero-loss delta term is excluded")
+    valid = (grid > 0) & (grid < energy)
+    if not np.all(valid):
+        message = "require 0 < loss_eV < electron_energy_eV; the zero-loss delta term is excluded"
+        if material.gap_eV:
+            message += " at " + ", ".join(_loss_point(grid, (j,)) for j in np.flatnonzero(~valid))
+        raise ValueError(message)
     epsabs, epsrel = finite_number(epsabs, "epsabs"), finite_number(epsrel, "epsrel")
     if epsabs <= 0 or epsrel <= 0:
         raise ValueError("epsabs and epsrel must be positive")
@@ -605,20 +731,37 @@ def effective_cross_section_fixed_depth(
         raise ValueError("limit must be a positive integer")
 
     with np.errstate(over="ignore", divide="ignore", invalid="ignore", under="ignore"):
+        diagnostics, warnings = {}, ()
+        gapped = material.gap_eV > 0
+        if gapped:
+            check_edges(material, grid)
         lower, upper = _parallel_limits(energy, grid)
         omega = grid / (2 * math.sqrt(HBAR2_OVER_2ME_EV_A2 * energy))
         bad = ~((lower > 0) & (lower < upper) & np.isfinite(upper) & (omega > 0) & np.isfinite(omega))
-        if np.any(bad):
-            raise FixedDepthConvergenceError(f"parallel momentum bounds unresolved at {_first_loss(grid, bad)}")
         offsets = omega if epsilon_momentum == "k_total" else np.zeros_like(omega)
+        if gapped:
+            qlo, qhi = np.hypot(lower, offsets), np.hypot(upper, offsets)
+            bad |= ~((qlo < qhi) & np.isfinite(qhi))
+        if np.any(bad):
+            if gapped:
+                locations = ", ".join(_loss_point(grid, (j,)) for j in np.flatnonzero(bad))
+                raise FixedDepthConvergenceError(f"parallel momentum bounds unresolved at {locations}")
+            raise FixedDepthConvergenceError(f"parallel momentum bounds unresolved at {_first_loss(grid, bad)}")
         # For nonnegative dispersions static F is largest at the smallest q.
         i = int(np.hypot(lower, offsets).argmin())
         try:
-            _checked_static_response(material, np.hypot(lower[i], offsets[i]))
-        except NumericalConvergenceError as exc:
+            if gapped:
+                diagnostics, warnings = gap_preflight(material, energy, grid, qlo, qhi,
+                                                       epsilon_momentum == "k_total")
+            else:
+                _checked_static_response(material, np.hypot(lower[i], offsets[i]))
+        except (ArithmeticError, NumericalConvergenceError) as exc:
+            if not gapped and isinstance(exc, ArithmeticError):
+                raise
             raise FixedDepthConvergenceError(f"fixed-depth at {_loss_point(grid, (i,))}: {exc}") from exc
         terms = np.empty((len(TERM_NAMES), grid.size))
         error = np.empty(grid.size)
+        output_errors = np.empty((grid.size, 11)) if gapped else None
         batch = None
         for i, t in enumerate(grid):
             try:
@@ -627,13 +770,19 @@ def effective_cross_section_fixed_depth(
                         block = slice(i, i + LOSS_BATCH)
                         try:
                             batch = _initial_panels(material, grid[block], energy, depth, omega[block],
-                                                    offsets[block], lower[block], upper[block], limit)
+                                                    offsets[block], lower[block], upper[block], limit, charge)
                         except (ArithmeticError, NumericalConvergenceError, _PanelLimitError):
                             # Replay individually to report the original loss and grid index.
                             batch = None
-                    terms[:, i], error[i] = _integrate_loss(
+                    integrate = _integrate_gap if gapped else _integrate_loss
+                    terms[:, i], estimate = integrate(
                         material, t, energy, depth, omega[i], offsets[i], lower[i], upper[i],
                         charge, epsabs, epsrel, limit, batch[i % LOSS_BATCH] if batch is not None else None)
+                    if gapped:
+                        output_errors[i] = estimate
+                        error[i] = max(estimate)
+                    else:
+                        error[i] = estimate
             except _PanelLimitError as exc:
                 raise ValueError(f"fixed-depth at {_loss_point(grid, (i,))}: {exc}") from exc
             except (ArithmeticError, NumericalConvergenceError) as exc:
@@ -642,5 +791,16 @@ def effective_cross_section_fixed_depth(
         bad = ~(np.isfinite(total) & np.isfinite(hole) & np.isfinite(no_hole))
         if np.any(bad):
             raise FixedDepthConvergenceError(f"fixed-depth oscillator sum outside numerical range at {_first_loss(grid, bad)}")
+    component_errors = {}
+    if gapped:
+        names = (*TERM_NAMES, "no_hole", "hole", "total")
+        component_errors = dict(zip(names, output_errors.T))
+        values = np.column_stack((*terms, no_hole, hole, total))
+        ratios = output_errors/_accuracy(values, epsabs, epsrel)
+        diagnostics["error_budget_ratios"] = dict(zip(names, ratios.T.tolist()))
+        magnitude = abs(terms).sum(axis=0)
+        mask = (grid < material.gap_eV) & (magnitude > 0)
+        diagnostics["max_subgap_identity_residual"] = (float(np.max(abs(no_hole[mask]+hole[mask])/magnitude[mask]))
+                                                       if mask.any() else None)
     return FixedDepthResult(energy, depth, depth, theta, charge, epsilon_momentum,
-                            grid, *terms, no_hole, hole, total, error)
+                            grid, *terms, no_hole, hole, total, error, component_errors, diagnostics, warnings)
