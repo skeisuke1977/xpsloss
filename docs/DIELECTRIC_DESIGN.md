@@ -207,7 +207,7 @@ for upper in (24, 48, 96):
 | E4a、E4c | Bobrov ら著者公開版 PDF p. 2 式 (4)、(7)。周波数の偶奇性と固定 \(q\) の遅延応答。E4c は分子定数の引き算 | \(F,L\) は無次元、\(u,T\) は eV | `negative_inverse_dielectric_function`。直接の Cauchy 主値積分と対数発散係数 |
 | D2、D3 | E4a と Tougaard ら (2022) PDF p. 4 式 (9)、(10) から部分分数で導出。正のギャップの実部に適用。虚部は E1、ギャップなしは E4b | \(D\) は eV⁴、\(P_g,J_g\) は eV\(^{-1}\)、\(Q_g\) は eV\(^{-3}\) | `negative_inverse_dielectric_closed_form`。減衰 5 条件とギャップ 2 条件の主値積分。狭い共鳴での桁落ち検出 |
 | E4d と極 | \(F=-1/\epsilon\) の定義と E4a の複素延長。Bobrov ら著者公開版 PDF p. 2 式 (1)、(2)、(5)、(7) を参照 | \(F,\epsilon\) は無次元 | `dielectric_response`。真空、受動性、静的な Drude 極、上半平面の極 |
-| D4 | Tougaard ら (2022) PDF p. 5 式 (11) の符号を E4a の静的極限から確定。第一モーメントは E4a と E4b の高エネルギー展開 | \(S_0,R_0\) は無次元、\(M_1\) は eV² | `optical_sum_rule_lhs`、`optical_sum_rule_residual`、`optical_elf_first_moment`。ギャップゼロの閉形式とギャップありの直接積分 |
+| D4 | Tougaard ら (2022) PDF p. 5 式 (11) の符号を E4a の静的極限から確定。第一モーメントは E4a と E4b の高エネルギー展開 | \(S_0,R_0\) は無次元、\(M_1\) は eV² | `optical_sum_rule_lhs`、`optical_sum_rule_residual`、`optical_elf_first_moment`。ギャップゼロの閉形式とギャップありの直接積分。ギャップのない場合は閉形式なので、`epsabs`・`epsrel` は求積に使わず、結果は丸めの範囲で決まる（段階4g、各関数の docstring） |
 | D5、D6、D8 | Bobrov ら著者公開版 PDF p. 2 式 (7) と E4a の正エネルギー核を、線形補間と固定指数の尾へ適用 | \(a,b,x_i,T\) は eV、\(m_i\) は eV\(^{-1}\)、尾部係数は eV³、\(\Delta\operatorname{Re}F\) は無次元 | `tabulated_elf_kk`。不等間隔の数値主値積分、連続接続、尾部警告と感度表 |
 | D7 | 実装上の数値判定基準。倍精度の格子と符号判定に適用。警告の対数項は E4a の端の漸近形 | \(\delta_g\) は eV、\(\tau_0\) と対数項は無次元 | `dielectric_response` と `dielectric_diagnostics`。丸めの異なる Drude 入力、Al・Au、ギャップ端上およびその近傍の格子、最小の正のギャップ、独立な零点探索 |
 

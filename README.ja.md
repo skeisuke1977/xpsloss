@@ -50,7 +50,7 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m xpsloss dielectric examples/synthetic_bulk.json --q-inv-A 0.5 --out runs/dielectric-demo
 .\.venv\Scripts\python.exe -m xpsloss bulk examples/synthetic_bulk.json --out runs/bulk-demo
 .\.venv\Scripts\python.exe -m xpsloss xps-fixed-depth examples/synthetic_bulk.json --depth-A 10 --epsilon-momentum k_total --out runs/xps-fixed-depth-demo
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe tests\run_suite.py
 ```
 
 `xps-fixed-depth` は、表面法線からの出射角0°、生成深さ `--depth-A` で、正孔ありの有効断面積と、その「正孔なし」「正孔（単位電荷）」成分、項ごとの値を出力します。`--epsilon-momentum` は必須です。`k_total`（全運動量で ε を評価）を選ぶと、深い極限でバルクの式に一致します。`k_parallel` は原著の閉形式の導出どおりの評価です。
@@ -75,7 +75,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e .
 .venv/bin/python -m xpsloss capabilities --json
 .venv/bin/python -m xpsloss bulk examples/synthetic_bulk.json --out runs/bulk-demo
-.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python tests/run_suite.py
 ```
 
 **`examples/` の例題は合成材料です。Al、CoO、Siなどの実測・文献データとして利用しないでください。** 文献由来の入力は `benchmarks/inputs/` にだけ置き、出典ごとに分けています。既存の出力ディレクトリには上書きしません。再計算するときは新しい出力名を指定します。
@@ -106,4 +106,4 @@ Keisuke Sato がコードを MIT、自作文書を CC BY 4.0 で提供します�
 - `docs/REFERENCES.md`: 一次資料と用途。
 - `NOTICES.md`: ライセンスの適用範囲、同梱データの帰属表示、参照ソフトとの関係。
 
-現在の全131件は、Windows の Python 3.12.10 と 3.10.22（依存の最低版）で、作業ツリーから合格しています。最後の修正（段階4f）の前の公開候補では、全119件が、Windows の Python 3.12.10（NumPy 2.5.5、SciPy 1.18.1）と Python 3.10.22（NumPy 1.24.0、SciPy 1.10.0）で、作業ツリーから合格しました。Python 3.12.10 では、展開した sdist からも合格しました。UTF-8 モードを使わず、リダイレクトした出力は既定の文字コード（cp932）でした。その前の版の全112件は、両方の環境で展開した sdist からも合格しました。別担当も、Windows の Python 3.11.14（NumPy 2.4.6、SciPy 1.17.1）で、展開した sdist の全112件を確認しました。以前の版のテスト（75件）は、CI で Linux（Python 3.10 と依存の最低版、3.12）、Windows（3.12）、macOS（3.13）と、wheel の導入・展開した sdist のテストのジョブに合格しました。コミット `5625455` の公開候補（131件）は、CI（run 44850011206）で Linux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）と配布物のジョブに合格しました。2つの照合も合格しました。その前の公開候補 `c7fdd22`（119件）も、同じジョブに合格しています。詳細は `docs/VALIDATION.md` を参照してください。
+現在の全157件は、Windows の Python 3.12.10 と 3.10.22（依存の最低版）で、作業ツリーから合格しています。最後の修正（段階4f）の前の公開候補では、全119件が、Windows の Python 3.12.10（NumPy 2.5.5、SciPy 1.18.1）と Python 3.10.22（NumPy 1.24.0、SciPy 1.10.0）で、作業ツリーから合格しました。Python 3.12.10 では、展開した sdist からも合格しました。UTF-8 モードを使わず、リダイレクトした出力は既定の文字コード（cp932）でした。その前の版の全112件は、両方の環境で展開した sdist からも合格しました。別担当も、Windows の Python 3.11.14（NumPy 2.4.6、SciPy 1.17.1）で、展開した sdist の全112件を確認しました。以前の版のテスト（75件）は、CI で Linux（Python 3.10 と依存の最低版、3.12）、Windows（3.12）、macOS（3.13）と、wheel の導入・展開した sdist のテストのジョブに合格しました。コミット `5625455` の公開候補（131件）は、CI（run 44850011206）で Linux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）と配布物のジョブに合格しました。2つの照合も合格しました。その前の公開候補 `c7fdd22`（119件）も、同じジョブに合格しています。詳細は `docs/VALIDATION.md` を参照してください。

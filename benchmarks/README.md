@@ -48,7 +48,7 @@ export PYTHONPATH=src QUEELS_EXPORT_DIR=/path/to/exports
 python benchmarks/compare_queels_fixed_depth.py --reference-dir "$QUEELS_EXPORT_DIR" --out comparison.json
 ```
 
-`--out` には新しいファイル名を指定します。既存のファイルを指定すると、終了コード1で止まります。比較が完了すると終了コードは0です。各運動量指定の合否は、標準出力と JSON の `choices` にある `pass` で確かめます。
+`--out` には新しいファイル名を指定します。終了コードは、基準を満たせば0、満たさなければ1、入力の誤り（既存の出力先、ファイルの不足、有限でない値、格子の食い違いなど）なら2です。各運動量指定の合否は、標準出力と JSON の `choices` にある `pass` で確かめます。
 
 2026-11-20 の比較では、分散のあるAlで両方の運動量指定が不合格でした。合成入力3件で行った追試には、候補式が参照出力と一致した条件と許容幅を記録しています。[事前登録試験と結果](../docs/QUEELS_DISPERSION_TEST.md)
 
