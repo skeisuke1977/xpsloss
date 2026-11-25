@@ -3,8 +3,11 @@ message: "If you use xpsloss in your research, please cite this software."
 title: xpsloss
 version: "0.2.0"
 date-released: "2026-11-25"
-doi: 10.5281/zenodo.24490457
+doi: 10.5281/zenodo.24543166
 identifiers:
+  - type: doi
+    value: 10.5281/zenodo.24543166
+    description: "Version 0.2.0"
   - type: doi
     value: 10.5281/zenodo.24490457
     description: "All versions; resolves to the latest version"

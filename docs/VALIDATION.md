@@ -2,6 +2,20 @@
 
 文書中の `work/` はレビュー原本、転記、参照ソフト出力などを保管する非公開の作業フォルダーであり、リポジトリと配布物の対象外である。過去の記録で公開方針を決定した「利用者」は、プロジェクトの所有者を指す。
 
+## 0.2.0 公開（2026-11-25）
+
+利用者の決定（2026-11-25）により、0.2.0 を公開した。
+
+| 対象 | 条件と結果 |
+| --- | --- |
+| 公開用のコミット | `023820c`。M3a まで検証した `86c9266` に、版・書誌・文書だけの変更を加えた（下の「0.2.0 公開準備」） |
+| 公開用のコミットの CI | GitHub Actions の run 45695975423 で全5ジョブが合格した。Linux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）で 275 件のテストが合格し（skip 13 件）、`predict --check` と `generate.py --check` も合格した。配布物のジョブでは wheel の CLI と、展開した sdist の 275 件（skip 15 件）、2つの照合が合格した |
+| 公開 | 利用者が `023820c` に注釈付きタグ `v0.2.0`（タグオブジェクト `5ea5a5a`）を付け、GitHub の Release「xpsloss 0.2.0」を作った（2026-11-25 20:44 UTC）。`v0.1.0` は `0167e38` のまま |
+| Zenodo | Release から版の記録が作られた。版の DOI は 10.5281/zenodo.24543166（版 0.2.0、2026-11-25）。DataCite で findable で、すべての版をまとめた DOI 10.5281/zenodo.24490457 の版として登録され、doi.org で解決する |
+| 公開したタグからの再現 | GitHub と同じタグオブジェクトの `v0.2.0` から `git archive` で取り出したツリーだけを、新しい仮想環境（Windows 11、Python 3.12.10、NumPy 2.5.5、SciPy 1.18.1、PYTHONUTF8 と PYTHONIOENCODING なし）に `pip install .` で導入した。README の6つのコマンド（`capabilities`、`validate`、`bulk`、`dielectric`、`xps-fixed-depth`、`xps-depth-averaged`）が終了 0 で成功し、stderr は空だった。警告は深さ平均の常に出る注意4件だけで、`pip check` も通った。275 件のテストが合格し（Git の履歴がないので skip は 15 件）、`predict --check` と `generate.py --check` も合格した（合わせて 742 秒） |
+
+DOI の追記は、タグの後の main のコミットで行った（タグは動かしていない）。
+
 ## 0.2.0 公開準備（2026-11-25）
 
 公開候補は、M3a まで検証した main（`86c9266`。CI の run 45583703820 で全5ジョブが合格）に、版・書誌・文書だけの変更を加えたコミットである。コードは変えていない。
@@ -11,7 +25,7 @@
 | 作業ツリー | Windows 11、Python 3.12.10、NumPy 2.5.5、SciPy 1.18.1、PYTHONUTF8 と PYTHONIOENCODING なし。全 275 件が合格した（13 件は skip。求めたときだけ動く全件の検査と V9）。同じ PC で他の計算が動いていたため、約 1120 秒かかった |
 | 展開した sdist | 公開候補から作った `xpsloss-0.2.0.tar.gz` を展開し、Python 3.12.10 で全 275 件が合格した（Git がないため比較の2件が加わり、skip は 15 件）。`xpsloss --version` は 0.2.0 |
 | 版・書誌・文書 | `__version__`、CHANGELOG の日付、CITATION.cff（版、日付、要旨。DOI の欄は全版の DOI）、`.zenodo.json`（版、説明）、README（日英）、AGENTS.md、CLAUDE.md、ROADMAP、NEXT_TASK |
-| CI | 利用者が公開候補を push した後に記録する |
+| CI | 利用者が公開候補を push し、run 45695975423 で全5ジョブが合格した（上の「0.2.0 公開」） |
 
 ## v0.1.0 公開準備（2026-11-20）
 
