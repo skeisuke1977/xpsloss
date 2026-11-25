@@ -1,4 +1,10 @@
-"""Dielectric response, XPS cross sections and finite-window single-loss spectra."""
+"""Independent dielectric response, bulk, fixed-depth and depth-averaged XPS losses,
+and the single-loss spectrum with finite loss-window areas at normal emission.
+
+Not a full QUEELS-XPS implementation: oblique emission, trajectory-dependent
+weight lengths, multiple scattering and full spectra beyond single loss are
+not implemented.
+"""
 
 __version__ = "0.3.0.dev0"
 

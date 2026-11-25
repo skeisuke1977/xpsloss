@@ -182,8 +182,8 @@ def run(args):
     files = {"window_area.csv": _csv(_areas(result))}
     if spectrum:
         files["single_loss_spectrum.csv"] = _csv(_regions(result))
-    inputs = {"electron_energy_eV", "loss_window_eV", "weight_length_A", "epsilon_momentum",
-              "hole_charge", "theta_deg", "diagnostics", "warnings", "output_edges_eV", "primary"}
+    # prereg 4.4: results carries every field of 4.1, including the input copies.
+    not_results = {"diagnostics", "warnings", "primary"}
     units = dict(loss_window_eV="eV", kernel_energy_eV="eV", theta_deg="degree from surface normal",
                  weight_length_A="angstrom", window_area="angstrom^-1", inverse_window_area_A="angstrom",
                  cutoff_sensitivity="dimensionless", single_loss_weight="dimensionless")
@@ -202,7 +202,7 @@ def run(args):
                         length_kind="external_constant", length_source=args.weight_length_source),
                         kernel_energy_eV=config.electron_energy_eV, axis="kinetic_energy_eV", config_loss_grid_used=False),
                     effective_settings=settings, effective_settings_sources=sources, primary=primary_record,
-                    output_edges_eV=edges, results={k: v for k, v in vars(result).items() if k not in inputs},
+                    output_edges_eV=edges, results={k: v for k, v in vars(result).items() if k not in not_results},
                     diagnostics=result.diagnostics, comparison=result.diagnostics["comparison"])
     files["run.json"] = json.dumps(json_value(manifest), ensure_ascii=False, allow_nan=False, indent=2)+"\n"
     # Serialize everything before claiming the directory, then write the
