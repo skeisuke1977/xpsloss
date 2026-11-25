@@ -251,6 +251,13 @@ class V9PathThree(unittest.TestCase):
         failures, uncertified = [], []
         entries = [e for e in self.paths["path3"] if e["weight_length_A"] in lams]
         self.assertEqual(len(entries), 2 * 3 * len(lams), "path-3 entries (2 materials x 3 charges per length)")
+        statuses = {p["status"] for e in entries for p in e["points"]}
+        if statuses == {"not_computed"}:
+            # Owner decision (2026-11-25): V9 is recorded as not obtained; the frozen path-3 rule was too
+            # costly to run (docs/M3A_PREREG.md, appendix). Any computed path-3 value is compared in full.
+            self.assertTrue(all(e["scale_max_abs_K_total"] is None for e in entries))
+            self.assertTrue(all(len(e["points"]) == 9 for e in entries))
+            self.skipTest("V9 not obtained: path 3 not computed (owner decision 2026-11-25, see the appendix)")
         for entry in entries:
             if entry.get("status") == "not_computed":
                 uncertified.append((entry["material"], entry["weight_length_A"], "not computed"))
