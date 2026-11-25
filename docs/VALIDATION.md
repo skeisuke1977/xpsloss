@@ -14,7 +14,7 @@
 | Zenodo | Release から版の記録が作られた。版の DOI は 10.5281/zenodo.24543166（版 0.2.0、2026-11-25）。DataCite で findable で、すべての版をまとめた DOI 10.5281/zenodo.24490457 の版として登録され、doi.org で解決する |
 | 公開したタグからの再現 | GitHub と同じタグオブジェクトの `v0.2.0` から `git archive` で取り出したツリーだけを、新しい仮想環境（Windows 11、Python 3.12.10、NumPy 2.5.5、SciPy 1.18.1、PYTHONUTF8 と PYTHONIOENCODING なし）に `pip install .` で導入した。README の6つのコマンド（`capabilities`、`validate`、`bulk`、`dielectric`、`xps-fixed-depth`、`xps-depth-averaged`）が終了 0 で成功し、stderr は空だった。警告は深さ平均の常に出る注意4件だけで、`pip check` も通った。275 件のテストが合格し（Git の履歴がないので skip は 15 件）、`predict --check` と `generate.py --check` も合格した（合わせて 742 秒） |
 
-DOI の追記は、タグの後の main のコミットで行った（タグは動かしていない）。
+DOI の追記は、タグの後の main のコミットで行った（タグは動かしていない）。そのコミットと版の 0.3.0.dev0 への切り替え（`aea634f`）も、run 45710633267 で CI の全5ジョブが合格した。
 
 ## 0.2.0 公開準備（2026-11-25）
 
