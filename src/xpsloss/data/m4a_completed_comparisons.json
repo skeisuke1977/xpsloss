@@ -1,6 +1,4892 @@
 {
-  "version": "m4a-v0",
-  "registration_sha256": "250b45f863ccbd1c4c94474f23769976380c5dad5c2671328712ef4acdc7f408",
-  "reference_sha256": null,
-  "records": []
+ "records": [
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "max_cells": 2000000,
+     "panel_limit": 400,
+     "spectrum_epsabs_fraction": 1e-09
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_total",
+    "hole_charge": 1.0,
+    "loss_window_eV": [
+     1.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 0.0,
+     "oscillators": [
+      [
+       15.6,
+       243.3598,
+       1.5,
+       1.0
+      ]
+     ]
+    },
+    "output_edges_eV": [
+     960.0,
+     980.0,
+     984.0,
+     988.0,
+     995.0,
+     999.0,
+     1000.0,
+     1001.0
+    ],
+    "primary": {
+     "energies_eV": [
+      1000.0
+     ],
+     "intensities": [
+      1.0
+     ],
+     "kind": "delta"
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "single_loss_spectrum",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    },
+    "spectrum": {
+     "bin[0].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB1"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "max_cells": 2000000,
+     "panel_limit": 400,
+     "spectrum_epsabs_fraction": 1e-09
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_parallel",
+    "hole_charge": 1.0,
+    "loss_window_eV": [
+     1.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 0.0,
+     "oscillators": [
+      [
+       15.6,
+       243.3598,
+       1.5,
+       1.0
+      ]
+     ]
+    },
+    "output_edges_eV": [
+     960.0,
+     980.0,
+     984.0,
+     988.0,
+     995.0,
+     999.0,
+     1000.0,
+     1001.0
+    ],
+    "primary": {
+     "energies_eV": [
+      1000.0
+     ],
+     "intensities": [
+      1.0
+     ],
+     "kind": "delta"
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "single_loss_spectrum",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    },
+    "spectrum": {
+     "bin[0].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB2"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "max_cells": 2000000,
+     "panel_limit": 400,
+     "spectrum_epsabs_fraction": 1e-09
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_total",
+    "hole_charge": 1.0,
+    "loss_window_eV": [
+     5.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 1.12,
+     "oscillators": [
+      [
+       10.0,
+       6.08458,
+       5.0,
+       0.5
+      ],
+      [
+       14.0,
+       30.4229,
+       5.0,
+       0.5
+      ],
+      [
+       16.8,
+       212.9603,
+       3.8,
+       0.5
+      ]
+     ]
+    },
+    "output_edges_eV": [
+     960.0,
+     980.0,
+     984.0,
+     990.0,
+     998.0,
+     1000.0
+    ],
+    "primary": {
+     "edges_eV": [
+      998.0,
+      999.0,
+      1001.0
+     ],
+     "intensities": [
+      0.3,
+      0.7
+     ],
+     "kind": "binned"
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "single_loss_spectrum",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    },
+    "spectrum": {
+     "bin[0].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB3"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "max_cells": 2000000,
+     "panel_limit": 400,
+     "spectrum_epsabs_fraction": 1e-09
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_parallel",
+    "hole_charge": 1.0,
+    "loss_window_eV": [
+     5.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 1.12,
+     "oscillators": [
+      [
+       10.0,
+       6.08458,
+       5.0,
+       0.5
+      ],
+      [
+       14.0,
+       30.4229,
+       5.0,
+       0.5
+      ],
+      [
+       16.8,
+       212.9603,
+       3.8,
+       0.5
+      ]
+     ]
+    },
+    "output_edges_eV": [
+     960.0,
+     980.0,
+     984.0,
+     990.0,
+     998.0,
+     1000.0
+    ],
+    "primary": {
+     "edges_eV": [
+      998.0,
+      999.0,
+      1001.0
+     ],
+     "intensities": [
+      0.3,
+      0.7
+     ],
+     "kind": "binned"
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "single_loss_spectrum",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    },
+    "spectrum": {
+     "bin[0].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB4"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "max_cells": 2000000,
+     "panel_limit": 400,
+     "spectrum_epsabs_fraction": 1e-09
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_total",
+    "hole_charge": 1.0,
+    "loss_window_eV": [
+     1.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 0.0,
+     "oscillators": [
+      [
+       15.6,
+       243.3598,
+       1.5,
+       1.0
+      ]
+     ]
+    },
+    "output_edges_eV": [
+     960.0,
+     980.0,
+     984.0,
+     988.0,
+     995.0,
+     999.0,
+     1000.0,
+     1001.0
+    ],
+    "primary": {
+     "energies_eV": [
+      1000.0
+     ],
+     "intensities": [
+      1.0
+     ],
+     "kind": "delta"
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 5.0
+   },
+   "entry": "single_loss_spectrum",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    },
+    "spectrum": {
+     "bin[0].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB5"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "max_cells": 2000000,
+     "panel_limit": 400,
+     "spectrum_epsabs_fraction": 1e-09
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_total",
+    "hole_charge": 0.0,
+    "loss_window_eV": [
+     1.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 0.0,
+     "oscillators": [
+      [
+       15.6,
+       243.3598,
+       1.5,
+       1.0
+      ]
+     ]
+    },
+    "output_edges_eV": [
+     960.0,
+     980.0,
+     984.0,
+     988.0,
+     995.0,
+     999.0,
+     1000.0,
+     1001.0
+    ],
+    "primary": {
+     "energies_eV": [
+      1000.0
+     ],
+     "intensities": [
+      1.0
+     ],
+     "kind": "delta"
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "single_loss_spectrum",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    },
+    "spectrum": {
+     "bin[0].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB6"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "max_cells": 2000000,
+     "panel_limit": 400,
+     "spectrum_epsabs_fraction": 1e-09
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_total",
+    "hole_charge": 0.5,
+    "loss_window_eV": [
+     1.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 0.0,
+     "oscillators": [
+      [
+       15.6,
+       243.3598,
+       1.5,
+       1.0
+      ]
+     ]
+    },
+    "output_edges_eV": [
+     960.0,
+     980.0,
+     984.0,
+     988.0,
+     995.0,
+     999.0,
+     1000.0,
+     1001.0
+    ],
+    "primary": {
+     "energies_eV": [
+      1000.0
+     ],
+     "intensities": [
+      1.0
+     ],
+     "kind": "delta"
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "single_loss_spectrum",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    },
+    "spectrum": {
+     "bin[0].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB7"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "max_cells": 2000000,
+     "panel_limit": 400,
+     "spectrum_epsabs_fraction": 1e-09
+    },
+    "electron_energy_eV": 1200.0,
+    "epsilon_momentum": "k_total",
+    "hole_charge": 1.0,
+    "loss_window_eV": [
+     1.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 0.0,
+     "oscillators": [
+      [
+       15.6,
+       243.3598,
+       1.5,
+       1.0
+      ]
+     ]
+    },
+    "output_edges_eV": [
+     1160.0,
+     1180.0,
+     1184.0,
+     1188.0,
+     1195.0,
+     1199.0,
+     1200.0,
+     1201.0
+    ],
+    "primary": {
+     "energies_eV": [
+      1200.0
+     ],
+     "intensities": [
+      1.0
+     ],
+     "kind": "delta"
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "single_loss_spectrum",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    },
+    "spectrum": {
+     "bin[0].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[0].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[1].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[2].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[3].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[4].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[5].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "bin[6].zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.high.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.minus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.cutoff_sensitivity.plus.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.single_loss_total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.spectrum": {
+      "reason": null,
+      "status": "pass"
+     },
+     "outside.low.zero_loss": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB8"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "panel_limit": 400
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_total",
+    "hole_charge": 1.0,
+    "loss_window_eV": [
+     1.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 0.0,
+     "oscillators": [
+      [
+       15.6,
+       243.3598,
+       1.5,
+       1.0
+      ]
+     ]
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "loss_window_area",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB1a"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "panel_limit": 400
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_parallel",
+    "hole_charge": 1.0,
+    "loss_window_eV": [
+     1.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 0.0,
+     "oscillators": [
+      [
+       15.6,
+       243.3598,
+       1.5,
+       1.0
+      ]
+     ]
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "loss_window_area",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB2a"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "panel_limit": 400
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_total",
+    "hole_charge": 1.0,
+    "loss_window_eV": [
+     5.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 1.12,
+     "oscillators": [
+      [
+       10.0,
+       6.08458,
+       5.0,
+       0.5
+      ],
+      [
+       14.0,
+       30.4229,
+       5.0,
+       0.5
+      ],
+      [
+       16.8,
+       212.9603,
+       3.8,
+       0.5
+      ]
+     ]
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "loss_window_area",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB3a"
+  },
+  {
+   "conditions": {
+    "effective_settings": {
+     "area_epsabs": 1e-10,
+     "epsrel": 1e-06,
+     "kernel_epsabs": 1e-12,
+     "kernel_epsrel": 1e-09,
+     "kernel_limit": 200,
+     "panel_limit": 400
+    },
+    "electron_energy_eV": 1000.0,
+    "epsilon_momentum": "k_parallel",
+    "hole_charge": 1.0,
+    "loss_window_eV": [
+     5.0,
+     50.0
+    ],
+    "material": {
+     "gap_eV": 1.12,
+     "oscillators": [
+      [
+       10.0,
+       6.08458,
+       5.0,
+       0.5
+      ],
+      [
+       14.0,
+       30.4229,
+       5.0,
+       0.5
+      ],
+      [
+       16.8,
+       212.9603,
+       3.8,
+       0.5
+      ]
+     ]
+    },
+    "theta_deg": 0.0,
+    "weight_length_A": 20.0
+   },
+   "entry": "loss_window_area",
+   "key_status": {
+    "areas": {
+     "cutoff_sensitivity.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "cutoff_sensitivity.total": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.lower": {
+      "reason": null,
+      "status": "pass"
+     },
+     "inverse_window_area_interval_A.upper": {
+      "reason": null,
+      "status": "pass"
+     },
+     "single_loss_weight": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.no_hole": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13a": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_13b": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_14": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T1": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T2": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_15_T3": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_e": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.term_16_h": {
+      "reason": null,
+      "status": "pass"
+     },
+     "window_area.total": {
+      "reason": null,
+      "status": "pass"
+     }
+    }
+   },
+   "row": "RB4a"
+  }
+ ],
+ "reference_sha256": {
+  "r_a": "d4b9939bc5a623ed794462a58584b4dd2b7e324452e9486f1d6f10f4e12d4c96",
+  "r_b": "942353c748b4959220ba4da15f078a8ebdbdd9833d3abdc2e80cb8acfd6e8d94"
+ },
+ "registration_sha256": "250b45f863ccbd1c4c94474f23769976380c5dad5c2671328712ef4acdc7f408",
+ "version": "m4a-1"
 }
