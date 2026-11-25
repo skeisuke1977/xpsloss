@@ -1,8 +1,4 @@
-"""Independent dielectric response, bulk losses and fixed-depth XPS cross sections.
-
-Not a full QUEELS-XPS implementation: depth averaging, oblique emission
-and spectra are not implemented.
-"""
+"""Independent dielectric response, bulk, fixed-depth and depth-averaged XPS losses."""
 
 __version__ = "0.2.0.dev0"
 
@@ -15,7 +11,12 @@ from .xps_fixed_depth import (
     FixedDepthConvergenceError, FixedDepthGapDomainError, FixedDepthResult, effective_cross_section_fixed_depth,
 )
 
+from .xps_depth_averaged import (
+    DepthAverageConvergenceError, DepthAveragedResult, effective_cross_section_depth_averaged,
+)
+
 __all__ = [
+    "DepthAverageConvergenceError", "DepthAveragedResult", "effective_cross_section_depth_averaged",
     "BulkConvergenceError", "NumericalConvergenceError",
     "DielectricConvergenceError", "DielectricResponse", "Material", "Oscillator",
     "bulk_diimfp", "dielectric_response", "loss_function", "negative_inverse_dielectric_function",

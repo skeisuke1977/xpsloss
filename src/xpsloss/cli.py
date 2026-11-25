@@ -20,10 +20,13 @@ from .dielectric import (
     DIELECTRIC_MODEL_ID, DielectricGapEdgeError,
     dielectric_diagnostics, dielectric_response,
 )
-from .model import (BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, MODEL_ID, FIXED_DEPTH_UNSUPPORTED_PHYSICS,
+from .model import (BOHR_RADIUS_A, DEFAULT_ABS, DEFAULT_REL, HBAR2_OVER_2ME_EV_A2, MODEL_ID, FIXED_DEPTH_UNSUPPORTED_PHYSICS,
                     Material, NumericalConvergenceError, Oscillator, UNSUPPORTED_PHYSICS, bulk_diimfp, finite_number, loss_function)
+from .xps_depth_averaged import (
+    DEPTH_AVERAGED_MODEL_ID, DepthAverageConvergenceError, effective_cross_section_depth_averaged,
+)
 from .xps_fixed_depth import (
-    EPSILON_MOMENTA, FIXED_DEPTH_MODEL_ID, TERM_NAMES,
+    EPSILON_MOMENTA, FIXED_ABS, FIXED_REL, FIXED_DEPTH_MODEL_ID, TERM_NAMES,
     FixedDepthConvergenceError, FixedDepthGapDomainError, FixedDepthResult, effective_cross_section_fixed_depth,
 )
 
@@ -62,15 +65,27 @@ class JSONParser(argparse.ArgumentParser):
         raise ValueError(message)
 
 
+_AVERAGE_UNSUPPORTED = (
+    "trajectory_dependent_weight_length", "elastic_scattering", "oblique_emission",
+    "nonuniform_depth_distribution", "loss_window_area", "full_spectrum", "multiple_scattering",
+)
+
+
 def capabilities():
     return {
         "package": "xpsloss", "version": __version__, "model_id": MODEL_ID,
         "status": "experimental",
         "supported": ["strict_json_validation", "drude_lindhard_elf", "bulk_diimfp",
-                      "causal_dielectric_response", "xps_fixed_depth"],
+                      "causal_dielectric_response", "xps_fixed_depth", "xps_depth_averaged"],
         "dielectric_model_id": DIELECTRIC_MODEL_ID,
         "bulk_unsupported_physics": list(UNSUPPORTED_PHYSICS),
         "bulk_unsupported_physics_model_id": MODEL_ID,
+        "xps_depth_averaged": {
+            "model_id": DEPTH_AVERAGED_MODEL_ID,
+            "scope": "Eq. (18) single scattering with an external constant length, normal emission, "
+                     "uniform semi-infinite medium, gapless or accepted hard gap",
+            "unsupported_physics": list(_AVERAGE_UNSUPPORTED),
+        },
         "xps_fixed_depth": {
             "model_id": FIXED_DEPTH_MODEL_ID,
             "scope": "positive fixed depth, 0 degrees from the surface normal, gapless or an accepted hard gap; sub-gap epsilon=-1 delta terms excluded",
@@ -135,7 +150,7 @@ def build_parser():
     cap.add_argument("--json", action="store_true", help="Print the capabilities as JSON (default).")
     val = sub.add_parser("validate")
     val.add_argument("config")
-    for name in ("bulk", "elf", "dielectric", "xps-fixed-depth"):
+    for name in ("bulk", "elf", "dielectric", "xps-fixed-depth", "xps-depth-averaged"):
         child = sub.add_parser(name)
         child.add_argument("config")
         child.add_argument("--out", type=Path, required=True, help="new output directory; never overwritten")
@@ -144,11 +159,25 @@ def build_parser():
                                help="wavevector in inverse angstrom; default 0 (optical limit)")
         if name == "xps-fixed-depth":
             child.add_argument("--depth-A", required=True, type=float, help="positive creation depth in angstrom")
+        if name == "xps-depth-averaged":
+            child.add_argument("--weight-length-A", required=True, type=float, help="external weight length in angstrom")
+            child.add_argument("--weight-length-source", help="source of the external weight length")
+        if name in ("xps-fixed-depth", "xps-depth-averaged"):
             child.add_argument("--epsilon-momentum", required=True, choices=EPSILON_MOMENTA)
             child.add_argument("--hole-charge", type=float, default=1.0, help="charge in units of +e")
             child.add_argument("--theta-deg", type=float, default=0.0,
                                help="angle from the surface normal (only 0 degrees)")
     return p
+
+
+def _trajectory_assumptions():
+    return {
+        "velocity": "constant_at_initial_kinetic_energy", "kinematics": "nonrelativistic",
+        "trajectory": "rectilinear", "core_hole": "static", "small_loss": "T << E0",
+        "pair_creation": "sudden_at_t0", "core_hole_lifetime": "infinite",
+        "surface": "specular_reflection_model",
+        "source": "Simonsen et al. (1997) p. 1613 and Eq. (3); docs/M1_EQUATION_MAP.md section 2",
+    }
 
 
 def _fixed_depth_applicability(result: FixedDepthResult, material: Material):
@@ -157,13 +186,7 @@ def _fixed_depth_applicability(result: FixedDepthResult, material: Material):
     departures = []
     applicability = {
         "max_loss_over_E0": ratio, "electron_energy_eV": energy, "epsilon_momentum": result.epsilon_momentum,
-        "assumptions": {
-            "velocity": "constant_at_initial_kinetic_energy", "kinematics": "nonrelativistic",
-            "trajectory": "rectilinear", "core_hole": "static", "small_loss": "T << E0",
-            "pair_creation": "sudden_at_t0", "core_hole_lifetime": "infinite",
-            "surface": "specular_reflection_model",
-            "source": "Simonsen et al. (1997) p. 1613 and Eq. (3); docs/M1_EQUATION_MAP.md section 2",
-        },
+        "assumptions": _trajectory_assumptions(),
     }
     if material.gap_eV:
         applicability["assumptions"].update(gap="hard_step", real_part="causal_Kramers_Kronig",
@@ -265,22 +288,30 @@ def run(args):
         units = {"loss_eV": "eV", "elf_dimensionless": "dimensionless", "q_inv_A": "angstrom^-1"}
         diagnostics = {"q_inv_A": q, "optical_limit": q == 0,
                        "sum_rule_enforced": False, "real_dielectric_part_computed": False}
-    elif args.command == "xps-fixed-depth":
-        model_id = FIXED_DEPTH_MODEL_ID
-        result = effective_cross_section_fixed_depth(
-            config.material, config.electron_energy_eV, grid, args.depth_A, theta_deg=args.theta_deg,
-            hole_charge=args.hole_charge, epsilon_momentum=args.epsilon_momentum,
-            epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit,
-        )
-        applicability, warnings = _fixed_depth_applicability(result, config.material)
+    elif args.command in ("xps-fixed-depth", "xps-depth-averaged"):
+        averaged = args.command == "xps-depth-averaged"
+        settings = dict(theta_deg=args.theta_deg, hole_charge=args.hole_charge, epsilon_momentum=args.epsilon_momentum,
+                        epsabs=config.epsabs, epsrel=config.epsrel, limit=config.limit)
+        if averaged:
+            model_id = DEPTH_AVERAGED_MODEL_ID
+            result = effective_cross_section_depth_averaged(
+                config.material, config.electron_energy_eV, grid, weight_length_A=args.weight_length_A, **settings)
+            warnings = list(result.warnings)
+            lengths = {"weight_length_A": result.weight_length_A}
+        else:
+            model_id = FIXED_DEPTH_MODEL_ID
+            result = effective_cross_section_fixed_depth(
+                config.material, config.electron_energy_eV, grid, args.depth_A, **settings)
+            applicability, warnings = _fixed_depth_applicability(result, config.material)
+            lengths = {"depth_A": result.depth_A, "path_length_A": result.path_length_A}
         columns = ("loss_eV", "total", "no_hole", "hole", *TERM_NAMES, "quadrature_error")
         table = np.column_stack([getattr(result, name) for name in columns])
-        header, output_name = ",".join(columns), "xps_fixed_depth.csv"
+        header, output_name = ",".join(columns), args.command.replace("-", "_") + ".csv"
         units = dict.fromkeys(columns, "angstrom^-1 eV^-1")
-        units.update(loss_eV="eV", depth_A="angstrom", path_length_A="angstrom",
+        units.update(loss_eV="eV", **dict.fromkeys(lengths, "angstrom"),
                      theta_deg="degree from surface normal", hole_charge="elementary charge")
         diagnostics = {
-            "depth_A": result.depth_A, "path_length_A": result.path_length_A,
+            **lengths,
             "theta_deg": result.theta_deg, "hole_charge": result.hole_charge,
             "epsilon_momentum": result.epsilon_momentum, "kinematics": "nonrelativistic",
             "delta_terms": "pi*delta(omega_perp) parts of Eqs. (14)-(16) contribute nothing for loss > 0 "
@@ -298,6 +329,8 @@ def run(args):
         }
         if result.diagnostics:
             diagnostics.update(result.diagnostics)
+            if averaged:
+                diagnostics["error_budget_ratios"] = {k: v.tolist() for k, v in result.diagnostics["error_budget_ratios"].items()}
             diagnostics["component_errors"] = {k: v.tolist() for k, v in result.component_errors.items()}
             diagnostics["quadrature_error_interpretation"] = (
                 "Maximum of eleven absolute output error estimates per loss (angstrom^-1 eV^-1). "
@@ -365,7 +398,7 @@ def run(args):
                        "https://doi.org/10.1002/sia.7095",
                        "https://www.quases.com/products/queels-xps/"],
     }
-    if args.command in ("dielectric", "xps-fixed-depth"):
+    if args.command in ("dielectric", "xps-fixed-depth", "xps-depth-averaged"):
         manifest["input_config_model_id"] = manifest["config"]["model"]
         manifest["warnings"] = warnings
     if args.command == "dielectric":
@@ -373,6 +406,34 @@ def run(args):
     elif args.command == "xps-fixed-depth":
         manifest["applicability"] = applicability
         manifest["unsupported_physics"] = list(FIXED_DEPTH_UNSUPPORTED_PHYSICS)
+        manifest["references"].append("https://doi.org/10.1103/PhysRevB.56.1612")
+    elif args.command == "xps-depth-averaged":
+        manifest.update(
+            fixed_depth_model_id=FIXED_DEPTH_MODEL_ID, dielectric_model_id=DIELECTRIC_MODEL_ID,
+            weight={"form": "x*exp(-x/L)/L^2", "normalization": 1, "length_A": result.weight_length_A,
+                    "length_kind": "external_constant", "length_source": args.weight_length_source,
+                    "depth_integration": "closed_form_laplace", "elastic_scattering": False,
+                    "depth_distribution": "uniform_semi_infinite", "loss_window_for_length": None},
+            applicability={
+                "electron_energy_eV": result.electron_energy_eV,
+                "max_loss_over_E0": float(grid.max()/result.electron_energy_eV),
+                "assumptions": {**_trajectory_assumptions(), "theta_deg_from_normal": 0.,
+                                "depth_distribution": "uniform_semi_infinite", "weight_length": "external_constant",
+                                "elastic_scattering": False, "scattering_order": "single",
+                                **({"gap": "hard_step", "real_part": "causal_Kramers_Kronig",
+                                    "prescription": "retarded_limit", "broadening_eV": 0.}
+                                   if config.material.gap_eV else {})},
+                "numerical_checks": {"source": "docs/M3A_PREREG.md section 6",
+                                     "V10": {"materials": ["Al", "Si"], "electron_energy_eV": 1000.,
+                                             "weight_lengths_A": [5., 20., 80.], "epsilon_momentum": "k_total",
+                                             "outputs": "all eleven terms and components, mesh refinement"},
+                                     "physical_validation": "not established"},
+            },
+            unsupported_physics=list(_AVERAGE_UNSUPPORTED),
+            defaults={"theta_deg": 0., "hole_charge": 1., "weight_length_source": None,
+                      "api_integration": {"epsabs": FIXED_ABS, "epsrel": FIXED_REL, "limit": 200},
+                      "cli_integration": {"epsabs": DEFAULT_ABS, "epsrel": DEFAULT_REL, "limit": 200}},
+        )
         manifest["references"].append("https://doi.org/10.1103/PhysRevB.56.1612")
     (args.out / "run.json").write_text(json.dumps(manifest, ensure_ascii=False, allow_nan=False, indent=2) + "\n", encoding="utf-8")
     success = {"status": "complete", "model_id": model_id, "output_dir": str(args.out.resolve()),
@@ -400,6 +461,8 @@ def main(argv=None):
         return 2
     except NumericalConvergenceError as exc:
         message = {"status": "not_converged", "error_type": type(exc).__name__, "message": str(exc)}
+        if isinstance(exc, DepthAverageConvergenceError):
+            message.update(vars(exc))
         if isinstance(exc, FixedDepthConvergenceError) and exc.diagnostics:
             message["diagnostics"] = exc.diagnostics
         emit(message, sys.stderr)

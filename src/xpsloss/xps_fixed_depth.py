@@ -9,6 +9,7 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy.special import roots_legendre
 
+from ._depth_kernel import assemble_terms, fixed_depth_weights
 from ._gap_domain import FixedDepthGapDomainError, check_edges, gap_preflight
 from ._gap_response import _D3ConditionError, gapped_sum, resolve_surface
 from .dielectric import _checked_static_response
@@ -272,38 +273,12 @@ def _term_integrands(k, coefficients, energy, depth, omega, *, select_bounds=Fal
     (response, reflection, surface), (ds, dr, dc) = coefficients
     bulk = -response
 
-    denom = omega**2 + k**2
-    plus = (omega + 1j*k) / denom
-    minus = plus.conj()
-    # Contract conjugate phases first. Every remaining phase carries exp(-ka).
-    attenuation = -k * depth
-    decay = np.exp(attenuation)
-    phase = -1j * (omega * depth)
-    u = decay * np.exp(phase)
-    diff = -np.expm1(attenuation) - decay * np.expm1(phase)
-    norm = abs(diff)**2 / denom
-    mixed = u * diff.conj()                     # u − exp(-2ka)
-
+    denom, plus, u, diff, norm, w13b, weight_14, w15b, w15c, w16e, w16h = fixed_depth_weights(k, omega, depth)
     measure = k**2 / (math.pi * BOHR_RADIUS_A * energy)
     pref = measure / (2 * depth * omega)
     w13a = measure / denom
-    term_13a = w13a * response.imag
-    # The A and B terms of 13b form a conjugate pair. C supplies |1-u|².
-    w13b = 2 * (plus**2 * diff).imag
-    term_13b = pref * (bulk.imag * w13b + bulk.real * norm)
-    weight_14 = plus*diff + minus*mixed
-    term_14 = pref * (bulk * weight_14).real / omega
-    term_15_T1 = pref * surface.real * norm
-    w15b = minus * mixed
-    w15c = minus**2 * diff.conj()
-    w16e = plus * (2j*k/denom - plus*u)
-    w16h = plus * u
-    term_15_T2 = pref * (surface * w15b).real / omega
-    term_15_T3 = pref * (reflection * w15c).real
-    term_16_e = -pref * (reflection * w16e).real
-    term_16_h = -pref * (reflection * w16h).real / omega
-    terms = np.stack((term_13a, term_13b, term_14, term_15_T1, term_15_T2,
-                      term_15_T3, term_16_e, term_16_h), axis=-2)
+    terms = assemble_terms(response, reflection, surface, pref, omega, w13a, w13b,
+                           norm, weight_14, w15b, w15c, w16e, w16h)
 
     def projected(weight, coefficient_size, uncertainty):
         bound = abs(weight.real)*uncertainty[0] + abs(weight.imag)*uncertainty[1]
