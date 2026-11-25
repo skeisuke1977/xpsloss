@@ -15,6 +15,8 @@ import numpy as np
 import scipy
 
 from . import __version__
+from . import _single_loss_cli
+from .xps_single_loss import SingleLossInputError, SingleLossConvergenceError
 from .config import load_config
 from .dielectric import (
     DIELECTRIC_MODEL_ID, DielectricGapEdgeError,
@@ -79,7 +81,8 @@ def capabilities():
         "package": "xpsloss", "version": __version__, "model_id": MODEL_ID,
         "status": "experimental",
         "supported": ["strict_json_validation", "drude_lindhard_elf", "bulk_diimfp",
-                      "causal_dielectric_response", "xps_fixed_depth", "xps_depth_averaged"],
+                      "causal_dielectric_response", "xps_fixed_depth", "xps_depth_averaged",
+                      "xps_loss_window_area", "xps_single_loss"],
         "dielectric_model_id": DIELECTRIC_MODEL_ID,
         "bulk_unsupported_physics": list(UNSUPPORTED_PHYSICS),
         "bulk_unsupported_physics_model_id": MODEL_ID,
@@ -172,6 +175,7 @@ def build_parser():
             child.add_argument("--hole-charge", type=float, default=1.0, help="charge in units of +e")
             child.add_argument("--theta-deg", type=float, default=0.0,
                                help="angle from the surface normal (only 0 degrees)")
+    _single_loss_cli.add_commands(sub)
     return p
 
 
@@ -259,6 +263,9 @@ def _fixed_depth_applicability(result: FixedDepthResult, material: Material):
 
 
 def run(args):
+    if args.command in _single_loss_cli.COMMANDS:
+        emit(_single_loss_cli.run(args))
+        return 0
     if args.command == "capabilities":
         emit(capabilities())
         return 0
@@ -453,10 +460,17 @@ def run(args):
 
 def main(argv=None):
     try:
-        return run(build_parser().parse_args(argv))
+        args = build_parser().parse_args(argv)
+        return run(args)
+    except (SingleLossInputError, SingleLossConvergenceError) as exc:
+        status = "not_converged" if isinstance(exc, SingleLossConvergenceError) else "error"
+        emit(_single_loss_cli.json_value(dict(status=status, error_type=type(exc).__name__,
+                                              message=str(exc), **vars(exc))), sys.stderr)
+        return 2
     except DielectricGapEdgeError as exc:
         emit({
             "status": "error", "error_type": type(exc).__name__, "message": str(exc),
+            **(vars(exc) if args.command in _single_loss_cli.COMMANDS else {}),
             **({"offending_indices": exc.offending_indices} if hasattr(exc, "offending_indices") else {}),
             "gap_eV": exc.gap_eV, "gap_edge_exclusion_eV": exc.exclusion_eV,
             "offending_loss_eV": exc.offending_loss_eV, "remedy": exc.remedy,

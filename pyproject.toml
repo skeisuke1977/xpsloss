@@ -33,3 +33,6 @@ where = ["src"]
 
 [tool.setuptools.dynamic]
 version = {attr = "xpsloss.__version__"}
+
+[tool.setuptools.package-data]
+xpsloss = ["data/m4a_completed_comparisons.json"]

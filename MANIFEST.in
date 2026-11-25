@@ -9,3 +9,4 @@ recursive-include benchmarks/queels_prereg *.py *.md *.txt
 recursive-include benchmarks/paper_figures *.py *.md *.csv
 recursive-include benchmarks/numerics *.py *.json
 recursive-include tests *.py
+include src/xpsloss/data/m4a_completed_comparisons.json
