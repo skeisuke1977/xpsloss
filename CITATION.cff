@@ -1,16 +1,16 @@
 cff-version: 1.2.0
 message: "If you use xpsloss in your research, please cite this software."
 title: xpsloss
-version: "0.1.0"
-date-released: "2026-11-24"
-doi: 10.5281/zenodo.24490458
+version: "0.2.0"
+date-released: "2026-11-25"
+doi: 10.5281/zenodo.24490457
 identifiers:
-  - type: doi
-    value: 10.5281/zenodo.24490458
-    description: "Version 0.1.0"
   - type: doi
     value: 10.5281/zenodo.24490457
     description: "All versions; resolves to the latest version"
+  - type: doi
+    value: 10.5281/zenodo.24490458
+    description: "Version 0.1.0"
 authors:
   - family-names: Sato
     given-names: Keisuke
@@ -18,9 +18,11 @@ license: MIT
 repository-code: "https://github.com/skeisuke1977/xpsloss"
 abstract: >-
   xpsloss implements oscillator energy-loss functions, causal dielectric response,
-  and bulk inelastic scattering in Python. For normal emission from a positive
-  depth in a gapless material, it calculates the effective XPS cross section
-  including surface, vacuum, core-hole, and interference terms.
+  and bulk inelastic scattering in Python. For normal emission, it calculates the
+  fixed-depth effective XPS cross section including surface, vacuum, core-hole,
+  and interference terms, for gapless materials and accepted materials with a
+  hard band gap, and its average over single-scattering paths with an
+  externally supplied constant weight length.
 keywords:
   - X-ray photoelectron spectroscopy
   - dielectric response
