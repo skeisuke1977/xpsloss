@@ -5,7 +5,7 @@ weight lengths, loss-window areas, spectra and multiple scattering are not
 implemented.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0.dev0"
 
 from .dielectric import (
     DielectricConvergenceError, DielectricResponse, dielectric_response,
