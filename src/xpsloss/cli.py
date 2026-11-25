@@ -138,7 +138,9 @@ def capabilities():
     }
 
 
-def emit(data, stream=sys.stdout):
+def emit(data, stream=None):
+    # Resolve the stream at call time so that redirected stdout is honoured.
+    stream = sys.stdout if stream is None else stream
     print(json.dumps(data, ensure_ascii=True, allow_nan=False, indent=2), file=stream)
 
 
