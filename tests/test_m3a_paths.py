@@ -281,12 +281,15 @@ class V9PathThree(unittest.TestCase):
         self.assertEqual(failures, [])
 
     def test_frozen_path_criterion(self):
+        checked, statuses = 0, set()
         for entry in self.paths["path3"]:
             if entry.get("status") == "not_computed" or (not FULL and entry["weight_length_A"] != 20.0):
                 continue
             for p in entry["points"]:
+                statuses.add(p["status"])
                 if p["status"] != "ok":
                     continue
+                checked += 1
                 for name, col in p["columns"].items():
                     with self.subTest(material=entry["material"], lam=entry["weight_length_A"],
                                       q=entry["hole_charge"], loss=p["loss_eV"], column=name):
@@ -295,6 +298,10 @@ class V9PathThree(unittest.TestCase):
                         self.assertEqual(set(col["changes"]), {"A", "B", "C", "D", "E"})
                         self.assertLessEqual(max(abs(x) for x in col["changes"].values()), 0.1 * width)
                         self.assertLessEqual(col["tail"], 0.1 * width)
+        if statuses == {"not_computed"}:
+            # Same owner decision as _run: nothing to check, so do not report a pass.
+            self.skipTest("V9 not obtained: path 3 not computed (owner decision 2026-11-25, see the appendix)")
+        self.assertGreater(checked, 0, f"no path-3 point checked (statuses {sorted(statuses)})")
 
     def test_routine_lambda_20(self):
         self._run((20.0,))

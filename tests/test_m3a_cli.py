@@ -74,6 +74,9 @@ class AverageCLITests(unittest.TestCase):
     def test_v15_ms4_cli_api_and_manifest(self):
         scope = cli.capabilities()["xps_depth_averaged"]
         self.assertEqual(scope["model_id"], "simonsen1997_depth_average_external_v0")
+        # Review finding 5: the fixed-depth limits on sub-gap delta terms and broadening carry over.
+        for name in ("sub_gap_surface_mode_delta_terms", "gap_broadening", "oblique_emission"):
+            self.assertIn(name, scope["unsupported_physics"])
         for row in table()["runs"]:
             if row["family"] != "MS4" or row["entry"] != "CLI":
                 continue

@@ -65,9 +65,12 @@ class JSONParser(argparse.ArgumentParser):
         raise ValueError(message)
 
 
+# The depth average uses the fixed-depth integrand and coefficients, so the fixed-depth
+# limitations on sub-gap delta terms and gap broadening carry over.
 _AVERAGE_UNSUPPORTED = (
     "trajectory_dependent_weight_length", "elastic_scattering", "oblique_emission",
     "nonuniform_depth_distribution", "loss_window_area", "full_spectrum", "multiple_scattering",
+    "sub_gap_surface_mode_delta_terms", "gap_broadening",
 )
 
 
@@ -429,6 +432,8 @@ def run(args):
                                      "V10": {"materials": ["Al", "Si"], "electron_energy_eV": 1000.,
                                              "weight_lengths_A": [5., 20., 80.], "epsilon_momentum": "k_total",
                                              "outputs": "all eleven terms and components, mesh refinement"},
+                                     "per_run_envelope_check": "not performed; inputs outside the "
+                                                               "listed conditions are not verified",
                                      "physical_validation": "not established"},
             },
             unsupported_physics=list(_AVERAGE_UNSUPPORTED),

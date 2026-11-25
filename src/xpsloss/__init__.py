@@ -1,4 +1,9 @@
-"""Independent dielectric response, bulk, fixed-depth and depth-averaged XPS losses."""
+"""Independent dielectric response, bulk, fixed-depth and depth-averaged XPS losses.
+
+Not a full QUEELS-XPS implementation: oblique emission, trajectory-dependent
+weight lengths, loss-window areas, spectra and multiple scattering are not
+implemented.
+"""
 
 __version__ = "0.2.0.dev0"
 
