@@ -125,3 +125,27 @@ E4a を上半平面に延長すると、\(\operatorname{Im}F(q,z)\) は \(\opera
 媒質・正孔・真空の各項はすべて固体内経路長 \(x=a\) 当たりの eV⁻¹ Å⁻¹ で返す。13a の積分 \(k_\parallel\,dk_\parallel/(\Omega_0^2+k_\parallel^2)\) は無次元である。残りの項でも面積次元の核と \(k_\parallel\,dk_\parallel\) の積は無次元で、追加の前因子 \(1/(2x\omega_\perp)\) も無次元となる。単位は共通の \(1/(\pi a_0 E_0)\) で決まる。単位電荷の正孔差分 `hole` は 14、15-T2、16-h の符号付き和で、`total = no_hole + hole_charge * hole` とする。検査条件は [M2 内部検査 I1–I8](M2_FIRST_CASE.md#41-内部の検査参照ソフトなしで自動テストにする) にある。
 
 数値の精度は、8つの項、`no_hole`、単位電荷の `hole`、`total` のそれぞれについて \(\max(\varepsilon_{\rm abs},\varepsilon_{\rm rel}|K|)\) で判定する。表面反射の係数 \(R=S/(2-S)\) と \(C=2S-R\) は、表面共鳴（\(S\approx2\)）の近くで実部が桁落ちする。そこで、実部と虚部の丸め誤差を別々に見積もり、積分点の座標の丸めも含めて各項に伝える。見積もりが要求精度を超えうる点では、与えた倍精度の値から、係数を有理数で、座標を80桁で計算し直す。それでも要求精度を満たせなければ `FixedDepthConvergenceError` を返す（段階4f）。`quadrature_error` は、全項に共通の誤差の上界である。段階4fからは係数の丸めも含むので、それ以前より大きく出る（ELF データ集の材料で中央値は約20倍）。
+
+## E6. 法線出射の深さ平均（外から与える一定の長さ）
+
+`simonsen1997_depth_average_external_v0`（開発版、M3a）は、E5 の固定深さの11出力を原著の式(18)の重みで深さ方向に平均する。[Simonsen ら (1997) 式(18)](https://doi.org/10.1103/PhysRevB.56.1612)
+
+\[
+K_{{\rm sc},j}(T;\lambda)=\int_0^\infty w(x)\,K_j(T;a=x)\,dx,\qquad
+w(x)=\frac{x}{\lambda^2}e^{-x/\lambda},\qquad \int_0^\infty w\,dx=1
+\]
+
+| 記号 | 意味 | 単位 |
+| --- | --- | --- |
+| \(\lambda\)（`weight_length_A`） | 重みの長さ。外から与える有限の正の値で、全経路で一定。既定値はない | Å |
+| \(x=a\) | 固体内の経路長（法線出射なので生成深さに等しい） | Å |
+| \(K_j\) | E5 の固定深さの出力（8項、`no_hole`、`hole`、`total`） | eV⁻¹ Å⁻¹ |
+| \(K_{{\rm sc},j}\) | 深さ平均した出力（固体内の経路長当たり、真空中の損失を含む） | eV⁻¹ Å⁻¹ |
+
+- **重み:** 一定率のポアソン過程で、経路 \(x\) の間にちょうど1回非弾性散乱する確率 \((x/\lambda)e^{-x/\lambda}\) を、経路長で規格化したもの。重みの積分 1 は経路長の分布の規格化で、損失エネルギー方向の規格化ではない。全出力に同じ重みを使うので、`total = no_hole + hole_charge * hole` が保たれる。
+- **仮定:** 均質・半無限の試料、表面法線からの出射角 0°、弾性散乱なし、一様な深さ分布、単一散乱。軌道ごとに変わる長さ（文献の自己無撞着な長さ）、損失窓の面積、式(19)のスペクトルは扱わない。原著の留保（式(18)は REELS の重みの流用で XPS での妥当性は検討を要すること、\(K_{\rm sc}\) は最初の1回の非弾性散乱だけを表し intrinsic の部分を含むこと）は `warnings` に書く。[原文 Simonsen1997 p.1615]
+- **深さの積分:** 数値の深さ求積は使わない。\(\theta=0\) では、13a 以外の項の \(aK_j\) の被積分密度が、深さについて \(\{1,\ e^{-sa},\ e^{-\bar sa},\ e^{-2ka}\}\)（\(s=k+ib\)、\(k=k_\parallel\)、\(b=\Omega_0\)）の線形結合になり、係数は深さによらない。そこで式(18)の深さの積分をラプラス変換で閉じ、\(k_\parallel\) の被積分関数に \(p=1/\lambda\) の有理式の重み（W13、N、W14、W15b、W15c、W16e、W16h）を掛けて、E5 と同じ \(\ln k_\parallel\) 上で積分する。13a は深さによらないので固定深さの値と同じになる。\(a\to0\) で \(aK_j\)（13a を除く）は有限の極限（媒質内の項では 0、真空中の 16-e と 16-h では 0 でない値）を持つので、\(w(x)K_j\) は \(x=0\) で有限で、深さの積分に特異性はない。重みとその誤差の上界は [M3a の設計](M3A_DESIGN.md) §2.2、§3.1 にある。
+- **ギャップのある材料:** E5 と同じ受理条件と事前検査（深さによらない）を使う。ギャップ下で正孔電荷が 1 の `total` は、8項の値の和ではなく、節点ごとに8項を足した直接和を積分して作り、その数値誤差を別に評価する（理論値は 0）。
+- **精度:** 11出力のそれぞれで、推定誤差が \(\max(\varepsilon_{\rm abs},\varepsilon_{\rm rel}|K_{{\rm sc},j}|)\) 以下になるまでパネルを細分する。満たせなければ `DepthAverageConvergenceError`（`reason` は `budget_not_met`、`panel_floor_exceeds_budget`、`direct_sum_floor_exceeds_budget`、`weight_out_of_range` ほか）で止まる。`quadrature_error` は11出力の推定の最大である。既定は API で \(\varepsilon_{\rm abs}=10^{-12}\) Å⁻¹ eV⁻¹、\(\varepsilon_{\rm rel}=10^{-9}\)、CLI では設定ファイルの `integration`（省略時は \(10^{-9}\)、\(10^{-7}\)）で、limit はともに 200。
+
+実装は `xps_depth_averaged.effective_cross_section_depth_averaged`（深さの閉形式は `_depth_kernel`）、CLI は `xps-depth-averaged`。検証の条件と許容幅は [M3a の事前登録](M3A_PREREG.md)、結果は [VALIDATION.md](VALIDATION.md) の「M3a」にある。

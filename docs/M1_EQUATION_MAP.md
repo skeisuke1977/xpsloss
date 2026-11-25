@@ -133,7 +133,7 @@ $$
 | 16-e | 式(16)波括弧の分数 | (1−ε)/(1+ε) | − | あり | 真空中の損失（p. 1615左） | `term_16_e` | I3 |
 | 16-h | 式(16)波括弧の最後の項 | 同上 | あり | あり | 真空中、正孔の項 | `term_16_h` | I3、I5 |
 | E17 | 式(17) | − | − | − | 13a–16-h の積分範囲 | `_parallel_limits` | I2（θ = 0） |
-| E18 | 式(18) 経路長の重み付き平均 | − | − | − | 深さ平均 | 本体は未実装（M3）。図8の検算には `benchmarks/paper_figures/model.py` の `depth_average` を使う | − |
+| E18 | 式(18) 経路長の重み付き平均 | − | − | − | 深さ平均（外から与える一定の長さ、法線出射） | `xps_depth_averaged.effective_cross_section_depth_averaged`（開発版、M3a。深さの積分は `_depth_kernel` の閉形式。[EQUATIONS](EQUATIONS.md) E6）。図8の検算には別の実装 `benchmarks/paper_figures/model.py` の `depth_average` を使う | M3a の V1–V16（[事前登録](M3A_PREREG.md)、[検証記録](VALIDATION.md)の「M3a」） |
 | E19 | 式(19) 1回散乱のスペクトル | − | − | − | スペクトル | M4（未実装） | − |
 | E20 | 式(20) 原著のAl誘電関数 | − | − | − | 原著の計算例の入力 | 本体の振動子模型の対象外。図3・5・8の検算には `benchmarks/paper_figures/model.py` の `eq20` を使う | − |
 
