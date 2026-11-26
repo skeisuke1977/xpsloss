@@ -379,18 +379,17 @@ def _balance(diag, key, terms, target, rounding):
 
 def integrate_window(kernel, loss_window_eV, *, features, weight_length_A, hole_charge=1.,
                      primary=None, output_edges_eV=None, initial_edges=None, inject=None,
-                     epsrel, area_epsabs, spectrum_epsabs_fraction, panel_limit, max_cells):
+                     epsrel, area_epsabs, spectrum_epsabs_fraction, panel_limit, max_cells,
+                     multiplier="weight_length", multiplier_A=None):
     settings = dict(epsrel=epsrel, area_epsabs=area_epsabs, spectrum_epsabs_fraction=spectrum_epsabs_fraction,
                     panel_limit=panel_limit, max_cells=max_cells)
     return _integrate(kernel, checked_window(loss_window_eV), features, weight_length_A, hole_charge,
                       primary, output_edges_eV, settings, _diagnostics(settings),
-                      kernel_errstate=np.geterr(), initial_edges=initial_edges, inject=inject)
+                      kernel_errstate=np.geterr(), initial_edges=initial_edges, inject=inject,
+                      multiplier=multiplier, multiplier_A=multiplier_A)
 
 
-@np.errstate(over="raise", divide="raise", invalid="raise")
-def _integrate(kernel, window, features, length, charge, primary, edges, settings, diag, *,
-               kernel_errstate, energy=None, mode=None, gap=0., zero=False, initial_edges=None, inject=None):
-    validate_settings(settings)
+def _prepare(window, features, primary, edges, settings, diag, energy, gap, initial_edges):
     geometry = None
     if primary is not None:
         if not isinstance(primary, (DeltaPrimary, BinnedPrimary)):
@@ -403,7 +402,61 @@ def _integrate(kernel, window, features, length, charge, primary, edges, setting
                                        min_minus_E0_eV=None if energy is None or lo is None else lo-energy,
                                        max_minus_E0_eV=None if energy is None or hi is None else hi-energy)
     mesh = _initial_mesh(window, features, settings["panel_limit"], diag, energy=energy, gap=gap,
-                         initial_edges=window if zero else initial_edges)
+                         initial_edges=initial_edges)
+    return geometry, edges, mesh
+
+
+def preflight(prepared, settings, diag):
+    geometry, _, mesh = prepared
+    if geometry:
+        bounds = [mesh[0][0], *(r for _, r in mesh)]
+        count = geometry.cell_count(bounds, settings["max_cells"])
+        if count > settings["max_cells"]:
+            raise SingleLossInputError("cell_limit_exceeded", message_details=dict(
+                cells_at_least=count, max_cells=settings["max_cells"]))
+    for l, r in mesh:
+        if not _nodes(l, r)[2]:
+            _width_failure(l, r, 0, diag)
+
+
+def _denominator(row, extra, epsrel, name, stage, diag):
+    """Decide on the exact binary64 inputs, before rounding the reciprocal."""
+    area, error = Q(row["value"]), Q(row["estimate"])
+    d = area + Q(extra)
+    threshold = Q(epsrel)*abs(d)
+    resolved = d-error > 0 and error <= threshold
+    def display(value):
+        # A sum or a threshold may exceed binary64 even for a finite reciprocal.
+        try:
+            return float(value)
+        except OverflowError:
+            return str(value)
+    diag["denominator"] = dict(value=display(d), error=float(error), threshold=display(threshold),
+                               resolved=resolved, stage=stage)
+    argument = "weight_length_kind" if name == "weight_length" else "multiplier"
+    attr = dict(stage=stage, diagnostics=diag, message_details=dict(argument=argument))
+    if d+error < 0 and error <= threshold:
+        raise SingleLossInputError(name+"_undefined", **attr)
+    if not resolved:
+        return None, None
+    center, interval, reason = inverse_area(d, error)
+    if reason:
+        raise SingleLossConvergenceError(name+"_not_representable", **attr)
+    return center, interval
+
+
+@np.errstate(over="raise", divide="raise", invalid="raise")
+def _integrate(kernel, window, features, length, charge, primary, edges, settings, diag, *,
+               kernel_errstate, energy=None, mode=None, gap=0., zero=False, initial_edges=None, inject=None,
+               prepared=None, seed=False, extra=0., multiplier="weight_length", multiplier_A=None,
+               weight_interval=None):
+    validate_settings(settings)
+    geometry, edges, mesh = prepared or _prepare(window, features, primary, edges, settings, diag, energy,
+                                                 gap, window if zero else initial_edges)
+    m = multiplier_A if multiplier == "external" else length
+    interval = weight_interval if multiplier == "weight_length" else None
+    denominator_key = "window_area.term_13a" if seed else "window_area.total"
+    name = "weight_length" if seed else "multiplier"
     stage = 0
     sampler = _Sampler(kernel, diag, energy is not None)
     previous = {}
@@ -454,13 +507,20 @@ def _integrate(kernel, window, features, length, charge, primary, edges, setting
             diag["verification"] = dict(rho_max=max(float(p.rho.max()) for p in panels),
                                         epsilon_max=max(float(p.epsilon.max()) for p in panels))
             outputs, local = _areas(panels)
+            pending = False
+            if seed or multiplier == "inverse_window_area":
+                if seed:
+                    outputs = {denominator_key: outputs[denominator_key]}
+                m, interval = _denominator(outputs[denominator_key], extra if seed else 0.,
+                                           settings["epsrel"], name, stage, diag)
+                pending = m is None
             folded, spec_abs, support = None, 0., {}
-            if geometry:
+            if geometry and not pending:
                 if not zero and inject is not None:
                     lower_minus = tuple(x[:, 0] for x in sampler.read([lower_key], "interpolation", inject))
                 else:
                     lower_minus = None if zero else sampler.cache[sampler.key(lower_key)]
-                folded = _fold._fold(panels, geometry, length, lower_minus)
+                folded = _fold._fold(panels, geometry, m, lower_minus)
                 support = folded.support_widths
                 for name in geometry.names:
                     for quantity in QUANTITIES[:-1]:
@@ -470,13 +530,33 @@ def _integrate(kernel, window, features, length, charge, primary, edges, setting
                 spec_abs = settings["spectrum_epsabs_fraction"]*math.fsum(primary.intensities)
             split = _budget(outputs, local, diag, np.diff(bounds), support, settings["epsrel"],
                             settings["area_epsabs"], spec_abs)
+            if pending:
+                index = max(range(len(mesh)), key=lambda i: (local[denominator_key][i],
+                            Q(mesh[i][1])-Q(mesh[i][0]), -i))
+                split.fill(False)
+                split[index] = True
             if not np.any(split):
-                result = _finish(window, length, charge, panels, outputs, folded, geometry,
+                if seed:
+                    row = outputs[denominator_key]
+                    return dict(area13=row["value"], error13=row["estimate"], length_A=m,
+                                interval_A=interval), panels
+                result = _finish(window, m, charge, panels, outputs, folded, geometry,
                                  primary, edges, diag, energy, mode)
+                result.weight_length_A = length
+                result.multiplier_A = m
+                result.multiplier_convention = multiplier
+                result.multiplier_interval_A = interval
+                if interval is not None:
+                    diag["multiplier"] = dict(convention=multiplier, value_A=m, interval_A=interval)
+                    _fold.propagate_multiplier(result)
                 _check_finite_result(result)
                 return result, panels
             if len(mesh)+int(split.sum()) > settings["panel_limit"]:
                 budget = diag["error_budget"]
+                if pending:
+                    argument = "weight_length_kind" if seed else "multiplier"
+                    raise SingleLossConvergenceError(name+"_unresolved", stage=stage, diagnostics=diag,
+                                                     message_details=dict(argument=argument, worst=budget["max_ratio"]))
                 key = budget["max_ratio"]["key"]
                 worst = budget["outputs"][key]
                 details = dict(output=key, estimate=worst["estimate"], budget=worst["budget"],

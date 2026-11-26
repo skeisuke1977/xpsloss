@@ -34,8 +34,17 @@ def add_commands(sub):
         child.add_argument("config")
         child.add_argument("--out", type=Path, required=True)
         child.add_argument("--loss-window-eV", type=float, nargs=2, required=True)
-        child.add_argument("--weight-length-A", type=float, required=True)
+        weight = child.add_mutually_exclusive_group(required=True)
+        weight.add_argument("--weight-length-A", type=float)
+        weight.add_argument("--weight-length-inverse-13a-window-area", action="store_true")
         child.add_argument("--weight-length-source")
+        child.add_argument("--extra-inverse-length-per-A", type=float)
+        child.add_argument("--extra-inverse-length-source")
+        child.add_argument("--weight-length-seed-A", type=float)
+        multiplier = child.add_mutually_exclusive_group()
+        multiplier.add_argument("--multiplier-A", type=float)
+        multiplier.add_argument("--multiplier-inverse-window-area", action="store_true")
+        child.add_argument("--multiplier-source")
         child.add_argument("--epsilon-momentum", choices=EPSILON_MOMENTA, required=True)
         child.add_argument("--theta-deg", type=float, default=0.)
         child.add_argument("--hole-charge", type=float, default=1.)
@@ -151,6 +160,16 @@ def _regions(result):
 
 
 def run(args):
+    derived = args.weight_length_inverse_13a_window_area
+    if derived and args.weight_length_source is not None:
+        raise ValueError("--weight-length-source requires --weight-length-A")
+    if not derived and any(v is not None for v in (args.extra_inverse_length_per_A, args.extra_inverse_length_source,
+                                                   args.weight_length_seed_A)):
+        raise ValueError("extra attenuation and seed options require --weight-length-inverse-13a-window-area")
+    if args.extra_inverse_length_source is not None and args.extra_inverse_length_per_A is None:
+        raise ValueError("--extra-inverse-length-source requires --extra-inverse-length-per-A")
+    if args.multiplier_source is not None and args.multiplier_A is None:
+        raise ValueError("--multiplier-source requires --multiplier-A")
     if args.out.exists() or args.out.is_symlink():
         raise FileExistsError(f"output path already exists: {args.out}")
     start = time.perf_counter()
@@ -170,7 +189,12 @@ def run(args):
     validate_settings(settings)
     definition = dict(loss_window_eV=args.loss_window_eV, epsilon_momentum=args.epsilon_momentum,
                       theta_deg=args.theta_deg, hole_charge=args.hole_charge)
-    kw = dict(**definition, weight_length_A=args.weight_length_A, **settings)
+    convention = "external" if args.multiplier_A is not None else (
+        "inverse_window_area" if args.multiplier_inverse_window_area else "weight_length")
+    kw = dict(**definition, weight_length_A=args.weight_length_A, **settings,
+              weight_length_kind="inverse_13a_window_area" if derived else "external_constant",
+              extra_inverse_length_per_A=args.extra_inverse_length_per_A or 0.,
+              weight_length_seed_A=args.weight_length_seed_A, multiplier=convention, multiplier_A=args.multiplier_A)
     spectrum_input, primary_record, edges = None, None, None
     if spectrum:
         primary, edges, spectrum_input = _spectrum_input(args.spectrum, settings["max_cells"])
@@ -190,17 +214,25 @@ def run(args):
                  cutoff_sensitivity="dimensionless", single_loss_weight="dimensionless")
     if spectrum:
         units.update(bin_integral=primary.intensity_unit, density=primary.intensity_unit+"/eV")
+    units.update(multiplier_A="angstrom", multiplier_interval_A="angstrom", weight_length_interval_A="angstrom",
+                 weight_length_seed_A="angstrom", area13="angstrom^-1", error13="angstrom^-1",
+                 extra_inverse_length_per_A="angstrom^-1")
+    weight = dict(length_A=result.weight_length_A, length_kind=result.weight_length_kind,
+                  length_source=args.weight_length_source)
+    if derived:
+        weight.update(result.diagnostics["weight_length"], extra_inverse_length_source=args.extra_inverse_length_source)
     manifest = dict(schema_version=1, status="complete", command=args.command, created_utc=datetime.now(timezone.utc).isoformat(),
                     elapsed_seconds=time.perf_counter()-start, input_sha256=digest, input_file=args.config,
-                    package_version=__version__, model_id=api.SINGLE_LOSS_MODEL_ID,
+                    package_version=__version__, model_id=result.model_id,
                     dependent_model_ids=dict(depth_averaged=DEPTH_AVERAGED_MODEL_ID, fixed_depth=FIXED_DEPTH_MODEL_ID,
                                              dielectric=DIELECTRIC_MODEL_ID),
                     runtime=dict(python=platform.python_version(), numpy=np.__version__, scipy=scipy.__version__),
                     config=config.public_dict(), units=units, constants=dict(bohr_radius_A=BOHR_RADIUS_A,
                     hbar2_over_2me_eV_A2=HBAR2_OVER_2ME_EV_A2), files=list(files), warnings=result.warnings,
                     spectrum_input=spectrum_input,
-                    spectrum_definition=dict(**definition, weight=dict(length_A=result.weight_length_A,
-                        length_kind="external_constant", length_source=args.weight_length_source),
+                    spectrum_definition=dict(**definition, weight=weight, multiplier=dict(
+                        convention=convention, value_A=result.multiplier_A, interval_A=result.multiplier_interval_A,
+                        source=args.multiplier_source),
                         kernel_energy_eV=config.electron_energy_eV, axis="kinetic_energy_eV", config_loss_grid_used=False),
                     effective_settings=settings, effective_settings_sources=sources, primary=primary_record,
                     output_edges_eV=edges, results={k: v for k, v in vars(result).items() if k not in not_results},
@@ -221,6 +253,6 @@ def run(args):
             path.unlink()
         args.out.rmdir()
         raise
-    return dict(status="complete", model_id=api.SINGLE_LOSS_MODEL_ID, output_dir=str(args.out.resolve()),
+    return dict(status="complete", model_id=result.model_id, output_dir=str(args.out.resolve()),
                 files=list(files), warning_count=len(result.warnings))
 

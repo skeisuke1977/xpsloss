@@ -168,6 +168,62 @@ def fold(panels, primary, output_edges_eV, *, multiplier, hole_charge):
     return _fold(panels, Geometry(primary, output_edges_eV), multiplier)
 
 
+def _up(value):
+    rounded = float(value)
+    return math.nextafter(rounded, math.inf) if rounded < value else rounded
+
+
+def propagate_multiplier(result):
+    """Propagate the reported multiplier interval after the fixed-m budget test."""
+    m = Q(result.multiplier_A)
+    lo, hi = map(Q, result.multiplier_interval_A)
+    rho = Q(_up(max(m-lo, hi-m)/m))
+    result.diagnostics["multiplier"]["rho"] = float(rho)
+
+    def corrected(y, error):
+        return _up(Q(error) + rho*(abs(Q(y)) + Q(error)))
+
+    def correct_sens(values, errors):
+        for key, value in values.items():
+            if isinstance(value, np.ndarray):
+                errors[key] = np.array([corrected(y, e) for y, e in zip(value, errors[key])])
+            else:
+                errors[key] = corrected(value, errors[key])
+
+    correct_sens(result.cutoff_sensitivity, result.cutoff_sensitivity_error)
+    if result.multiplier_convention == "inverse_window_area":
+        result.single_loss_weight_error = _up(abs(Q(result.single_loss_weight)-1))
+    else:
+        result.single_loss_weight_error = corrected(result.single_loss_weight, result.single_loss_weight_error)
+    if not hasattr(result, "outside"):
+        return
+
+    def sum_error(e1, e0, y):
+        return _up(Q(e1) + Q(e0) + Q(EPS)*abs(Q(y)))
+
+    for side in result.outside.values():
+        for c in COMPONENTS:
+            k = "single_loss_"+c
+            side[k+"_error"] = corrected(side[k], side[k+"_error"])
+        side["spectrum_error"] = sum_error(side["single_loss_total_error"], side["zero_loss_error"], side["spectrum"])
+        for sign in ("plus", "minus"):
+            correct_sens(side["cutoff_sensitivity"][sign], side["cutoff_sensitivity_error"][sign])
+    for sign in ("plus", "minus"):
+        correct_sens(result.cutoff_sensitivity_bins[sign], result.cutoff_sensitivity_bins_error[sign])
+    for c in COMPONENTS:
+        k = "single_loss_"+c
+        setattr(result, k+"_error", np.array([corrected(y, e) for y, e in
+                                              zip(getattr(result, k), getattr(result, k+"_error"))]))
+    result.spectrum_error = np.array([sum_error(e1, e0, y) for e1, e0, y in
+                                      zip(result.single_loss_total_error, result.zero_loss_error, result.spectrum)])
+    edges = result.output_edges_eV
+    widths = [Q(b)-Q(a) for a, b in zip(edges, edges[1:])]
+    for k in QUANTITIES[1:]:
+        errors = [float((Q(e)+Q(EPS)*abs(Q(y)))/d)
+                  for e, y, d in zip(getattr(result, k+"_error"), getattr(result, k), widths)]
+        setattr(result, k+"_per_eV_error", np.array(errors))
+
+
 def _fold(panels, geometry, multiplier, lower_minus=None):
     outputs, panel_errors, support_widths = {}, {}, {}
     first = panels[0]

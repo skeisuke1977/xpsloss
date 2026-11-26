@@ -21,7 +21,7 @@ from .xps_depth_averaged import (
     DepthAverageConvergenceError, DepthAveragedResult, effective_cross_section_depth_averaged,
 )
 from .xps_single_loss import (
-    SINGLE_LOSS_MODEL_ID, BinnedPrimary, DeltaPrimary, LossWindowAreaResult, SingleLossConvergenceError,
+    SINGLE_LOSS_MODEL_ID, SINGLE_LOSS_CONVENTIONS_MODEL_ID, BinnedPrimary, DeltaPrimary, LossWindowAreaResult, SingleLossConvergenceError,
     SingleLossInputError, SingleLossSpectrumResult, loss_window_area, single_loss_spectrum,
 )
 
@@ -31,6 +31,6 @@ __all__ = [
     "DielectricConvergenceError", "DielectricResponse", "Material", "Oscillator",
     "bulk_diimfp", "dielectric_response", "loss_function", "negative_inverse_dielectric_function",
     "FixedDepthConvergenceError", "FixedDepthGapDomainError", "FixedDepthResult", "effective_cross_section_fixed_depth",
-    "SINGLE_LOSS_MODEL_ID", "BinnedPrimary", "DeltaPrimary", "LossWindowAreaResult", "SingleLossSpectrumResult",
+    "SINGLE_LOSS_MODEL_ID", "SINGLE_LOSS_CONVENTIONS_MODEL_ID", "BinnedPrimary", "DeltaPrimary", "LossWindowAreaResult", "SingleLossSpectrumResult",
     "SingleLossInputError", "SingleLossConvergenceError", "loss_window_area", "single_loss_spectrum",
 ]

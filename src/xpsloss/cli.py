@@ -17,6 +17,7 @@ import scipy
 from . import __version__
 from . import _single_loss_cli
 from .xps_single_loss import SINGLE_LOSS_MODEL_ID, SingleLossInputError, SingleLossConvergenceError
+from ._single_loss_types import SINGLE_LOSS_CONVENTIONS_MODEL_ID, MULTIPLIERS, WEIGHT_KINDS
 from .config import load_config
 from .dielectric import (
     DIELECTRIC_MODEL_ID, DielectricGapEdgeError,
@@ -88,8 +89,10 @@ def capabilities():
         "bulk_unsupported_physics_model_id": MODEL_ID,
         "xps_single_loss": {
             "model_id": SINGLE_LOSS_MODEL_ID,
+            "model_ids": [SINGLE_LOSS_MODEL_ID, SINGLE_LOSS_CONVENTIONS_MODEL_ID],
+            "weight_length_kinds": list(WEIGHT_KINDS), "multiplier_conventions": list(MULTIPLIERS),
             "scope": "Eq. (19) zero-loss and single-loss terms over a finite loss window, "
-                     "0 degrees from the surface normal, external constant length, kernel fixed at E0. "
+                     "0 degrees from the surface normal, constant lengths for the weight and multiplier, kernel fixed at E0. "
                      "The primary is assumed to exclude intrinsic loss satellites.",
             "unsupported_physics": ["oblique_emission", "trajectory_dependent_weight_length", "self_consistent_length",
                                     "multiple_scattering", "intrinsic_loss_separation", "losses_outside_window",

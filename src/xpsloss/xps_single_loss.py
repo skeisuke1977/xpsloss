@@ -1,7 +1,7 @@
 """Finite-window integration of Eq. (19), Simonsen et al., Phys. Rev. B 56, 1612.
 
-The depth weight and the satellite multiplier use the same externally supplied
-length in angstrom. Detector bins contain integrated intensity on the kinetic
+The depth weight and the satellite multiplier are constant lengths in angstrom.
+Their finite-window conventions can be selected separately. Detector bins contain integrated intensity on the kinetic
 energy axis, including separate low and high overflow regions.
 """
 
@@ -15,13 +15,13 @@ from . import _loss_panels
 from ._loss_roots import candidates
 from ._single_loss_types import (
     BinnedPrimary, COLUMNS, COMPONENTS, DeltaPrimary, LossWindowAreaResult, QUANTITIES,
+    MULTIPLIERS, WEIGHT_KINDS, SINGLE_LOSS_MODEL_ID as SINGLE_LOSS_MODEL_ID, SINGLE_LOSS_CONVENTIONS_MODEL_ID,
     SingleLossConvergenceError, SingleLossInputError, SingleLossSpectrumResult,
 )
 from .model import Material, finite_number
 from .xps_depth_averaged import DepthAverageConvergenceError, effective_cross_section_depth_averaged
 from .xps_fixed_depth import EPSILON_MOMENTA, FIXED_ABS, FIXED_REL
 
-SINGLE_LOSS_MODEL_ID = "simonsen1997_single_loss_spectrum_external_v0"
 AREA_DEFAULTS = dict(epsrel=1e-6, area_epsabs=1e-10, panel_limit=400, kernel_epsabs=FIXED_ABS,
                      kernel_epsrel=FIXED_REL, kernel_limit=200)
 SPECTRUM_DEFAULTS = dict(**AREA_DEFAULTS, spectrum_epsabs_fraction=1e-9, max_cells=2_000_000)
@@ -164,10 +164,47 @@ def _warnings(result, primary):
     comparison = diag["comparison"]
     if any(comparison[k] != "matched" for k in comparison["key_status"]):
         add("outside_matched_scope", "The completed comparison table does not cover all requested outputs.")
+    if result.model_id == SINGLE_LOSS_CONVENTIONS_MODEL_ID:
+        if result.weight_length_kind == "inverse_13a_window_area":
+            add("W-13a", "This window-dependent length is not an IMFP. Comparison with trajectory weighting "
+                "covers only the registered Al and Si conditions at normal emission and unit hole charge.")
+        if result.extra_inverse_length_per_A > 0:
+            add("W-c", "The extra attenuation is supplied by the caller and was checked only in the "
+                "supplementary M3a-2 conditions.")
+        if result.multiplier_A != result.weight_length_A:
+            add("W-len", "Different weight and multiplier lengths depart from the constant-attenuation derivation.")
+        if result.multiplier_convention == "inverse_window_area":
+            add("W-S2", "The single-loss weight is one by convention; it does not predict the relative satellite area.")
+        add("W-sens", "Cutoff sensitivity holds the reported weight length and multiplier fixed.")
     result.warnings = tuple(r["message"] for r in diag["warnings"])
 
 
-def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, charge, settings, batch_size=None):
+def _number(value, argument, reason, *, allow_zero=False):
+    try:
+        value = finite_number(value, argument)
+        if value < 0 or (value == 0 and not allow_zero):
+            raise ValueError
+    except (ValueError, OverflowError) as exc:
+        raise SingleLossInputError(reason, message_details=dict(argument=argument)) from exc
+    return value
+
+
+def _seed_length(material, energy, window, features, seed_length, extra, kw, batch_size, diag):
+    settings = diag["effective_settings"]
+    sampler = _DepthSampler(material, energy, window, dict(kw, weight_length_A=seed_length), batch_size, diag)
+    try:
+        seed, _ = _loss_panels._integrate(sampler, window, features, seed_length, kw["hole_charge"],
+            None, None, settings, diag, kernel_errstate=np.geterr(), energy=energy,
+            mode=kw["epsilon_momentum"], gap=material.gap_eV, seed=True, extra=extra)
+    except (SingleLossInputError, SingleLossConvergenceError) as exc:
+        exc.phase = "weight_length_seed"
+        raise
+    return seed
+
+
+def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, charge, settings, batch_size=None,
+         *, weight_length_kind="external_constant", extra_inverse_length_per_A=0., weight_length_seed_A=None,
+         multiplier="weight_length", multiplier_A=None):
     if not isinstance(material, Material):
         raise ValueError("material must be a Material")
     if not isinstance(mode, str) or mode not in EPSILON_MOMENTA:
@@ -175,9 +212,16 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
     if finite_number(theta, "theta_deg") != 0:
         raise ValueError("only normal emission (theta_deg=0) is supported")
     energy = finite_number(energy, "electron_energy_eV")
-    length = finite_number(length, "weight_length_A")
+    if not isinstance(weight_length_kind, str) or weight_length_kind not in WEIGHT_KINDS:
+        raise SingleLossInputError("invalid_weight_length_kind")
+    derived = weight_length_kind == "inverse_13a_window_area"
+    if derived:
+        if length is not None:
+            raise SingleLossInputError("invalid_weight_length", message_details=dict(argument="weight_length_A"))
+    else:
+        length = finite_number(length, "weight_length_A")
     charge = finite_number(charge, "hole_charge")
-    if energy <= 0 or length <= 0:
+    if energy <= 0 or (not derived and length <= 0):
         raise ValueError("weight_length_A and electron_energy_eV must be positive")
     window = _loss_panels.checked_window(loss_window_eV, energy)
     _loss_panels.validate_settings(settings)
@@ -185,6 +229,24 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
     if active and window[0] <= material.gap_eV:
         raise SingleLossInputError("window_not_above_gap", gap_eV=material.gap_eV, loss_window_eV=window,
                                    message_details=dict(loss_window_eV=window))
+    extra = _number(extra_inverse_length_per_A, "extra_inverse_length_per_A", "invalid_extra_inverse_length",
+                    allow_zero=True)
+    if extra and not derived:
+        raise SingleLossInputError("extra_inverse_length_without_derived_weight",
+                                  message_details=dict(argument="extra_inverse_length_per_A"))
+    seed_length = 20.
+    if weight_length_seed_A is not None:
+        seed_length = _number(weight_length_seed_A, "weight_length_seed_A", "invalid_weight_length_seed")
+        if not derived:
+            raise SingleLossInputError("weight_length_seed_without_derived_weight",
+                                      message_details=dict(argument="weight_length_seed_A"))
+    if not isinstance(multiplier, str) or multiplier not in MULTIPLIERS:
+        raise SingleLossInputError("invalid_multiplier")
+    if multiplier == "external":
+        multiplier_A = _number(multiplier_A, "multiplier_A", "invalid_multiplier_length")
+    elif multiplier_A is not None:
+        raise SingleLossInputError("invalid_multiplier_length", message_details=dict(argument="multiplier_A"))
+    legacy = not derived and (multiplier == "weight_length" or (multiplier == "external" and multiplier_A == length))
     diag = _loss_panels._diagnostics(settings)
     features = {}
     if active:
@@ -195,15 +257,63 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
         diag["resolution_basis_reason"] = "zero_response"
     kw = dict(weight_length_A=length, epsilon_momentum=mode, theta_deg=theta, hole_charge=charge,
               epsabs=settings["kernel_epsabs"], epsrel=settings["kernel_epsrel"], limit=settings["kernel_limit"])
+    prepared = None
+    weight_interval = None
+    if not legacy:
+        prepared = _loss_panels._prepare(window, features, primary, edges, settings, diag, energy,
+                                         material.gap_eV, None if active else window)
+        _loss_panels.preflight(prepared, settings, diag)
+    if derived:
+        seed_diag = _loss_panels._diagnostics({k: settings[k] for k in AREA_DEFAULTS})
+        if active:
+            seed = _seed_length(material, energy, window, features, seed_length, extra, kw, batch_size, seed_diag)
+        else:
+            if not extra:
+                raise SingleLossInputError("weight_length_undefined", message_details=dict(argument="weight_length_kind"))
+            center, interval = _loss_panels._denominator(dict(value=0., estimate=0.), extra,
+                settings["epsrel"], "weight_length", None, seed_diag)
+            seed = dict(length_A=center, interval_A=interval, area13=0., error13=0.,
+                        seed_skipped="structural_zero", consistency="not_applicable")
+        length, weight_interval = seed["length_A"], seed["interval_A"]
+        kw["weight_length_A"] = length
+        diag["weight_length"] = dict(**seed, seed_A=seed_length, extra_inverse_length_per_A=extra,
+            **{k: seed_diag[k] for k in ("kernel_calls", "effective_settings", "denominator", "final_panels",
+                                          "stages", "warnings", "error_budget")})
+    if not active and multiplier == "inverse_window_area":
+        raise SingleLossInputError("multiplier_undefined")
     sampler = _DepthSampler(material, energy, window, kw, batch_size, diag)
-    result, _ = _loss_panels._integrate(sampler, window, features, length, charge, primary, edges, settings,
-                                        diag, kernel_errstate=np.geterr(), energy=energy, mode=mode,
-                                        gap=material.gap_eV, zero=not active)
+    try:
+        result, _ = _loss_panels._integrate(sampler, window, features, length, charge, primary, edges, settings,
+            diag, kernel_errstate=np.geterr(), energy=energy, mode=mode, gap=material.gap_eV, zero=not active,
+            prepared=prepared, multiplier=multiplier, multiplier_A=multiplier_A, weight_interval=weight_interval)
+    except (SingleLossInputError, SingleLossConvergenceError) as exc:
+        if not legacy:
+            exc.phase = "production"
+        raise
+    result.weight_length_kind = weight_length_kind
+    result.weight_length_interval_A = weight_interval
+    result.extra_inverse_length_per_A = extra
+    if derived and active:
+        a, e = result.window_area["term_13a"], result.window_area_error["term_13a"]
+        delta = abs(Fraction(seed["area13"])-Fraction(a))
+        allowance = Fraction(seed["error13"])+Fraction(e)
+        diag["weight_length"]["consistency"] = dict(beta_area13=a, beta_error13=e, delta=float(delta),
+                                                    allowance=float(allowance), passed=delta <= allowance)
+        if delta > allowance:
+            raise SingleLossConvergenceError("weight_length_inconsistent", phase="production",
+                stage=diag["stages"], diagnostics=diag, message_details=dict(argument="weight_length_kind"))
     conditions = dict(material=dict(gap_eV=material.gap_eV,
                                     oscillators=[[o.energy_eV, o.strength_eV2, o.width_eV, o.dispersion]
                                                  for o in material.oscillators]),
                       electron_energy_eV=energy, weight_length_A=length, theta_deg=theta, epsilon_momentum=mode,
                       hole_charge=charge, loss_window_eV=list(window), effective_settings=settings)
+    if not legacy:
+        result.model_id = SINGLE_LOSS_CONVENTIONS_MODEL_ID
+        conditions.update(weight_length_kind=weight_length_kind, multiplier=multiplier, multiplier_A=result.multiplier_A)
+        if derived:
+            conditions["extra_inverse_length_per_A"] = extra
+        diag.setdefault("multiplier", dict(convention=multiplier, value_A=result.multiplier_A, interval_A=None,
+                                           rho=0.))
     if primary is not None:
         edges = result.output_edges_eV
         conditions.update(primary=_primary_values(primary), output_edges_eV=edges.tolist())
@@ -214,32 +324,43 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
 
 def loss_window_area(material, electron_energy_eV, *, loss_window_eV, weight_length_A, epsilon_momentum,
                      theta_deg=0., hole_charge=1., epsrel=1e-6, area_epsabs=1e-10, panel_limit=400,
-                     kernel_epsabs=FIXED_ABS, kernel_epsrel=FIXED_REL, kernel_limit=200) -> LossWindowAreaResult:
+                     kernel_epsabs=FIXED_ABS, kernel_epsrel=FIXED_REL, kernel_limit=200,
+                     weight_length_kind="external_constant", extra_inverse_length_per_A=0.,
+                     weight_length_seed_A=None, multiplier="weight_length", multiplier_A=None) -> LossWindowAreaResult:
     """Integrate eleven depth-averaged cross sections over a finite positive window (angstrom^-1)."""
     settings = dict(epsrel=epsrel, area_epsabs=area_epsabs, panel_limit=panel_limit,
                     kernel_epsabs=kernel_epsabs, kernel_epsrel=kernel_epsrel, kernel_limit=kernel_limit)
     return _run(material, electron_energy_eV, None, None, loss_window_eV, weight_length_A,
-                epsilon_momentum, theta_deg, hole_charge, settings)
+                epsilon_momentum, theta_deg, hole_charge, settings, weight_length_kind=weight_length_kind,
+                extra_inverse_length_per_A=extra_inverse_length_per_A, weight_length_seed_A=weight_length_seed_A,
+                multiplier=multiplier, multiplier_A=multiplier_A)
 
 
 def _single_loss_spectrum(material, electron_energy_eV, primary, output_edges_eV, *, loss_window_eV,
                           weight_length_A, epsilon_momentum, theta_deg=0., hole_charge=1.,
-                          kernel_batch_size=None, **numerics):
+                          kernel_batch_size=None, weight_length_kind="external_constant", extra_inverse_length_per_A=0.,
+                          weight_length_seed_A=None, multiplier="weight_length", multiplier_A=None, **numerics):
     if not isinstance(primary, (DeltaPrimary, BinnedPrimary)):
         raise SingleLossInputError("invalid_primary")
     return _run(material, electron_energy_eV, primary, output_edges_eV, loss_window_eV, weight_length_A,
-                epsilon_momentum, theta_deg, hole_charge, {**SPECTRUM_DEFAULTS, **numerics}, kernel_batch_size)
+                epsilon_momentum, theta_deg, hole_charge, {**SPECTRUM_DEFAULTS, **numerics}, kernel_batch_size,
+                weight_length_kind=weight_length_kind, extra_inverse_length_per_A=extra_inverse_length_per_A,
+                weight_length_seed_A=weight_length_seed_A, multiplier=multiplier, multiplier_A=multiplier_A)
 
 
 def single_loss_spectrum(material, electron_energy_eV, primary, output_edges_eV, *, loss_window_eV,
                          weight_length_A, epsilon_momentum, theta_deg=0., hole_charge=1., epsrel=1e-6,
                          area_epsabs=1e-10, spectrum_epsabs_fraction=1e-9, panel_limit=400, max_cells=2_000_000,
-                         kernel_epsabs=FIXED_ABS, kernel_epsrel=FIXED_REL, kernel_limit=200) -> SingleLossSpectrumResult:
+                         kernel_epsabs=FIXED_ABS, kernel_epsrel=FIXED_REL, kernel_limit=200,
+                         weight_length_kind="external_constant", extra_inverse_length_per_A=0., weight_length_seed_A=None,
+                         multiplier="weight_length", multiplier_A=None) -> SingleLossSpectrumResult:
     """Fold a delta or binned primary with the single-loss kernel at fixed electron energy."""
     return _single_loss_spectrum(
         material, electron_energy_eV, primary, output_edges_eV, loss_window_eV=loss_window_eV,
         weight_length_A=weight_length_A, epsilon_momentum=epsilon_momentum, theta_deg=theta_deg,
         hole_charge=hole_charge, epsrel=epsrel, area_epsabs=area_epsabs, spectrum_epsabs_fraction=spectrum_epsabs_fraction,
         panel_limit=panel_limit, max_cells=max_cells, kernel_epsabs=kernel_epsabs,
-        kernel_epsrel=kernel_epsrel, kernel_limit=kernel_limit)
+        kernel_epsrel=kernel_epsrel, kernel_limit=kernel_limit, weight_length_kind=weight_length_kind,
+        extra_inverse_length_per_A=extra_inverse_length_per_A, weight_length_seed_A=weight_length_seed_A,
+        multiplier=multiplier, multiplier_A=multiplier_A)
 

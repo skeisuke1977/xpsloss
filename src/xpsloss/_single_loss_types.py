@@ -1,20 +1,24 @@
 """Inputs, results and failure records shared by both loss-window layers."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 import math
 
 import numpy as np
 
 from .model import NumericalConvergenceError, finite_number
-from .xps_depth_averaged import COLUMNS
+from .xps_depth_averaged import COLUMNS as COLUMNS
 
 COMPONENTS = ("total", "no_hole", "hole")
 QUANTITIES = ("zero_loss", "single_loss_total", "single_loss_no_hole", "single_loss_hole", "spectrum")
 PARTS = ("interpolation", "verification", "kernel_point_error", "edge", "rounding")
 EPS = math.ulp(1.)
+SINGLE_LOSS_MODEL_ID = "simonsen1997_single_loss_spectrum_external_v0"
+SINGLE_LOSS_CONVENTIONS_MODEL_ID = "simonsen1997_single_loss_spectrum_conventions_v0"
+WEIGHT_KINDS = ("external_constant", "inverse_13a_window_area")
+MULTIPLIERS = ("weight_length", "external", "inverse_window_area")
 _ATTRIBUTES = ("required_panels", "panel_eV", "panel_width_ulp", "dominant_part", "node_kind",
-               "loss_eV", "index", "column", "stage", "inner_exception", "inner_reason",
+               "loss_eV", "index", "column", "stage", "phase", "inner_exception", "inner_reason",
                "inner", "inner_attributes", "diagnostics")
 
 
@@ -135,6 +139,17 @@ class LossWindowAreaResult:
     cutoff_sensitivity_error: dict
     diagnostics: dict
     warnings: tuple
+    model_id: str = field(kw_only=True, default=SINGLE_LOSS_MODEL_ID)
+    weight_length_kind: str = field(kw_only=True, default="external_constant")
+    weight_length_interval_A: tuple | None = field(kw_only=True, default=None)
+    extra_inverse_length_per_A: float = field(kw_only=True, default=0.)
+    multiplier_convention: str = field(kw_only=True, default="weight_length")
+    multiplier_A: float | None = field(kw_only=True, default=None)
+    multiplier_interval_A: tuple | None = field(kw_only=True, default=None)
+
+    def __post_init__(self):
+        if self.multiplier_A is None:
+            self.multiplier_A = self.weight_length_A
 
 
 @dataclass
