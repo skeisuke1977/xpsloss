@@ -993,9 +993,9 @@ def check_cli_state(row, out):
 
 
 def v_unavailable_verdict(state):
-    """Prereg 5.2: an unpacked sdist skips with the reason; missing history fails in CI."""
+    """Prereg 5.2: only an unpacked sdist (no Git checkout) skips; a checkout without the tag fails."""
     kind, reason = state
-    if kind == "skip" or "CI" not in os.environ:
+    if kind == "skip":
         return "skipped", reason
     return "fail", reason
 
