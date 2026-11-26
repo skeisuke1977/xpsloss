@@ -173,7 +173,7 @@ H_j=L\,a\,K_{{\rm sc},j}(E_0,a;L)
 | \(F\)、\(I\) | 一次線と強度の単位。δ 線（位置 \(E_i\)、強度 \(s_i\)）か、ビン（端 \(e_m\)、積分強度 \(f_m\)）のどちらか | \(I\) |
 | \(E\)、\(E'\)、\(T\) | 検出の運動エネルギー、一次励起の運動エネルギー、損失。\(E=E'-T\) | eV |
 | \(E_0\) | 核を評価するエネルギー（設定の `electron_energy_eV`）。すべての \(E'\) で同じ値に固定する | eV |
-| \(L\)（`weight_length_A`） | 外から与える一定の長さ。式(18)の重みと式(19)の乗数に同じ値を使う。既定値はない | Å |
+| \(L\)（`weight_length_A`） | 外から与える一定の長さ。既定の規約では、式(18)の重みと式(19)の乗数に同じ値を使う。既定値はない。重みの長さと乗数を分ける規約は下の E7a | Å |
 | \(W=[a,b]\)（`loss_window_eV`） | 損失窓。必須で、既定値はない。\(0<a<b<E_0\) | eV |
 | \(K_{{\rm sc},j}\) | E6 の深さ平均の出力（8項、`no_hole`、`hole`、`total`） | Å⁻¹ eV⁻¹ |
 | \(A_j\)（`window_area`） | 窓の面積（11列） | Å⁻¹ |
@@ -201,3 +201,40 @@ H_j=L\,a\,K_{{\rm sc},j}(E_0,a;L)
 | --- | --- | --- |
 | \(A_j\)、\(w_{1,W}\)、\(H_j\)、逆数の区間 | `xps_single_loss.loss_window_area`（パネルは `_loss_panels`、候補の根は `_loss_roots`）。CLI は `xps-loss-window-area` | 解析の参照 R-A、実材料の参照 R-B と CE（[M4a の事前登録](M4A_PREREG.md)、[VALIDATION.md](VALIDATION.md) の「M4a」） |
 | \(J_0\)、\(J_{1,j}\)、\(J\)、両側の外、\(H^\pm_{j,D}\) | `xps_single_loss.single_loss_spectrum`（セルの積分は `_fold`）。CLI は `xps-single-loss` | 同上 |
+
+### E7a. 重みの長さと式(19)の乗数を分ける規約（M4a-2）
+
+E7 の \(L\) を、式(18)の重みに使う長さ \(L_w\) と、式(19)の乗数 \(m\) に分ける。**物理は足さない。** 核（E6）、窓の積分、セルの積分、誤差の予算は E7 のままである。どの規約が物理として正しいかは主張しない。比較のために規約を選べるようにしたものである。
+
+\[
+J_{1,j}(E)=m\int_W F(E+T)\,K_{{\rm sc},j}(E_0,T;L_w)\,dT,\qquad
+w_{1,W}=m\,A_{\rm total}(L_w),\qquad
+H_j=m\,a\,K_{{\rm sc},j}(E_0,a;L_w)
+\]
+
+面積 \(A_j(L_w)\) と \(J_0\) は乗数によらない。収支は \(\sum_DJ_{1,j}=S\,m\,A_j\)、上端の診断 `LbK_b` は \(m\,b\,K_j(b)\) である。
+
+| 重みの長さ（`weight_length_kind`） | \(L_w\) | 根拠 |
+| --- | --- | --- |
+| `external_constant`（既定） | 呼び出す側が与える正の値 `weight_length_A` | 式(18) [Simonsen ら (1997) p. 1615](https://doi.org/10.1103/PhysRevB.56.1612) |
+| `inverse_13a_window_area` | \(1/D\)、\(D=A_{13a}(W)+c\)。`weight_length_A=None` を明示する | 文献の式ではない。面積と \(\lambda_c^{-1}\) の和の逆数という形（[Tougaard ら (2022) p. 4 式(7)](https://doi.org/10.1002/sia.7095)。面積は 0 から \(E_{\max}\) までの全有効断面積）を、13a の項と有限の窓に当てはめたもの。根拠は M3a-2 の判定（[ROADMAP](ROADMAP.md)） |
+
+| 乗数（`multiplier`） | \(m\) | \(w_{1,W}\) | 根拠 |
+| --- | --- | --- | --- |
+| `weight_length`（既定） | \(L_w\) | \(L_wA_{\rm total}\) | 式(18)–(19)（同じ \(\lambda\)） |
+| `external` | 呼び出す側が与える正の値 `multiplier_A`（Å） | \(mA_{\rm total}\) | 文献の式ではない（比較のための組み合わせ） |
+| `inverse_window_area`（S2） | \(1/A_{\rm total}(W;L_w)\) | 定義により 1 | 深さ平均の後の断面積の面積で乗数を決める規約（[Yubero と Tougaard (2005) p. 045414-3 式(9)の後](https://doi.org/10.1103/PhysRevB.71.045414)）を、有限の窓に限って読んだもの。文献の面積は計算した損失の全範囲である |
+
+- **規約の組と識別子:** 外部の重みで乗数が \(L_w\)（省略、`weight_length`、または \(L_w\) と binary64 で等しい `multiplier_A`）のときは、E7 と同じ演算の列でビット単位で同じ値を返し、識別子 `simonsen1997_single_loss_spectrum_external_v0`、照合、警告も E7 のままである。それ以外の5通りの組は識別子 `simonsen1997_single_loss_spectrum_conventions_v0`（式(19)の形に別の規約の長さを入れたもの）で、照合は常に `not_matched` である。組の全体は [M4a-2 の設計](M4A2_DESIGN.md) §2.4。
+- **\(L_w\neq m\) は導出の外:** E7 の導出で重みの長さと乗数が同じになるのは、一様な生成と一定長の指数の減衰を仮定したときだけである。\(L_w\neq m\) の組はその導出から外れる規約の組み合わせで、導出の結果ではない（警告 W-len）。
+- **窓の 13a の長さ:** \(c\ge0\)（`extra_inverse_length_per_A`、Å⁻¹、既定 0）は呼び出す側が与える追加の減衰で、パッケージは \(\lambda_c\) を計算しない。13a の被積分関数に深さも長さも入らないので、\(A_{13a}\) は重みの長さによらない。この長さは**平均自由行程ではない**。窓に依存し（ELF データ集の Al、1000 eV、`k_total` で、上端 50 eV と 99.8 eV でおよそ 27.06 Å と 25.96 Å）、軌道ごとの重みに近いことを確かめたのは、M3a-2 の列挙した条件（Al と Si、1000 eV、法線出射、正孔電荷 1）だけである（警告 W-13a、\(c>0\) なら W-c）。`k_parallel` の 13a は無限媒質のバルクの値と違うので、名前に bulk を使わない。外部から文献の IMFP を入れる使い方は、外部の重みで行う。
+- **2段の計算:** 窓の 13a の重みでは、まず種の長さ（`weight_length_seed_A`、省略で 20 Å）で面積を積分し、`term_13a` だけを判定する（段α）。\(A^\alpha_{13a}\)、その誤差 \(e^\alpha\)、\(c\) を厳密な有理数で足し、\(L_w\) を \(1/D\) の最も近い binary64、区間 `weight_length_interval_A` を \([1/(D+e^\alpha),1/(D-e^\alpha)]\) の外向きの丸めとする。次に \(L_w\) で本計算をする（段β）。最後に \(|A^\alpha_{13a}-A^\beta_{13a}|\le e^\alpha+e^\beta\) を有理数で確かめ、外れたら `weight_length_inconsistent`。例外は `phase`（`weight_length_seed`、`production`）を持つ。既定の組の例外、計算の前の検査の例外、段αを飛ばした構造的なゼロの例外では `phase` は `None` である。
+- **分母の規則:** 逆数を取る量 \(D\)（段αは \(A^\alpha_{13a}+c\)、S2 は \(A_{\rm total}\)）には、E7 の面積の予算に加えて \(D-e>0\) と \(e\le\varepsilon_{\rm rel}|D|\) を課す。満たさない段では逆数を保留し、畳み込みと成功をしない。保留の間は、分母の列の局所の誤差が最大のパネルを**1枚だけ**二分する（同じなら長いもの、さらに同じなら左のもの。通常の分割の候補は使わない）。符号は条件を満たした段で初めて決め、負なら `weight_length_undefined`、`multiplier_undefined`。分割が `panel_limit` で実行できないときに分母が決まっていなければ `weight_length_unresolved`、`multiplier_unresolved`。逆数か区間の端が表せなければ `*_not_representable`。強度が正の振動子がない材料は、核を呼ぶ前に判別する（窓の 13a の重みで \(c=0\) と、外部の重みで S2 は拒否。\(c>0\) なら \(L_w=1/c\) で段αを飛ばす）。
+- **S2:** 段βの各段で面積を求めた後、分母が決まった段で \(m\) を決め直し、全パネルをその \(m\) で畳み直す。\(w_{1,W}\equiv1\) なので衛星の相対面積は予測ではなく定義で、意味をもつのは窓の中の形とビンごとの配分だけである（警告 W-S2）。一次線の強度が 0 のとき、\(w=1\) は規約の値で、衛星と一次線の比は定義されない。ポアソンの数え方による乗数は文献の式ではないので実装しない（一定長では \(L_w\) と一致する）。
+- **感度:** `cutoff_sensitivity`、`cutoff_sensitivity_bins`、`LbK_b` は、報告した \(L_w\) と \(m\) を**固定した**偏感度である。窓を変えたときの \(m\) や \(L_w\) の変化は含まない（S2 では \(w\equiv1\) なので全微分は 0 だが、\(H\) は 0 でない。警告 W-sens）。窓を変えたときの値が要るなら、その窓で計算し直す。
+- **返す誤差:** 乗数に区間があるとき（S2 と、窓の 13a の重みで乗数 `weight_length`。`multiplier_interval_A`）、乗数に比例する出力の誤差を \(e_{\rm ret}=e_f+\rho(|\hat y|+e_f)\)、\(\rho=\max(\hat m-m_-,m_+-\hat m)/\hat m\) とする（厳密な有理数で求め、最後に1回だけ上向きに丸める。`diagnostics["multiplier"]["rho"]`）。成功の判定と `diagnostics.error_budget` は、報告した \(L_w\) と \(\hat m\) を固定した \(e_f\) で行う。そのため、この場合の `*_error` は `error_budget` の `estimate` と一致せず、\(\varepsilon_{\rm rel}\) が小さいとき予算のおよそ2倍までになりうる。S2 の \(w\) の誤差は \(|w-1|\) の上向きの丸めである。**重みの長さの不確かさが核 \(K(L_w)\) を通して出力を動かす分は、誤差に入れない。** その大きさは区間 `weight_length_interval_A` で示す（M3a-2 の条件では、長さ ±10 % で面積が数 %）。
+- **検査の順:** 新しい引数（\(c\)、種、乗数）の検査は、E7 の窓・材料・設定の検査の後、出力の端と一次線の検査の前に行う。どれも核を評価する前の拒否である。
+
+| 式 | 実装 | 検証 |
+| --- | --- | --- |
+| \(L_w\)、\(m\)、区間、2段の計算、分母の規則、返す誤差 | `xps_single_loss.loss_window_area`、`single_loss_spectrum`（キーワード `weight_length_kind`、`extra_inverse_length_per_A`、`weight_length_seed_A`、`multiplier`、`multiplier_A`）。分母と再畳み込みは `_loss_panels`、返す誤差は `_fold`。CLI は `--weight-length-inverse-13a-window-area`、`--extra-inverse-length-per-A`、`--weight-length-seed-A`、`--multiplier-A`、`--multiplier-inverse-window-area` | R-B から写像した参照（[M4a-2 の事前登録](M4A2_PREREG.md)、[VALIDATION.md](VALIDATION.md) の「M4a-2」） |
