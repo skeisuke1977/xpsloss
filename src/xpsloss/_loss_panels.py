@@ -12,6 +12,13 @@ from numpy.polynomial.legendre import leggauss
 
 from . import _fold
 from ._loss_roots import distance
+
+# Clearance rule (design 3.2 (4)): a panel needs dist(z, P) >= |P|/2 for every
+# candidate. The width cap Gamma_min is the boundary case of this rule for a
+# pole at distance Gamma_min/2, which binary64 roots reach only up to their
+# last bits. Roots within a relative 2**-48 inside the boundary count as on it,
+# so the panel count does not depend on those bits (prereg 11, CE5 and CE6).
+CLEARANCE_FACTOR = 1. - 2.**-48
 from ._single_loss_types import (
     BinnedPrimary, COLUMNS, COMPONENTS, DeltaPrimary, EPS, LossWindowAreaResult,
     PARTS, QUANTITIES, SingleLossConvergenceError, SingleLossInputError,
@@ -136,7 +143,7 @@ def _initial_mesh(window, features, limit, diag, *, energy=None, gap=0., initial
             stack = [(float(left+i*step), float(left+(i+1)*step))]
             while stack:
                 l, r = stack.pop()
-                if any(distance(z, l, r) < (r-l)/2 for z in poles):
+                if any(distance(z, l, r) < (r-l)/2*CLEARANCE_FACTOR for z in poles):
                     mid = _midpoint(l, r)
                     if not l < mid < r:
                         _width_failure(l, r, 0, diag)

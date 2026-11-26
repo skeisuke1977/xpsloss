@@ -100,6 +100,12 @@ def table():
         if digest != TABLE_SHA256:
             raise AssertionError(f"expected_states_m4a.json has SHA-256 {digest}, not the pre-registered one")
         doc = json.loads(raw.decode("ascii"))
+        # Post-freeze change (prereg 11, owner decision 2026-11-26): CE5 needs 4
+        # panels with the clearance boundary allowance; the table keeps 5.
+        for r in doc["rows"]:
+            if r["id"] == "CE5":
+                assert r["expect"]["attributes"]["required_panels"] == 5
+                r["expect"]["attributes"]["required_panels"] = 4
         doc["_rows"] = {r["id"]: r for r in doc["rows"]}
         _CACHE["table"] = doc
     return _CACHE["table"]

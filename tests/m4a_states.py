@@ -52,11 +52,28 @@ class KernelContractError(AssertionError):
     """The analytic kernel was asked for an undefined value (see the module docstring)."""
 
 
+# Post-freeze change of the registration (prereg 11, owner decision 2026-11-26).
+# The frozen table keeps its bytes and hash; only these expectations are
+# replaced when the table is read. The registered value stays in the table.
+POST_FREEZE_EXPECT = {
+    # CE5's surface roots lie on the clearance boundary; the frozen 5 came from
+    # the last bit of a root on one platform. With the boundary allowance the
+    # rule needs 4 panels on every platform.
+    "CE5": {"required_panels": (5, 4)},
+}
+
+
 def table():
     if "table" not in _CACHE:
         raw = TABLE_PATH.read_bytes()
         _CACHE["table_sha256"] = hashlib.sha256(raw).hexdigest()
-        _CACHE["table"] = json.loads(raw)
+        data = json.loads(raw)
+        for row in data["rows"]:
+            for name, (registered, replaced) in POST_FREEZE_EXPECT.get(row["id"], {}).items():
+                attributes = row["expect"]["attributes"]
+                need(attributes[name] == registered, f"{row['id']}: registered {name} is not {registered}")
+                attributes[name] = replaced
+        _CACHE["table"] = data
     return _CACHE["table"]
 
 

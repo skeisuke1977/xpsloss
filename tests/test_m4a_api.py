@@ -1,5 +1,6 @@
 """Public contract, moving-endpoint examples and the M3a boundary."""
 
+import math
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
@@ -47,7 +48,8 @@ class ResolutionTests(TestCase):
         self.assertEqual((n, basis), (74, "fixed_poles_enumerated"))
 
     def test_near_degenerate_surface_roots_are_preserved(self):
-        for energy, n, expected, confirmed in [(10.05, 5, "fixed_poles_enumerated", True),
+        # CE5 needs 4 panels: its surface roots lie on the clearance boundary (prereg 11).
+        for energy, n, expected, confirmed in [(10.05, 4, "fixed_poles_enumerated", True),
                                                 (10.0000001, 4, "computed_candidates_only", False)]:
             mat = Material("synthetic_doublet", 0., [Oscillator(10, 30, 1), Oscillator(energy, 30, 1)])
             count, roots, basis = self.mesh(mat, (7., 11.), "k_total")
@@ -55,6 +57,17 @@ class ResolutionTests(TestCase):
             positive = [r for r in roots if r["family"] == "surface" and 7 < r["z_re"] < 11]
             self.assertEqual(len(positive), 2)
             self.assertEqual(max(positive, key=lambda r: r["z_re"])["confirmed"], confirmed)
+
+    def test_clearance_boundary_does_not_depend_on_the_last_bits(self):
+        # prereg 11: a pole at distance |P|/2 from a panel of the cap width, or
+        # within a relative 2**-48 inside that boundary, does not split it.
+        def count(imag):
+            f = dict(singularities=[(3., imag)], min_half_width_eV=.5)
+            return len(_initial_mesh((2., 4.), f, 1000, _diagnostics({})))
+        self.assertEqual(count(-.5), 2)
+        self.assertEqual(count(math.nextafter(-.5, 0.)), 2)
+        self.assertEqual(count(-.5*(1-2.**-49)), 2)
+        self.assertEqual(count(-.5*(1-2.**-47)), 4)
 
     def test_remote_rational_check_is_visible_outside_mesh_candidates(self):
         material = Material("synthetic", 0, [Oscillator(1, .5, .1, 3037.62221442588)])
