@@ -15,16 +15,22 @@ PARTS = ("interpolation", "verification", "kernel_point_error", "edge", "roundin
 EPS = math.ulp(1.)
 _ATTRIBUTES = ("required_panels", "panel_eV", "panel_width_ulp", "dominant_part", "node_kind",
                "loss_eV", "index", "column", "stage", "inner_exception", "inner_reason",
-               "inner", "inner_attributes")
+               "inner", "inner_attributes", "diagnostics")
 
 
 class _Failure:
-    def __init__(self, reason, **attributes):
+    def __init__(self, reason, *, message_details=None, **attributes):
         self.reason = reason
         for name in _ATTRIBUTES:
             setattr(self, name, None)
         self.__dict__.update(attributes)
-        super().__init__(reason)
+        fields = {k: attributes[k] for k in ("setting", "required_panels", "panel_eV", "panel_width_ulp",
+                                             "gap_eV", "loss_eV", "index", "column",
+                                             "stage", "inner_reason", "dominant_part") if k in attributes}
+        fields.update(message_details or {})
+        details = ", ".join(f"{key}={value}" for key, value in fields.items() if value is not None)
+        message = f"{reason} ({details})" if details else reason
+        super().__init__(message.encode("ascii", "backslashreplace").decode("ascii"))
 
 
 class SingleLossInputError(_Failure, ValueError):

@@ -96,6 +96,11 @@ class LossMeshTests(unittest.TestCase):
                          ("loss_budget_not_met", "verification"))
         d = err.exception.diagnostics
         record = d["error_budget"]["outputs"]["window_area.total"]
+        worst = d["error_budget"]["max_ratio"]
+        row = d["error_budget"]["outputs"][worst["key"]]
+        for field in (f"output={worst['key']}", f"estimate={row['estimate']}", f"budget={row['budget']}",
+                      f"ratio={worst['value']}"):
+            self.assertIn(field, str(err.exception))
         self.assertGreater(record["verification"], record["kernel_point_error"])
         self.assertAlmostEqual(record["estimate"], 3.5585e-10, delta=3.5e-12)
         self.assertGreater(d["verification"]["rho_max"], 0)

@@ -1,13 +1,14 @@
 """Public contract, moving-endpoint examples and the M3a boundary."""
 
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 
 from xpsloss import (BinnedPrimary, DeltaPrimary, DepthAverageConvergenceError, Material, Oscillator,
                      SingleLossConvergenceError, SingleLossInputError, loss_window_area, single_loss_spectrum)
 from xpsloss import xps_single_loss as api
+from xpsloss import _loss_panels, _loss_roots
 from xpsloss._loss_panels import _initial_mesh, _diagnostics
 from xpsloss._loss_roots import candidates
 from xpsloss.config import load_config
@@ -22,11 +23,12 @@ EDGES = [960, 980, 984, 988, 995, 999, 1000, 1001]
 
 class ResolutionTests(TestCase):
     def mesh(self, m, w, mode):
-        roots, basis, _ = candidates(m, 1000., mode, w)
+        enumeration = candidates(m, 1000., mode, w)
+        roots = enumeration["candidates"]
         f = dict(singularities=[(r["z_re"], r["z_im"]) for r in roots],
                  min_half_width_eV=min(o.width_eV for o in m.oscillators)/2)
         mesh = _initial_mesh(w, f, 1000, _diagnostics({}), energy=1000., gap=m.gap_eV)
-        return len(mesh), roots, basis
+        return len(mesh), roots, enumeration["resolution_basis"]
 
     def test_moving_endpoint_roots_and_kinematic_endpoint_grading(self):
         for osc, mode, window, count, family, distance in [
@@ -54,6 +56,81 @@ class ResolutionTests(TestCase):
             self.assertEqual(len(positive), 2)
             self.assertEqual(max(positive, key=lambda r: r["z_re"])["confirmed"], confirmed)
 
+    def test_remote_rational_check_is_visible_outside_mesh_candidates(self):
+        material = Material("synthetic", 0, [Oscillator(1, .5, .1, 3037.62221442588)])
+        window = (49.5, 50.5)
+        d = candidates(material, 1000., "k_parallel", window)
+        self.assertEqual(d["resolution_basis"], "endpoint_roots_enumerated")
+        remote = d["remote_root_checks"]
+        self.assertTrue(any(r["confirmed"] and r["family"] == "surface" for r in remote))
+        self.assertTrue(all(r["method"] == "rational_remote_check" and r["distance_to_window_eV"] >= 1
+                            for r in remote))
+        self.assertTrue(d["candidates"])
+        self.assertTrue(all(r["method"] == "enumerated" and r["distance_to_window_eV"] < 1
+                            for r in d["candidates"]))
+
+    def test_numeric_failure_is_local_to_one_family_and_endpoint(self):
+        material = Material("synthetic", 0, [Oscillator(20, 3, 3, .5)])
+        args = (material, 1000., "k_total", (1., 50.))
+        def unaffected(r):
+            return (r["family"], r["end"]) != ("surface", "lower")
+        expected = [r for r in candidates(*args)["candidates"] if unaffected(r)]
+        self.assertTrue(any(r["end"] == "lower" for r in expected))
+        build = _loss_roots._family_polynomial
+        bad_roots = Mock(coef=np.array([1., 1.]))
+        bad_roots.trim.return_value.roots.return_value = np.array([complex(float("nan"), 0)])
+        for failure in [TypeError("polynomial arithmetic"), np.linalg.LinAlgError("root solver"),
+                        _loss_roots.Poly([1., np.inf]), bad_roots]:
+            with self.subTest(failure=failure):
+                def substitute(lines, energy, mode, end, family, index):
+                    if (family, end) == ("surface", "lower"):
+                        if isinstance(failure, Exception):
+                            raise failure
+                        return failure, _loss_roots.Poly([0., 1.])
+                    return build(lines, energy, mode, end, family, index)
+                with patch.object(_loss_roots, "_family_polynomial", side_effect=substitute):
+                    d = candidates(*args)
+                self.assertEqual(d["candidates"], expected)
+                self.assertEqual((d["resolution_basis"], d["resolution_basis_reason"]),
+                                 ("computed_candidates_only", "enumeration_failed"))
+                warning, = d["warnings"]
+                self.assertEqual((warning["family"], warning["end"], warning["code"]),
+                                 ("surface", "lower", "enumeration_failed"))
+                self.assertIn(warning["reason"], warning["message"])
+
+    def test_many_oscillators_defer_input_rejection_to_m3a(self):
+        lines = [Oscillator(c, a, w, (1., .5)[i % 2]) for i, (c, a, w) in
+                 enumerate(zip(np.linspace(3, 50, 60), np.linspace(5, 80, 60), np.linspace(1, 6, 60)))]
+        material = Material("synthetic_many", 0., lines)
+        with self.assertRaisesRegex(ValueError, "static sign") as upstream:
+            api.effective_cross_section_depth_averaged(material, 1000., [1., 50.],
+                                                       epsilon_momentum="k_total", weight_length_A=20)
+        with self.assertRaises(type(upstream.exception)) as caught:
+            loss_window_area(material, 1000., **KW)
+        self.assertEqual(str(caught.exception), str(upstream.exception))
+
+    def test_many_oscillators_return_area_after_coupled_polynomial_failure(self):
+        for n, energy in [(60, 10000.), (30, 100000.)]:
+            with self.subTest(n=n, energy=energy):
+                material = Material("synthetic_many", 0, [Oscillator(c, 3., 3., 1.) for c in np.linspace(6, 50, n)])
+                wide = candidates(material, energy, "k_total", (1., 50.))
+                self.assertEqual(wide["resolution_basis_reason"], "enumeration_failed")
+                self.assertTrue(any(r["family"] == "bulk" for r in wide["candidates"]))
+                # A narrow window keeps the real M3a integration inexpensive in the routine suite.
+                window = (1., 1.01)
+                kw = dict(epsilon_momentum="k_total", weight_length_A=20.)
+                kernel = api.effective_cross_section_depth_averaged(material, energy, window, limit=3000, **kw)
+                result = loss_window_area(material, energy, loss_window_eV=window, kernel_limit=3000, **kw)
+                mean = result.window_area["total"]/(window[1]-window[0])
+                self.assertLess(min(kernel.total), mean)
+                self.assertLess(mean, max(kernel.total))
+                d = result.diagnostics
+                self.assertEqual((d["resolution_basis"], d["resolution_basis_reason"]),
+                                 ("computed_candidates_only", "enumeration_failed"))
+                failed = {(w["family"], w["end"]) for w in d["warnings"] if w["code"] == "enumeration_failed"}
+                self.assertEqual(failed, {(f, e) for f in ("surface", "epsilon") for e in ("lower", "upper")})
+                self.assertTrue(all(w["message"] in result.warnings for w in d["warnings"]))
+
     def test_gap_grading_for_both_momenta(self):
         for mode in ("k_total", "k_parallel"):
             for name, window, count, expected_basis in [
@@ -69,9 +146,40 @@ class ResolutionTests(TestCase):
 
 
 class PublicTests(TestCase):
+    def test_integer_settings_use_the_index_protocol(self):
+        integers = dict(panel_limit=np.int64(400), kernel_limit=np.int32(200), max_cells=np.uint64(1000))
+        primary = DeltaPrimary([1000.], [1.])
+        r = single_loss_spectrum(WIDE, 1000., primary, EDGES, **{**KW, "loss_window_eV": (5., 5.01)}, **integers)
+        for name, value in integers.items():
+            actual = r.diagnostics["effective_settings"][name]
+            self.assertIs(type(actual), int)
+            self.assertEqual(actual, value)
+            for invalid in (True, np.bool_(True), np.int64(0), 1.5):
+                with self.subTest(name=name, invalid=invalid), self.assertRaises(SingleLossInputError) as err:
+                    single_loss_spectrum(ZERO, 1000., primary, EDGES, **KW, **{name: invalid})
+                self.assertEqual(err.exception.reason, "invalid_settings")
+                self.assertIsNone(err.exception.diagnostics)
+
+    def test_m3a_inherits_callers_float_settings(self):
+        settings = dict(over="ignore", divide="warn", invalid="ignore", under="ignore")
+        kernel, areas = api._call_kernel, _loss_panels._areas
+        def sample(*args, **kwargs):
+            self.assertEqual(np.geterr(), settings)
+            return kernel(*args, **kwargs)
+        def integrate(panels):
+            self.assertEqual(np.geterr(), {**settings, "over": "raise", "divide": "raise", "invalid": "raise"})
+            return areas(panels)
+        with np.errstate(**settings), patch.object(api, "_call_kernel", side_effect=sample) as m3a, \
+                patch.object(_loss_panels, "_areas", side_effect=integrate) as m4a:
+            loss_window_area(WIDE, 1000., **{**KW, "loss_window_eV": (5., 5.01)})
+            self.assertEqual(np.geterr(), settings)
+        m3a.assert_called()
+        m4a.assert_called()
+
     def test_common_validation_precedes_kernel_even_for_zero_material(self):
         with patch.object(api, "_call_kernel", side_effect=AssertionError) as calls:
             for kw, reason in [({"loss_window_eV": [1, float("nan")]}, "invalid_window"),
+                               ({"loss_window_eV": [1, 2**20_000]}, "invalid_window"),
                                ({"epsrel": 1e-17}, "invalid_settings"), ({"panel_limit": True}, "invalid_settings")]:
                 with self.assertRaises(SingleLossInputError) as exc:
                     loss_window_area(ZERO, 1000, **{**KW, **kw})
@@ -146,4 +254,7 @@ class PublicTests(TestCase):
         ex = caught.exception
         self.assertEqual((ex.node_kind, ex.index, ex.column, ex.stage), ("interior", 1, "total", 0))
         self.assertEqual(ex.inner_attributes["estimate"], 2.)
+        for field in (f"loss_eV={ex.loss_eV}", "index=1", "estimate=2.0", "budget=1.0"):
+            self.assertIn(field, str(ex))
+        self.assertTrue(str(ex).isascii())
 

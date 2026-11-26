@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from fractions import Fraction as Q
 from functools import cached_property
 import math
+import operator
 
 import numpy as np
 from numpy.polynomial.chebyshev import chebvander
@@ -45,20 +46,29 @@ def _nodes(a, b):
 
 
 def checked_window(window, energy=None):
+    details = {}
     try:
         a, b = (finite_number(x, "loss_window_eV") for x in window)
+        details["loss_window_eV"] = (a, b)
         valid = 0 < a < b and (energy is None or b < energy) and _nodes(a, b)[2]
-    except (TypeError, ValueError, OverflowError):
+    except (TypeError, ValueError, OverflowError) as exc:
+        details["detail"] = str(exc)
         valid = False
     if not valid:
-        raise SingleLossInputError("invalid_window", loss_window_eV=window)
+        raise SingleLossInputError("invalid_window", loss_window_eV=window, message_details=details)
     return a, b
 
 
 def validate_settings(settings):
     for key, value in settings.items():
         if key.endswith("limit") or key == "max_cells":
-            ok = isinstance(value, int) and not isinstance(value, bool) and value >= 1
+            if isinstance(value, (bool, np.bool_)):
+                raise SingleLossInputError("invalid_settings", setting=key)
+            try:
+                settings[key] = operator.index(value)
+            except TypeError as exc:
+                raise SingleLossInputError("invalid_settings", setting=key) from exc
+            ok = settings[key] >= 1
         else:
             try:
                 ok = finite_number(value, key) > 0
@@ -137,7 +147,8 @@ def _initial_mesh(window, features, limit, diag, *, energy=None, gap=0., initial
                     mesh.append((l, r))
     diag["required_panels"] = count
     if count > limit:
-        raise SingleLossInputError("resolution_exceeds_panel_limit", required_panels=count)
+        raise SingleLossInputError("resolution_exceeds_panel_limit", required_panels=count,
+                                   message_details=dict(panel_limit=limit))
     return mesh
 
 
@@ -210,7 +221,7 @@ def _areas(panels):
 
 
 def _diagnostics(settings):
-    return dict(resolution_basis=None, resolution_basis_reason="analytic_layer", candidates=[],
+    return dict(resolution_basis=None, resolution_basis_reason="analytic_layer", candidates=[], remote_root_checks=[],
                 required_panels=0, final_panels=0, stages=0, gradings=[], tolerance_bisected_panels=[],
                 verification=dict(rho_max=0., epsilon_max=0.), error_budget=dict(outputs={}, max_ratio=None),
                 balance={}, kernel_calls=dict(calls=0, points_sent_per_stage=[], points_sent_total=0,
@@ -366,12 +377,12 @@ def integrate_window(kernel, loss_window_eV, *, features, weight_length_A, hole_
                     panel_limit=panel_limit, max_cells=max_cells)
     return _integrate(kernel, checked_window(loss_window_eV), features, weight_length_A, hole_charge,
                       primary, output_edges_eV, settings, _diagnostics(settings),
-                      initial_edges=initial_edges, inject=inject)
+                      kernel_errstate=np.geterr(), initial_edges=initial_edges, inject=inject)
 
 
 @np.errstate(over="raise", divide="raise", invalid="raise")
 def _integrate(kernel, window, features, length, charge, primary, edges, settings, diag, *,
-               energy=None, mode=None, gap=0., zero=False, initial_edges=None, inject=None):
+               kernel_errstate, energy=None, mode=None, gap=0., zero=False, initial_edges=None, inject=None):
     validate_settings(settings)
     geometry = None
     if primary is not None:
@@ -395,9 +406,10 @@ def _integrate(kernel, window, features, length, charge, primary, edges, setting
             if geometry:
                 count = geometry.cell_count(bounds, settings["max_cells"])
                 if count > settings["max_cells"]:
+                    details = dict(cells_at_least=count, max_cells=settings["max_cells"])
                     if stage:
-                        raise SingleLossConvergenceError("cell_limit_reached", diagnostics=diag)
-                    raise SingleLossInputError("cell_limit_exceeded")
+                        raise SingleLossConvergenceError("cell_limit_reached", diagnostics=diag, message_details=details)
+                    raise SingleLossInputError("cell_limit_exceeded", message_details=details)
                 if not stage:
                     diag["initial_cells"] = count
                 diag["cells"] = count
@@ -418,7 +430,8 @@ def _integrate(kernel, window, features, length, charge, primary, edges, setting
             if geometry:
                 requests.append(lower_key)
             if not zero:
-                sampler.fill(requests, stage)
+                with np.errstate(**kernel_errstate):
+                    sampler.fill(requests, stage)
             current = {}
             for bounds_pair in mesh:
                 if bounds_pair in previous:
@@ -457,11 +470,15 @@ def _integrate(kernel, window, features, length, charge, primary, edges, setting
                 return result, panels
             if len(mesh)+int(split.sum()) > settings["panel_limit"]:
                 budget = diag["error_budget"]
-                worst = budget["outputs"][budget["max_ratio"]["key"]]
+                key = budget["max_ratio"]["key"]
+                worst = budget["outputs"][key]
+                details = dict(output=key, estimate=worst["estimate"], budget=worst["budget"],
+                               ratio=worst["ratio"], panel_limit=settings["panel_limit"])
                 if worst["kernel_point_error"] > worst["budget"]:
-                    raise SingleLossConvergenceError("kernel_error_exceeds_budget", diagnostics=diag)
+                    raise SingleLossConvergenceError("kernel_error_exceeds_budget", diagnostics=diag,
+                                                     message_details=details)
                 raise SingleLossConvergenceError("loss_budget_not_met", diagnostics=diag,
-                                                 dominant_part=max(PARTS, key=worst.get))
+                                                 dominant_part=max(PARTS, key=worst.get), message_details=details)
             mesh = []
             for (l, r), refine in zip(current, split):
                 if refine:

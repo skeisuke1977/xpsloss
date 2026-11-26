@@ -121,6 +121,7 @@ class _DepthSampler:
                 raise SingleLossConvergenceError(
                     "kernel_not_converged", node_kind="sentinel" if exc.loss_eV in self.window else "interior",
                     stage=stage, index=exc.index, column=exc.column, loss_eV=exc.loss_eV,
+                    message_details=dict(estimate=exc.estimate, budget=exc.budget),
                     inner_exception=type(exc).__name__, inner_reason=exc.reason, inner=str(exc),
                     inner_attributes=vars(exc).copy(), diagnostics=self.diag) from exc
             self._warnings(result, grid, stage)
@@ -182,25 +183,22 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
     _loss_panels.validate_settings(settings)
     active = [o for o in material.oscillators if o.strength_eV2]
     if active and window[0] <= material.gap_eV:
-        raise SingleLossInputError("window_not_above_gap", gap_eV=material.gap_eV, loss_window_eV=window)
+        raise SingleLossInputError("window_not_above_gap", gap_eV=material.gap_eV, loss_window_eV=window,
+                                   message_details=dict(loss_window_eV=window))
     diag = _loss_panels._diagnostics(settings)
     features = {}
     if active:
-        try:
-            with np.errstate(over="raise", divide="raise", invalid="raise"):
-                roots, basis, why = candidates(material, energy, mode, window)
-        except (ArithmeticError, np.linalg.LinAlgError, ValueError) as exc:
-            raise SingleLossConvergenceError("nonfinite_output", diagnostics=diag) from exc
-        features.update(singularities=[(r["z_re"], r["z_im"]) for r in roots],
+        diag.update(candidates(material, energy, mode, window))
+        features.update(singularities=[(r["z_re"], r["z_im"]) for r in diag["candidates"]],
                         min_half_width_eV=Fraction(min(o.width_eV for o in active))/2)
     else:
-        roots, basis, why = [], None, "zero_response"
-    diag.update(candidates=roots, resolution_basis=basis, resolution_basis_reason=why)
+        diag["resolution_basis_reason"] = "zero_response"
     kw = dict(weight_length_A=length, epsilon_momentum=mode, theta_deg=theta, hole_charge=charge,
               epsabs=settings["kernel_epsabs"], epsrel=settings["kernel_epsrel"], limit=settings["kernel_limit"])
     sampler = _DepthSampler(material, energy, window, kw, batch_size, diag)
     result, _ = _loss_panels._integrate(sampler, window, features, length, charge, primary, edges, settings,
-                                         diag, energy=energy, mode=mode, gap=material.gap_eV, zero=not active)
+                                        diag, kernel_errstate=np.geterr(), energy=energy, mode=mode,
+                                        gap=material.gap_eV, zero=not active)
     conditions = dict(material=dict(gap_eV=material.gap_eV,
                                     oscillators=[[o.energy_eV, o.strength_eV2, o.width_eV, o.dispersion]
                                                  for o in material.oscillators]),
@@ -209,7 +207,7 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
     if primary is not None:
         edges = result.output_edges_eV
         conditions.update(primary=_primary_values(primary), output_edges_eV=edges.tolist())
-    diag["comparison"] = _comparison(conditions, edges, basis)
+    diag["comparison"] = _comparison(conditions, edges, diag["resolution_basis"])
     _warnings(result, primary)
     return result
 

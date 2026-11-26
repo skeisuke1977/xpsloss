@@ -16,7 +16,7 @@ import scipy
 
 from . import __version__
 from . import _single_loss_cli
-from .xps_single_loss import SingleLossInputError, SingleLossConvergenceError
+from .xps_single_loss import SINGLE_LOSS_MODEL_ID, SingleLossInputError, SingleLossConvergenceError
 from .config import load_config
 from .dielectric import (
     DIELECTRIC_MODEL_ID, DielectricGapEdgeError,
@@ -86,6 +86,15 @@ def capabilities():
         "dielectric_model_id": DIELECTRIC_MODEL_ID,
         "bulk_unsupported_physics": list(UNSUPPORTED_PHYSICS),
         "bulk_unsupported_physics_model_id": MODEL_ID,
+        "xps_single_loss": {
+            "model_id": SINGLE_LOSS_MODEL_ID,
+            "scope": "Eq. (19) zero-loss and single-loss terms over a finite loss window, "
+                     "0 degrees from the surface normal, external constant length, kernel fixed at E0. "
+                     "The primary is assumed to exclude intrinsic loss satellites.",
+            "unsupported_physics": ["oblique_emission", "trajectory_dependent_weight_length", "self_consistent_length",
+                                    "multiple_scattering", "intrinsic_loss_separation", "losses_outside_window",
+                                    "elastic_scattering", "instrument_broadening", "background_subtraction"],
+        },
         "xps_depth_averaged": {
             "model_id": DEPTH_AVERAGED_MODEL_ID,
             "scope": "Eq. (18) single scattering with an external constant length, normal emission, "

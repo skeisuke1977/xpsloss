@@ -12,18 +12,25 @@ def distance(z, left, right):
     return math.hypot(max(left-z.real, 0., z.real-right), z.imag)
 
 
-def _families(oscillators, energy_polynomials, loss):
-    denominators = [w*w - loss*loss - 1j*osc.width_eV*loss
-                    for osc, w in zip(oscillators, energy_polynomials)]
-    for i, denominator in enumerate(denominators):
-        yield "bulk", i, denominator
+def _family_polynomial(lines, energy, mode, end, family, index):
+    # t = 1-sqrt(1-z/E0) for both moving endpoints. At the upper
+    # endpoint the momentum variable is 2-t.
+    t = Poly([0, 1])
+    loss = t if end == "both" else energy*t*(2-t)
+    momentum = t if end == "lower" else 2-t
+    shift = energy*momentum**2
+    if mode == "k_parallel":
+        shift -= loss**2/(4*energy)
     product = Poly([1])
     numerator = Poly([0])
-    for osc, denominator in zip(oscillators, denominators):
+    for osc in ((lines[index],) if family == "bulk" else lines):
+        w = osc.energy_eV + osc.dispersion*shift
+        denominator = w*w - loss*loss - 1j*osc.width_eV*loss
+        if family == "bulk":
+            return denominator, loss
         numerator = numerator*denominator + osc.strength_eV2*product
         product = product*denominator
-    for name, constant in (("surface", 2), ("epsilon", 1)):
-        yield name, constant, constant*product - numerator
+    return index*product - numerator, loss
 
 
 def _response(z, energy, mode, end, lines, family, index, *, factored=False):
@@ -47,21 +54,19 @@ def _response(z, energy, mode, end, lines, family, index, *, factored=False):
                 derivative -= z/(2*energy)
     terms, slopes = [], []
     cancelled = False
-    for i, osc in enumerate(lines):
+    for osc in ((lines[index],) if family == "bulk" else lines):
         w = osc.energy_eV + osc.dispersion*shift
         real_part = (w-z)*(w+z) if factored else w*w-z*z
         d = real_part - 1j*osc.width_eV*z
         dp = 2*w*osc.dispersion*derivative - 2*z - 1j*osc.width_eV
         scale = abs(w)**2 + abs(z)**2 + osc.width_eV*abs(z)
         if family == "bulk":
-            if i == index:
-                return d, dp, abs(d)/scale, False
-        else:
-            cancelled |= abs(d) <= 1e-10*scale
-            if d == 0:
-                return 0j, 0j, math.inf, True
-            terms.append(osc.strength_eV2/d)
-            slopes.append(terms[-1]*dp/d)
+            return d, dp, abs(d)/scale, False
+        cancelled |= abs(d) <= 1e-10*scale
+        if d == 0:
+            return 0j, 0j, math.inf, True
+        terms.append(osc.strength_eV2/d)
+        slopes.append(terms[-1]*dp/d)
     f = index - sum(terms)
     return f, sum(slopes), abs(f)/(1+sum(map(abs, terms))), cancelled
 
@@ -132,55 +137,88 @@ def _remote_single_root(t0, energy, mode, end, osc, family, index):
     return scalar(z), residual, cancelled
 
 
+def _family_candidates(lines, energy, mode, end, family, index, window):
+    left, right = window
+    polynomial, loss = _family_polynomial(lines, energy, mode, end, family, index)
+    if not np.isfinite(polynomial.coef).all():
+        raise ArithmeticError("nonfinite polynomial coefficients")
+    variables = polynomial.trim().roots()
+    if not np.isfinite(variables).all():
+        raise ArithmeticError("nonfinite polynomial roots")
+    variables = [complex(v) for v in variables if end == "both" or v.real < 1]
+    roots = [complex(loss(v)) for v in variables]
+    if not all(map(cmath.isfinite, roots)):
+        raise ArithmeticError("nonfinite loss roots")
+
+    def equation(z):
+        return _response(z, energy, mode, end, lines, family, index)
+
+    for i, root in enumerate(roots):
+        neighbors = roots[:i]+roots[i+1:]
+        z, residual, cancelled = _polish(root, neighbors, equation)
+        method = "enumerated"
+        if not cancelled:
+            # Check both forms where nearly coincident poles cost digits in D.
+            residual = max(residual, _response(z, energy, mode, end, lines, family, index,
+                                               factored=True)[2])
+        if (end != "both" and len(lines) == 1 and residual > 1e-8
+                and distance(root, left, right) >= right-left):
+            trial, err, cancel = _remote_single_root(variables[i], energy, mode, end,
+                                                     lines[0], family, index)
+            if not cmath.isfinite(trial):
+                raise ArithmeticError("nonfinite rationally checked root")
+            if all(abs(trial-root) <= abs(trial-other) for other in neighbors):
+                z, residual, cancelled = trial, err, cancel
+                method = "rational_remote_check"
+        if not cmath.isfinite(z):
+            raise ArithmeticError("nonfinite polished root")
+        if cancelled:
+            continue
+        if not math.isfinite(residual):
+            raise ArithmeticError("nonfinite root residual")
+        yield dict(z_re=z.real, z_im=z.imag, family=family, end=end, residual=residual,
+                   confirmed=residual <= 1e-8, near_origin=abs(z)<left/2, method=method,
+                   distance_to_window_eV=distance(z, left, right))
+
+
 def candidates(material, energy, mode, window):
     lines = [o for o in material.oscillators if o.strength_eV2]
     fixed = all(o.dispersion == 0 for o in lines)
-    left, right = window
-    records = []
+    families = [("bulk", i) for i in range(len(lines))] + [("surface", 2), ("epsilon", 1)]
+    records, remote_checks, warnings = [], [], []
     all_confirmed = True
-    t = Poly([0, 1])
     for end in (("both",) if fixed else ("lower", "upper")):
-        # At either end use the local expansion about z=0. For the upper
-        # branch its momentum variable is 2-t, where t=1-sqrt(1-z/E0).
-        zpoly = t if fixed else energy*t*(2-t)
-        momentum = t if end == "lower" else 2-t
-        shift = energy*momentum**2
-        if mode == "k_parallel":
-            shift -= zpoly**2/(4*energy)
-        ws = [o.energy_eV + o.dispersion*shift for o in lines]
-        for family, index, polynomial in _families(lines, ws, zpoly):
-            variables = [complex(v) for v in polynomial.trim().roots() if fixed or v.real < 1]
-            roots = [complex(zpoly(v)) for v in variables]
-            for i, root in enumerate(roots):
-                def equation(z):
-                    return _response(z, energy, mode, end, lines, family, index)
-                z, residual, cancelled = _polish(root, roots[:i]+roots[i+1:], equation)
-                if not cancelled:
-                    # Check the rational equation in both algebraic forms at
-                    # nearly coincident poles, where D itself loses digits.
-                    residual = max(residual, _response(z, energy, mode, end, lines, family, index,
-                                                       factored=True)[2])
-                if (not fixed and len(lines) == 1 and residual > 1e-8
-                        and distance(root, left, right) >= right-left):
-                    trial, err, cancel = _remote_single_root(variables[i], energy, mode, end,
-                                                             lines[0], family, index)
-                    if all(abs(trial-root) <= abs(trial-other) for other in roots[:i]+roots[i+1:]):
-                        z, residual, cancelled = trial, err, cancel
-                if cancelled:
-                    continue
-                confirmed = residual <= 1e-8
-                all_confirmed &= confirmed
-                dist = distance(z, left, right)
-                if dist >= right-left:
-                    continue
-                if any(row["family"] == family and row["end"] == end
-                       and abs(z-complex(row["z_re"], row["z_im"])) <= 1e-9*(1+abs(z))
-                       for row in records):
-                    continue
-                records.append(dict(z_re=z.real, z_im=z.imag, family=family, end=end,
-                                    residual=residual, confirmed=confirmed, near_origin=abs(z)<left/2,
-                                    method="enumerated", distance_to_window_eV=dist))
-    if material.gap_eV or not all_confirmed:
-        return records, "computed_candidates_only", ("hard_gap" if material.gap_eV else "unconfirmed_root")
-    return records, ("fixed_poles_enumerated" if fixed else "endpoint_roots_enumerated"), None
+        for family, index in families:
+            try:
+                with np.errstate(over="raise", divide="raise", invalid="raise"):
+                    for row in _family_candidates(lines, energy, mode, end, family, index, window):
+                        all_confirmed &= row["confirmed"]
+                        if row["distance_to_window_eV"] >= window[1]-window[0]:
+                            if row["method"] == "rational_remote_check":
+                                remote_checks.append(row)
+                            continue
+                        z = complex(row["z_re"], row["z_im"])
+                        if any(r["family"] == family and r["end"] == end
+                               and abs(z-complex(r["z_re"], r["z_im"])) <= 1e-9*(1+abs(z))
+                               for r in records):
+                            continue
+                        records.append(row)
+            except (ArithmeticError, np.linalg.LinAlgError, ValueError, TypeError) as exc:
+                label = f"bulk[{index}]" if family == "bulk" else family
+                warning = dict(source="xps_single_loss", code="enumeration_failed", family=family,
+                               end=end, reason=type(exc).__name__,
+                               message=f"Root enumeration failed for {label} at {end}: {type(exc).__name__}: {exc}")
+                if family == "bulk":
+                    warning["active_oscillator_index"] = index
+                warnings.append(warning)
+    reason = None
+    if warnings:
+        reason = "enumeration_failed"
+    elif material.gap_eV:
+        reason = "hard_gap"
+    elif not all_confirmed:
+        reason = "unconfirmed_root"
+    basis = "fixed_poles_enumerated" if fixed else "endpoint_roots_enumerated"
+    return dict(candidates=records, remote_root_checks=remote_checks, warnings=warnings,
+                resolution_basis="computed_candidates_only" if reason else basis, resolution_basis_reason=reason)
 

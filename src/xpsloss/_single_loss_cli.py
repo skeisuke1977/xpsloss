@@ -65,7 +65,8 @@ def _edges(spec, max_cells):
         if intervals.denominator != 1:
             raise ValueError("nonintegral output edge count")
         if intervals+2 > max_cells:
-            raise SingleLossInputError("cell_limit_exceeded")
+            raise SingleLossInputError("cell_limit_exceeded",
+                                       message_details=dict(cells_at_least=int(intervals)+2, max_cells=max_cells))
         spec = np.linspace(lo, hi, int(intervals)+1)
     return vector(spec, "invalid_output_edges", increasing=True)
 

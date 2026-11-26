@@ -133,6 +133,12 @@ class SingleLossCLITests(unittest.TestCase):
                          {"version", "registration_sha256", "reference_sha256", "records"})
 
     def test_failure_json_and_absent_output(self):
+        rc, err = self.invoke(False, "--panel-limit", "1")
+        self.assertEqual((rc, err["reason"], err["required_panels"]), (2, "resolution_exceeds_panel_limit", 9))
+        self.assertIsNone(err["diagnostics"])
+        self.assertIn("required_panels=9", err["message"])
+        self.assertIn("panel_limit=1", err["message"])
+        self.assertTrue(err["message"].isascii())
         rc, err = self.invoke(False, "--max-cells", "10")
         self.assertEqual((rc, err["error_type"]), (2, "ValueError"))
         self.assertNotIn("reason", err)
@@ -145,4 +151,17 @@ class SingleLossCLITests(unittest.TestCase):
             rc, err = self.invoke(True)
             self.assertEqual((rc, err["reason"]), (2, "invalid_schema"))
         self.assertFalse(self.out.exists())
+
+    def test_capabilities_describe_single_loss_scope(self):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.assertEqual(cli.main(["capabilities", "--json"]), 0)
+        info = json.loads(stdout.getvalue())["xps_single_loss"]
+        self.assertEqual(info["model_id"], api.SINGLE_LOSS_MODEL_ID)
+        for phrase in ("Eq. (19)", "finite loss window", "surface normal", "constant length",
+                       "fixed at E0", "exclude intrinsic loss"):
+            self.assertIn(phrase, info["scope"])
+        self.assertTrue({"oblique_emission", "trajectory_dependent_weight_length", "self_consistent_length",
+                         "multiple_scattering", "intrinsic_loss_separation", "losses_outside_window"}
+                        <= set(info["unsupported_physics"]))
 
