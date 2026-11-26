@@ -384,7 +384,7 @@ def legacy_items(log, before, after, prefix=""):
                 "multiplier_A",
                 "multiplier_interval_A",
                 "weight_length_interval_A",
-                "weight_length_seed_A",
+                "seed_A",
                 "area13",
                 "error13",
                 "extra_inverse_length_per_A",
@@ -542,7 +542,7 @@ def convention(row, log):
         if n > 2:
             log.check(g + ".keys", all(x["status"] == "no_reference" for x in keys.values()))
     log.equal("physical_validity", comp["physical_validity"], "not_established")
-    for k in ("weight_length_A", "multiplier_A", "weight_length_interval_A", "multiplier_interval_A"):
+    for k in ("weight_length_A", "seed_A", "multiplier_A", "weight_length_interval_A", "multiplier_interval_A"):
         log.equal("units." + k, manifest["units"][k], "angstrom")
     for k in ("area13", "error13", "extra_inverse_length_per_A"):
         log.equal("units." + k, manifest["units"][k], "angstrom^-1")
@@ -558,27 +558,32 @@ def usage(row, log):
         del argv[-2:]
         ext = ["--weight-length-A", "20"]
         derived = ["--weight-length-inverse-13a-window-area"]
-        flags_by_case = dict(
-            no_weight=[],
-            both_weights=ext + derived,
-            derived_source=derived + ["--weight-length-source", "text"],
-            external_c_zero=ext + ["--extra-inverse-length-per-A", "0"],
-            external_c_source=ext + ["--extra-inverse-length-source", "text"],
-            external_seed=ext + ["--weight-length-seed-A", "20"],
-            missing_c_with_source=derived + ["--extra-inverse-length-source", "text"],
-            both_m=ext + ["--multiplier-A", "7", "--multiplier-inverse-window-area"],
-            missing_m_with_source=ext + ["--multiplier-source", "text"],
-            s2_with_source=ext + ["--multiplier-inverse-window-area", "--multiplier-source", "text"],
-        )
+        derived_only = "extra attenuation and seed options require --weight-length-inverse-13a-window-area"
+        external_m_only = "--multiplier-source requires --multiplier-A"
+        flags, message = dict(
+            no_weight=([], "one of the arguments --weight-length-A --weight-length-inverse-13a-window-area is required"),
+            both_weights=(ext + derived, "argument --weight-length-inverse-13a-window-area: not allowed with argument --weight-length-A"),
+            derived_source=(derived + ["--weight-length-source", "text"], "--weight-length-source requires --weight-length-A"),
+            external_c_zero=(ext + ["--extra-inverse-length-per-A", "0"], derived_only),
+            external_c_source=(ext + ["--extra-inverse-length-source", "text"], derived_only),
+            external_seed=(ext + ["--weight-length-seed-A", "20"], derived_only),
+            missing_c_with_source=(derived + ["--extra-inverse-length-source", "text"],
+                                   "--extra-inverse-length-source requires --extra-inverse-length-per-A"),
+            both_m=(ext + ["--multiplier-A", "7", "--multiplier-inverse-window-area"],
+                    "argument --multiplier-inverse-window-area: not allowed with argument --multiplier-A"),
+            missing_m_with_source=(ext + ["--multiplier-source", "text"], external_m_only),
+            s2_with_source=(ext + ["--multiplier-inverse-window-area", "--multiplier-source", "text"], external_m_only),
+        )[case]
         with patch.object(m.api, "_call_kernel", wraps=m.api._call_kernel) as spy:
-            out = invoke(argv + flags_by_case[case], folder)
+            out = invoke(argv + flags, folder)
     d = json.loads(out["stderr"])
     log.check(
         "stderr",
         d["status"] == "error"
         and d["error_type"] == "ValueError"
-        and bool(d["message"])
+        and d["message"] == message
         and out["stderr"].isascii(),
+        actual=d["message"], expected=message,
     )
     log.check("calls", spy.call_count == 0)
     log.check("stdout", out["stdout"] is None)

@@ -213,7 +213,7 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
         raise ValueError("only normal emission (theta_deg=0) is supported")
     energy = finite_number(energy, "electron_energy_eV")
     if not isinstance(weight_length_kind, str) or weight_length_kind not in WEIGHT_KINDS:
-        raise SingleLossInputError("invalid_weight_length_kind")
+        raise SingleLossInputError("invalid_weight_length_kind", message_details=dict(argument="weight_length_kind"))
     derived = weight_length_kind == "inverse_13a_window_area"
     if derived:
         if length is not None:
@@ -241,7 +241,7 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
             raise SingleLossInputError("weight_length_seed_without_derived_weight",
                                       message_details=dict(argument="weight_length_seed_A"))
     if not isinstance(multiplier, str) or multiplier not in MULTIPLIERS:
-        raise SingleLossInputError("invalid_multiplier")
+        raise SingleLossInputError("invalid_multiplier", message_details=dict(argument="multiplier"))
     if multiplier == "external":
         multiplier_A = _number(multiplier_A, "multiplier_A", "invalid_multiplier_length")
     elif multiplier_A is not None:
@@ -260,9 +260,13 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
     prepared = None
     weight_interval = None
     if not legacy:
-        prepared = _loss_panels._prepare(window, features, primary, edges, settings, diag, energy,
-                                         material.gap_eV, None if active else window)
-        _loss_panels.preflight(prepared, settings, diag)
+        try:
+            with np.errstate(over="raise", divide="raise", invalid="raise"):
+                prepared = _loss_panels._prepare(window, features, primary, edges, settings, diag, energy,
+                                                 material.gap_eV, None if active else window)
+                _loss_panels.preflight(prepared, settings, diag)
+        except ArithmeticError as exc:
+            raise SingleLossConvergenceError("nonfinite_output", diagnostics=diag) from exc
     if derived:
         seed_diag = _loss_panels._diagnostics({k: settings[k] for k in AREA_DEFAULTS})
         if active:
@@ -280,7 +284,7 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
             **{k: seed_diag[k] for k in ("kernel_calls", "effective_settings", "denominator", "final_panels",
                                           "stages", "warnings", "error_budget")})
     if not active and multiplier == "inverse_window_area":
-        raise SingleLossInputError("multiplier_undefined")
+        raise SingleLossInputError("multiplier_undefined", message_details=dict(argument="multiplier"))
     sampler = _DepthSampler(material, energy, window, kw, batch_size, diag)
     try:
         result, _ = _loss_panels._integrate(sampler, window, features, length, charge, primary, edges, settings,
@@ -327,7 +331,25 @@ def loss_window_area(material, electron_energy_eV, *, loss_window_eV, weight_len
                      kernel_epsabs=FIXED_ABS, kernel_epsrel=FIXED_REL, kernel_limit=200,
                      weight_length_kind="external_constant", extra_inverse_length_per_A=0.,
                      weight_length_seed_A=None, multiplier="weight_length", multiplier_A=None) -> LossWindowAreaResult:
-    """Integrate eleven depth-averaged cross sections over a finite positive window (angstrom^-1)."""
+    """Integrate eleven depth-averaged cross sections over a finite positive window (angstrom^-1).
+
+    weight_length_kind selects the constant depth weight. The default,
+    "external_constant", requires a positive finite weight_length_A in angstrom.
+    With "inverse_13a_window_area", pass weight_length_A=None. The length is
+    1/(A_13a + c), using the term_13a area for this window and momentum choice.
+    extra_inverse_length_per_A is the finite nonnegative attenuation c in
+    inverse angstrom (default 0). A positive c requires the derived weight.
+    weight_length_seed_A is a positive finite seed in angstrom for that
+    calculation only. Its default None uses 20 angstrom for the derived weight.
+
+    multiplier selects the length m in Eq. (19). The default "weight_length"
+    uses the depth weight. "external" requires a positive finite multiplier_A
+    in angstrom. For both other choices, multiplier_A must be None (default).
+    "inverse_window_area" uses the reciprocal of the final total window area,
+    with no added c in the denominator, so m times that area is one by
+    convention. Each multiplier can be used with either weight. An external
+    multiplier equal to the external weight follows the default numerical path.
+    """
     settings = dict(epsrel=epsrel, area_epsabs=area_epsabs, panel_limit=panel_limit,
                     kernel_epsabs=kernel_epsabs, kernel_epsrel=kernel_epsrel, kernel_limit=kernel_limit)
     return _run(material, electron_energy_eV, None, None, loss_window_eV, weight_length_A,
@@ -354,7 +376,25 @@ def single_loss_spectrum(material, electron_energy_eV, primary, output_edges_eV,
                          kernel_epsabs=FIXED_ABS, kernel_epsrel=FIXED_REL, kernel_limit=200,
                          weight_length_kind="external_constant", extra_inverse_length_per_A=0., weight_length_seed_A=None,
                          multiplier="weight_length", multiplier_A=None) -> SingleLossSpectrumResult:
-    """Fold a delta or binned primary with the single-loss kernel at fixed electron energy."""
+    """Fold a delta or binned primary with the single-loss kernel at fixed electron energy.
+
+    weight_length_kind selects the constant depth weight. The default,
+    "external_constant", requires a positive finite weight_length_A in angstrom.
+    With "inverse_13a_window_area", pass weight_length_A=None. The length is
+    1/(A_13a + c), using the term_13a area for this window and momentum choice.
+    extra_inverse_length_per_A is the finite nonnegative attenuation c in
+    inverse angstrom (default 0). A positive c requires the derived weight.
+    weight_length_seed_A is a positive finite seed in angstrom for that
+    calculation only. Its default None uses 20 angstrom for the derived weight.
+
+    multiplier selects the length m in Eq. (19). The default "weight_length"
+    uses the depth weight. "external" requires a positive finite multiplier_A
+    in angstrom. For both other choices, multiplier_A must be None (default).
+    "inverse_window_area" uses the reciprocal of the final total window area,
+    with no added c in the denominator, so m times that area is one by
+    convention. Each multiplier can be used with either weight. An external
+    multiplier equal to the external weight follows the default numerical path.
+    """
     return _single_loss_spectrum(
         material, electron_energy_eV, primary, output_edges_eV, loss_window_eV=loss_window_eV,
         weight_length_A=weight_length_A, epsilon_momentum=epsilon_momentum, theta_deg=theta_deg,

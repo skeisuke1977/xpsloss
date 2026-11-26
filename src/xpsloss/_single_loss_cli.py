@@ -215,7 +215,7 @@ def run(args):
     if spectrum:
         units.update(bin_integral=primary.intensity_unit, density=primary.intensity_unit+"/eV")
     units.update(multiplier_A="angstrom", multiplier_interval_A="angstrom", weight_length_interval_A="angstrom",
-                 weight_length_seed_A="angstrom", area13="angstrom^-1", error13="angstrom^-1",
+                 seed_A="angstrom", area13="angstrom^-1", error13="angstrom^-1",
                  extra_inverse_length_per_A="angstrom^-1")
     weight = dict(length_A=result.weight_length_A, length_kind=result.weight_length_kind,
                   length_source=args.weight_length_source)

@@ -1,9 +1,12 @@
 """Frozen M4a-2 rows, actual API calls and the per-key execution ledger."""
 
+from collections import Counter
 from contextlib import contextmanager
 from copy import deepcopy
-from dataclasses import is_dataclass
+from dataclasses import dataclass, is_dataclass
+from decimal import Context, Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN
 from fractions import Fraction as F
+from fnmatch import fnmatchcase
 from functools import lru_cache
 import hashlib
 import json
@@ -22,7 +25,8 @@ from xpsloss._single_loss_types import COMPONENTS, QUANTITIES, EPS
 ROOT = Path(__file__).resolve().parents[1]
 DIRECTORY = ROOT / "benchmarks/numerics/m4a2"
 RAW = (DIRECTORY / "expected_states_m4a2.json").read_bytes()
-assert hashlib.sha256(RAW).hexdigest() == "4a8264a58b9902efee3d843c10be812569ff6f46d720c9f23ebf37a4f263073f"
+STATES_SHA256 = "4a8264a58b9902efee3d843c10be812569ff6f46d720c9f23ebf37a4f263073f"
+assert hashlib.sha256(RAW).hexdigest() == STATES_SHA256
 TABLE = json.loads(RAW)
 ROWS = {r["id"]: r for r in TABLE["rows"]}
 DERIVED = dict(weight_length_kind="inverse_13a_window_area", weight_length_A=None)
@@ -66,8 +70,8 @@ class Ledger:
     def equal(self, key, value, target, kind="identity"):
         self.check(key, bits(value) == bits(target), kind)
 
-    def status(self, key):
-        statuses = [v["status"] for (k, name), v in self.items.items() if name == key]
+    def status(self, key=None):
+        statuses = {v["status"] for (_, name), v in self.items.items() if key is None or name == key}
         return next(
             (
                 s
@@ -76,6 +80,73 @@ class Ledger:
             ),
             "not_run",
         )
+
+
+# A registered key with the same spelling as a check maps directly. These
+# groups name the finer ledger checks used for the other registered keys.
+# Patterns address "kind/key"; no execution-completed marker is evidence.
+REGION_VALUES = tuple("identity/*." + q for q in QUANTITIES)
+SENSITIVITIES = {
+    "w": ("identity/single_loss_weight",),
+    "H": ("identity/cutoff_sensitivity.*",),
+    "Hpm": ("identity/*.cutoff_sensitivity.*",),
+    "LbK_b": ("identity/diagnostics.LbK_b.*",),
+}
+REGISTERED_CHECKS = {
+    "paired_baseline": {"legacy": ("identity/fields", "identity/diagnostics", "identity/legacy.keys",
+                                   "identity/manifest.*", "identity/files.*")},
+    "m4a_ledger": {"original_check_plan": ("old.*/*",)},
+    "beta_replay": {"beta_numeric": ("identity/fixed.*",), "beta_diag": ("identity/beta.*",),
+                    "returned_errors": ("rounding/*_error",)},
+    "area_invariance": {"area11": ("identity/window_area",), "area_error11": ("identity/window_area_error",),
+                        "area_budget11": ("identity/window_area_budget",)},
+    "s2_map": {"returned_errors": ("rounding/*_error",)},
+    "analytic_map": {**SENSITIVITIES, "regions5": REGION_VALUES, "densities": ("identity/*_per_eV",)},
+    "direct_tails": {"outside.low": ("identity/outside.low.*",), "outside.high": ("identity/outside.high.*",)},
+    "refold": {"budget": ("identity/*.budget",)},
+    "error_formula": {
+        "spectrum_error": ("identity/*.spectrum_error",), "density_error": ("identity/*_per_eV_error",),
+        "satellite_errors": ("rounding/bin*.single_loss_*_error",), "outside_errors": ("rounding/outside.*_error",),
+        "H_errors": ("rounding/cutoff_sensitivity.*_error",), "Hpm_errors": ("rounding/*.cutoff_sensitivity.*_error",),
+    },
+    "wiring": {"kernel_calls": ("identity/*.call_kwargs.weight_length_A",)},
+    "partial_sensitivity": {**SENSITIVITIES, "balance": ("identity/diagnostics.balance.*",)},
+    "structural_zero": {"kernel_calls": ("identity/calls",), "interval": ("identity/weight_length_interval_A",),
+                        "w": ("identity/J",), "J0": ("identity/J",)},
+    "zero_primary": {"w_error": ("identity/w",), "regions5": REGION_VALUES},
+    "signed_s2": {"single_loss_hole": ("identity/*.single_loss_hole",)},
+    "denominator_progress": {"stage": ("identity/denominator", "identity/final_panels")},
+    "old_failure": {"worst_or_geometry": ("identity/worst_key", "identity/cells", "identity/panel_eV")},
+    "convention_record": {
+        "stdout": ("identity/stdout.model_id",), "manifest": ("identity/manifest.model_id", "identity/replay.spectrum_definition"),
+        "csv": ("identity/replay.csv",), "replay": ("identity/replay.*",),
+        "comparison": ("identity/comparison.*",), "units": ("identity/units.*",),
+    },
+    "old_manifest": {"legacy": ("identity/legacy.keys", "identity/window_area.*"), "replay": ("identity/csv",)},
+    "old_constructor": {"legacy": ("identity/field_order", "identity/old_args")},
+    "capabilities": {"supported": ("identity/other_blocks",)},
+    "kernel_failure": {"stdout": ("identity/exit",), "outdir": ("identity/exit",)},
+}
+
+
+def registered_checks(log):
+    """Resolve each frozen key to actual checks. Keep absent evidence visible."""
+    aliases = REGISTERED_CHECKS.get(log.row["rule"], {})
+    by_key = {}
+    for kind, key in log.items:
+        if kind not in ("execution", "registration", "unavailable"):
+            by_key.setdefault(key, []).append(f"{kind}/{key}")
+    checks = [check for matches in by_key.values() for check in matches]
+    mapping = {}
+    for key in log.row["keys"]:
+        patterns = ("identity/exception.*",) if key == "exception" else aliases.get(key, ())
+        matches = set(by_key.get(key, ()))
+        matches.update(check for pattern in patterns for check in checks if fnmatchcase(check, pattern))
+        timed_out = log.items.get(("unavailable", key), {}).get("reason") == "time_limit"
+        if not matches and not timed_out:
+            log.record("registration", key, "not_run", reason="unmapped_registered_key")
+        mapping[key] = sorted(matches)
+    return mapping
 
 
 def fixture(name="short", spectrum=False):
@@ -219,6 +290,58 @@ def beta(row, log):
         log.equal("beta." + k, r.diagnostics[k], b.diagnostics[k])
 
 
+@dataclass
+class ReferenceTable:
+    digest: str
+    records: dict
+
+    def audit_usage(self, rows, used):
+        """Count assigned comparisons only. Mutation witnesses are separate executions."""
+        expected = Counter(k for k in self.records if k[0] in rows)
+        if used != expected:
+            raise ValueError(f"reference usage: missing {expected - used}, unexpected/repeated {used - expected}")
+
+
+def index_references(doc):
+    meta = doc["metadata"]
+    paths = {DIRECTORY.parent / "m4a" / name: sha for name, sha in TABLE["frozen_inputs"].items()}
+    paths[DIRECTORY / "expected_states_m4a2.json"] = STATES_SHA256
+    if meta["inputs"] != {p.relative_to(ROOT).as_posix(): sha for p, sha in paths.items()}:
+        raise ValueError("mapped reference input hashes differ from the registration")
+    for p, sha in paths.items():
+        if hashlib.sha256(p.read_bytes()).hexdigest() != sha:
+            raise ValueError(f"frozen input hash mismatch: {p.name}")
+
+    index = {}
+    by_row, by_kind = Counter(), Counter()
+    for rec in doc["records"]:
+        rid, kind, key = pk = (rec["row_id"], rec["check_kind"], rec["key"])
+        if pk in index:
+            raise ValueError(f"duplicate mapped reference {pk}")
+        if rec["source_sha256"] != TABLE["frozen_inputs"]["references_rb_m4a.json"]:
+            raise ValueError(f"mapped reference source hash mismatch: {pk}")
+        if rid not in ROWS or key not in ROWS[rid]["keys"] or rec["source_row"] != ROWS[rid]["inputs"]["fixture"]:
+            raise ValueError(f"unregistered reference key or source row: {pk}")
+        if kind not in meta["check_kinds"]:
+            raise ValueError(f"unregistered reference kind: {pk}")
+        category = rec["counted_as"]
+        if kind == "ratio" and key == "single_loss_weight":
+            if category != "identity_4.4(5)":
+                raise ValueError(f"missing rounding identity: {pk}")
+            # planned_keys includes these identities among the 1,024 direct keys.
+            category = "direct_reference"
+        by_row[rid, kind, category] += 1
+        by_kind[kind, category] += 1
+        index[pk] = rec
+    plan = meta["planned_keys"]
+    planned_rows = {(rid, kind, cat): n for rid, kinds in plan["by_row_and_kind"].items()
+                    for kind, classes in kinds.items() for cat, n in classes.items()}
+    planned_kinds = {(kind, cat): n for kind, classes in plan["by_kind"].items() for cat, n in classes.items()}
+    if by_row != planned_rows or by_kind != planned_kinds:
+        raise ValueError("mapped reference counts differ from planned_keys by row, kind or counted_as")
+    return index
+
+
 @lru_cache(None)
 def references():
     path = DIRECTORY / "references_m4a2.json"
@@ -226,64 +349,42 @@ def references():
         return None
     raw = path.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
-    doc = json.loads(raw)
-    index = {}
-    for r in doc["records"]:
-        key = (r["row_id"], r["check_kind"], r["key"])
-        if key in index:
-            raise ValueError(f"duplicate mapped reference {key}")
-        index[key] = r
-    return digest, index
+    return ReferenceTable(digest, index_references(json.loads(raw)))
 
 
-@lru_cache(None)
-def rb_sources():
-    path = DIRECTORY.parent / "m4a/references_rb_m4a.json"
-    raw = path.read_bytes()
-    if hashlib.sha256(raw).hexdigest() != TABLE["frozen_inputs"][path.name]:
-        raise ValueError("R-B source hash differs from the registration")
-    return json.loads(raw)["rows"]
+def decimal40(x, rounding):
+    if not x:
+        return "0"
+    value = Context(prec=40, rounding=rounding).divide(Decimal(x.numerator), Decimal(x.denominator))
+    digits, exponent = format(value, ".39e").split("e")
+    return digits if int(exponent) == 0 else f"{digits}e{int(exponent):+d}"
 
 
-def fixed_reference(record, key, multiplier):
-    """Substitute one binary64 m in the affine expression of preregistration 4.1-4.2."""
-    p = record["parameter"]
-    if isinstance(p, dict) and "proportional" in p:
-        q = F(multiplier) / F(p["L_ref"])
-        r = F(p["constant"]["value"]) + q * F(p["proportional"]["value"])
-        u = F(p["constant"]["u_r"]) + q * F(p["proportional"]["u_r"])
-        floor = F(p["d_abs_constant"]) + q * F(p["d_abs_proportional"])
-        epsrel = F(p["epsrel"])
+def fixed_reference(record, multiplier):
+    """Evaluate metadata.fixed_m_evaluation using only the frozen operands."""
+    if not math.isfinite(multiplier) or multiplier <= 0:
+        raise ValueError("fixed_m requires a finite positive binary64 multiplier")
+    m = F(multiplier)
+    q = m / F(record["parameter"]["reference_length_A"])
+    t = record["terms"]
+    width = F(t["divide_by"])
+    r = (F(t["constant"]["value"]) + q * F(t["proportional"]["value"])) / width
+    u = (F(t["constant"]["u_r"]) + q * F(t["proportional"]["u_r"])) / width
+    floor = (F(t["d_abs"]["constant_exact"]) + m * F(t["d_abs"]["per_m_hat_exact"])) / width
+    value = decimal40(r, ROUND_HALF_EVEN)
+    stored_u = decimal40(u + abs(F(value) - r), ROUND_CEILING)
+    rel = max(8 * u / abs(r), F(t["epsrel_exact"])) if r else None
+    if r:
+        eligible = max(rel, 8 * F(stored_u) / abs(F(value))) <= F("1e-4")
     else:
-        # A symbolic parameter can identify the frozen operands by source row
-        # and keys instead of duplicating their decimal coefficients.
-        source = rb_sources()[record["source_row"]]
-        conditions = source["conditions"]
-        q = F(multiplier) / F(float.fromhex(conditions["weight_length_A"]))
-        epsrel = F(conditions["comparison_settings"]["epsrel"])
-        raw_key = key.removesuffix("_per_eV")
-        width = F(1)
-        if key != raw_key:
-            n = int(key[4 : key.index("]")])
-            edges = conditions["output_edges_eV"]
-            width = F(float.fromhex(edges[n + 1])) - F(float.fromhex(edges[n]))
-        terms = [(raw_key, q)]
-        if raw_key.startswith("window_area.") or raw_key.endswith(".zero_loss"):
-            terms = [(raw_key, F(1))]
-        elif raw_key.endswith(".spectrum"):
-            region = raw_key.removesuffix(".spectrum")
-            terms = [(region + ".zero_loss", F(1)), (region + ".single_loss_total", q)]
-        refs = source["keys"]
-        r = sum(factor * F(refs[k]["r"]) for k, factor in terms) / width
-        u = sum(factor * F(refs[k]["u_r"]) for k, factor in terms) / width
-        scale_floor = raw_key == "single_loss_weight" or "cutoff_sensitivity." in raw_key
-        floor = F(refs[raw_key]["d_abs"]) * (q if scale_floor else 1) / width
-    rel = max(epsrel, 8 * u / abs(r)) if r else None
-    return dict(value=r, u_r=u, d_abs=floor, d_rel=rel)
+        eligible = max(u, F(stored_u)) <= floor / 4
+    return dict(value=value, u_r=stored_u, d_abs=decimal40(floor, ROUND_FLOOR), d_abs_exact=str(floor),
+                d_rel=decimal40(rel, ROUND_FLOOR) if r else None, status="value" if eligible else "no_reference",
+                reason=None if eligible else "reference_width")
 
 
 def judge_numeric(value, error, ref, budget=None):
-    r, u, floor = (F(ref[k]) for k in ("value", "u_r", "d_abs"))
+    r, u, floor = (F(ref[k]) for k in ("value", "u_r", "d_abs_exact"))
     rel = F(ref["d_rel"]) if r else 0
     if min(u, floor, rel) < 0:
         return dict(status="fail", reason="invalid_reference")
@@ -304,54 +405,59 @@ def judge_numeric(value, error, ref, budget=None):
     return dict(status=status, precision=precision, coverage=coverage, budget=within)
 
 
-def mapped(log, kind, key, value, error=None, *, interval=None, budget=None, multiplier=None):
+def mapped(log, kind, key, value, error=None, *, interval=None, budget=None, multiplier=None, identity_value=None):
+    if (kind, key) in log.items:
+        raise ValueError(f"repeated comparison: {(log.row['id'], kind, key)}")
     table = references()
     if table is None:
         log.record(kind, key, "not_run", reason="references_absent")
         return
-    log.reference_sha256, refs = table
-    rec = refs.get((log.row["id"], kind, key))
+    log.reference_sha256 = table.digest
+    rec = table.records.get((log.row["id"], kind, key))
     if rec is None:
         log.record(kind, key, "fail", reason="missing_planned_reference_record")
         return
+    details = dict(counted_as=rec["counted_as"])
+    if interval is None:
+        details.update(observed=float(value).hex(), error=float(error).hex())
+        if budget is not None:
+            details["budget_value"] = float(budget).hex()
+    else:
+        details["reported_interval"] = [float(x).hex() for x in interval]
+    if rec["status"] == "parametric":
+        rec = fixed_reference(rec, multiplier)
+        details.update(multiplier_hex=float(multiplier).hex(),
+                       evaluated={k: rec[k] for k in ("value", "u_r", "d_abs", "d_rel")})
+        details["d_abs_exact"] = rec["d_abs_exact"]
     if rec["status"] in ("no_reference", "reference_path_failure"):
-        log.record(kind, key, rec["status"], reason=rec["reason"])
+        log.record(kind, key, rec["status"], reason=rec["reason"], **details)
         return
     if interval is not None:
-        # Test containment against the exact reciprocal of the source
-        # interval; a 40-digit outward-rounded endpoint is a display value.
-        source = rb_sources()[rec["source_row"]]["keys"]
-        seed = kind == "inverse_interval" and log.row["rule"] == "seed_reference"
-        area = source["window_area.term_13a" if seed else "window_area.total"]
-        d = F(area["r"]) + (F(log.row["inputs"]["c"]) if seed else 0)
-        u = F(area["u_r"])
-        if d <= u:
-            log.record(kind, key, "no_reference", reason="reference_denominator")
-            return
-        lower, upper = 1 / (d + u), 1 / (d - u)
-        bounds = rec["interval"]
-        if isinstance(bounds, dict):
-            bounds = (bounds["lower"], bounds["upper"])
-        stored_lo, stored_hi = map(F, bounds)
+        lower, upper = map(F, rec["interval_exact"])
+        details["interval_exact"] = rec["interval_exact"]
+        stored_lo, stored_hi = map(F, rec["interval"])
         if not stored_lo <= lower <= upper <= stored_hi:
-            log.record(kind, key, "fail", reason="mapped_interval_rounding")
+            log.record(kind, key, "fail", reason="mapped_interval_rounding", **details)
             return
         a, b = map(F, interval)
-        status = "pass" if a <= lower <= upper <= b else "fail" if b < lower or a > upper else "unresolved"
-        log.record(kind, key, status, coverage="interval")
+        if a > b or b < lower or a > upper:
+            status = "fail"
+        elif a <= lower and upper <= b:
+            status = "pass"
+        else:
+            status = "unresolved"
+        log.record(kind, key, status, coverage="interval", **details)
         return
-    extra = {}
-    if rec["status"] == "parametric":
-        rec = fixed_reference(rec, key, multiplier)
-        extra = dict(multiplier_hex=float(multiplier).hex(), evaluated={k: str(v) for k, v in rec.items()})
-    log.record(
-        kind,
-        key,
-        **judge_numeric(value, error, rec, budget),
-        observed=float(value).hex(),
-        error=float(error).hex(),
-        **extra,
-    )
+    if identity_value is not None:
+        target = F(rec["value"])
+        ok = (target == 1 and F(rec["u_r"]) == 0 and bits(value) == bits(identity_value)
+              and bits(error) == bits(rounded(abs(F(value) - target), math.inf)))
+        log.check(key, ok, kind, **details)
+        return
+    verdict = judge_numeric(value, error, rec, budget)
+    if verdict["status"] != "pass":
+        details["reference"] = {k: rec[k] for k in ("value", "u_r", "d_abs", "d_abs_exact", "d_rel")}
+    log.record(kind, key, **verdict, **details)
 
 
 def seed_observation(args, kw):
@@ -396,7 +502,7 @@ def cached_seed(mat, energy, window, mode, charge, settings, seed, c):
     )
 
 
-def seed_test(row, log):
+def seed_test(row, log, member_statuses):
     i = row["inputs"]
     args, kw = fixture(i["fixture"])
     args = (args[0], args[1], kw.pop("loss_window_eV"), kw.pop("epsilon_momentum"), kw.pop("hole_charge"))
@@ -408,15 +514,14 @@ def seed_test(row, log):
     if "seeds_A" in i:
         intervals = [run(s)["interval_A"] for s in i["seeds_A"]]
         members = [row["id"].removesuffix("intersection") + str(s) for s in i["seeds_A"]]
-        log.check("common_interval", max(x[0] for x in intervals) <= min(x[1] for x in intervals),
-                  member_rows=members)
+        common = max(x[0] for x in intervals), min(x[1] for x in intervals)
+        log.check("common_interval", common[0] <= common[1], member_rows=members)
+        mapped(log, "inverse_interval", "common_interval", None, interval=common)
         if references() is not None:
             for member in members:
-                single = Ledger(ROWS[member])
-                seed_test(ROWS[member], single)
-                statuses = {v["status"] for v in single.items.values()}
-                outcome = next(s for s in ("fail", "unresolved", "reference_path_failure", "no_reference",
-                                            "not_run", "pass") if s in statuses)
+                outcome = member_statuses.get(member)
+                if outcome is None:  # A standalone intersection still checks each seed.
+                    outcome = execute(ROWS[member]).status()
                 log.record("member", member, outcome)
         return
     v = run(i["seed_A"])
@@ -464,9 +569,10 @@ def real_map(row, log):
             if key in {"multiplier_A", "multiplier_interval_A", "returned_errors", "rho", "denominator"}:
                 continue
             if key.startswith("inverse_window_area_interval_A."):
-                mapped(log, kind, key, None, interval=interval)
+                mapped(log, kind, key, None, interval=r.inverse_window_area_interval_A)
             elif key == "single_loss_weight" and kind == "ratio":
-                log.equal(key, r.single_loss_weight, float(F(center) * F(r.window_area["total"])), kind)
+                mapped(log, kind, key, r.single_loss_weight, r.single_loss_weight_error,
+                       identity_value=float(F(center) * F(r.window_area["total"])))
             else:
                 y, e = old.read_key(obj, key)
                 rec = r.diagnostics["error_budget"]["outputs"].get(key)
@@ -553,7 +659,7 @@ def inherited(row, log):
             log.check("exception.reason", False)
 
 
-def execute(row):
+def execute(row, member_statuses=None):
     log = Ledger(row)
     try:
         rule = row["rule"]
@@ -562,7 +668,7 @@ def execute(row):
         elif rule in ("beta_replay", "area_invariance"):
             beta(row, log)
         elif rule in ("seed_reference", "seed_intersection"):
-            seed_test(row, log)
+            seed_test(row, log, member_statuses if member_statuses is not None else {})
         elif rule in ("external_map", "s2_map"):
             real_map(row, log)
         elif rule == "historical_replay":

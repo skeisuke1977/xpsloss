@@ -4,6 +4,7 @@ from contextlib import ExitStack, contextmanager
 from fractions import Fraction as F
 import math
 from types import SimpleNamespace
+import unittest
 from unittest.mock import patch
 
 import numpy as np
@@ -20,6 +21,58 @@ def columns(a=0.5, h=-0.25, b=0.0):
 
 def kernel(t, side):
     return np.tile(columns()[:, None], (1, len(t))), np.zeros((11, len(t)))
+
+
+class RefinementTests(unittest.TestCase):
+    def test_nonfinite_during_preparation_has_no_phase_or_stage(self):
+        args, kw = m.fixture(spectrum=True)
+
+        def overflow(*args):
+            np.multiply(np.finfo(float).max, 2.)
+
+        for name in ("_prepare", "preflight"):
+            with self.subTest(step=name), patch.object(panels, name, overflow), \
+                    np.errstate(over="ignore"), self.assertRaises(api.SingleLossConvergenceError) as failure:
+                m.call(args, kw | m.S2)
+            exc = failure.exception
+            self.assertEqual((exc.reason, exc.phase, exc.stage), ("nonfinite_output", None, None))
+            self.assertIsInstance(exc.__cause__, FloatingPointError)
+
+    def test_s2_denominator_returns_to_pending_after_fold(self):
+        window = (2., 4.)
+        primary = api.DeltaPrimary([10], [1])
+        edges = [6, 8, 9, 11]
+        verification = panels._nodes(*window)[1]
+        stages = []
+
+        def sample(points, stage):
+            stages.append(stage)
+            values, errors = kernel(points, None)
+            if stage == 0:
+                values[COLUMNS.index("term_13b"), np.isin(points, verification)] += 1
+            else:
+                errors[COLUMNS.index("total")] = 1
+            return values, errors
+
+        kw = dict(weight_length_A=8., multiplier="inverse_window_area", panel_limit=2)
+        for entry, phase in (("integrate_window", None), ("single_loss_spectrum", "production")):
+            stages.clear()
+            with self.subTest(entry=entry):
+                with self.assertRaises(api.SingleLossConvergenceError) as failure:
+                    if entry == "integrate_window":
+                        panels.integrate_window(
+                            lambda t, side: sample(t, len(stages)), window, primary=primary,
+                            output_edges_eV=edges, initial_edges=window, features={}, epsrel=1e-6,
+                            area_epsabs=1e-10, spectrum_epsabs_fraction=1e-9, max_cells=100, **kw)
+                    else:
+                        args, _ = m.fixture()
+                        with patch.object(api._DepthSampler, "__call__", lambda sampler, t, stage: sample(t, stage)):
+                            api.single_loss_spectrum(*args, primary, edges, epsilon_momentum="k_total",
+                                                     loss_window_eV=window, **kw)
+                exc = failure.exception
+                self.assertEqual(stages, [0, 1])
+                self.assertEqual(exc.diagnostics["required_panels"], 1)
+                self.assertEqual((exc.reason, exc.stage, exc.phase), ("multiplier_unresolved", 1, phase))
 
 
 def near(log, key, y, r):
@@ -162,7 +215,7 @@ def inputs(row, log):
 
                 log.equal("message", str(exc), old_length_message(row))
             if row["expect"].get("exception") == "SingleLossInputError" and i.get("argument"):
-                log.check("argument", i["argument"] in str(exc))
+                log.check("argument", "argument=" + i["argument"] in str(exc))
             r = None
         else:
             log.check("success", row["expect"]["status"] == "success")
@@ -422,6 +475,9 @@ class Simulation:
 
 
 def upstream_checks(log, sim, exc):
+    stages = [stage for phase, stage, *_ in sim.calls if phase == sim.target]
+    log.check("calls", stages == list(range(sim.i["fail_stage"] + 1))
+              and len(stages) == exc.diagnostics["kernel_calls"]["calls"])
     log.equal("inner_attributes", exc.inner_attributes, vars(sim.inner))
     log.check(
         "inner_exception",
@@ -493,6 +549,9 @@ def simulation(row, log, local_first=False):
                         worst is None
                         or worst["value"] == d["error_budget"]["outputs"][worst["key"]]["ratio"],
                     )
+                else:
+                    # Undefined or unrepresentable at stage zero, before _budget runs.
+                    log.equal("worst_key", d["error_budget"]["max_ratio"], None)
             if row["rule"] == "old_failure":
                 log.equal("diagnostics.stages", d["stages"], 0)
                 if name in ("budget_point", "budget_loss"):

@@ -522,9 +522,9 @@ def _integrate(kernel, window, features, length, charge, primary, edges, setting
                     lower_minus = None if zero else sampler.cache[sampler.key(lower_key)]
                 folded = _fold._fold(panels, geometry, m, lower_minus)
                 support = folded.support_widths
-                for name in geometry.names:
+                for region in geometry.names:
                     for quantity in QUANTITIES[:-1]:
-                        key = name+"."+quantity
+                        key = region+"."+quantity
                         outputs[key] = folded.outputs[key]
                 local.update(folded.panel_errors)
                 spec_abs = settings["spectrum_epsabs_fraction"]*math.fsum(primary.intensities)

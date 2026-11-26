@@ -249,13 +249,17 @@ def witness(row, change=None):
 
     m.cached_seed.cache_clear()
     pairs.cache_clear()
-    if change in ("perturb_equal_m", "old_warning"):
-        with patch.dict(os.environ, XPSLOSS_M4A2_CHILD_MUTANT=change):
-            return m.execute(row)
-    if change:
-        with fault(change):
-            return m.execute(row)
-    return m.execute(row)
+    try:
+        if change in ("perturb_equal_m", "old_warning"):
+            with patch.dict(os.environ, XPSLOSS_M4A2_CHILD_MUTANT=change):
+                return m.execute(row)
+        if change:
+            with fault(change):
+                return m.execute(row)
+        return m.execute(row)
+    finally:
+        m.cached_seed.cache_clear()
+        pairs.cache_clear()
 
 
 def mutation(row, log):
@@ -265,18 +269,20 @@ def mutation(row, log):
     control = witness(target)
     altered = witness(target, i["change"])
 
-    def verdict(run):
-        # The V3 reference is also observed through the primary-only identity.
-        # Credit only the registered reference when it is required.
-        if i["change"] == "scale_spectrum":
-            return run.items.get(("external", key), {}).get("status", "not_run")
-        return run.status(key)
-
-    a, b = verdict(control), verdict(altered)
+    kind = {"scale_spectrum": "external", "parallel_bulk": "seed_area"}.get(i["change"])
+    evidence = {}
+    if kind:
+        checks = [run.items.get((kind, key), {}) for run in (control, altered)]
+        a, b = (check.get("status", "not_run") for check in checks)
+        evidence = dict(witness=target["id"], check_kind=kind, control_check=checks[0], mutant_check=checks[1])
+        if hasattr(control, "reference_sha256"):
+            log.reference_sha256 = control.reference_sha256
+    else:
+        a, b = control.status(key), altered.status(key)
     errors = [run.items.get(("execution", "unexpected_exception")) for run in (control, altered)]
     if any(errors):
         log.record(
-            "mutation", key, "fail", control=a, mutant=b, reason="witness_execution_failed", errors=errors
+            "mutation", key, "fail", control=a, mutant=b, reason="witness_execution_failed", errors=errors, **evidence
         )
         return
     if a in ("not_run", "no_reference", "unresolved", "reference_path_failure"):
@@ -293,7 +299,7 @@ def mutation(row, log):
             ),
             "control_without_decision",
         )
-        log.record("mutation", key, a, control=a, mutant=b, reason=reason, **extra)
+        log.record("mutation", key, a, control=a, mutant=b, reason=reason, **extra, **evidence)
     else:
         log.check(
             key,
@@ -301,4 +307,5 @@ def mutation(row, log):
             "mutation",
             control=a,
             mutant=b,
+            **evidence,
         )
