@@ -76,6 +76,25 @@ jobs:
           /tmp/wheelenv/bin/xpsloss validate examples/synthetic_bulk.json
           /tmp/wheelenv/bin/xpsloss bulk examples/synthetic_bulk.json --out runs/bulk
           /tmp/wheelenv/bin/xpsloss xps-fixed-depth examples/synthetic_bulk.json --depth-A 10 --epsilon-momentum k_total --out runs/fixed-depth
+          /tmp/wheelenv/bin/xpsloss dielectric examples/synthetic_bulk.json --q-inv-A 0.5 --out runs/dielectric
+          /tmp/wheelenv/bin/xpsloss xps-depth-averaged examples/synthetic_bulk.json --weight-length-A 20 --epsilon-momentum k_total --out runs/depth-averaged
+          /tmp/wheelenv/bin/xpsloss xps-loss-window-area examples/synthetic_bulk.json --loss-window-eV 1 50 --weight-length-A 20 --epsilon-momentum k_total --out runs/loss-window-area
+          /tmp/wheelenv/bin/xpsloss xps-single-loss examples/synthetic_bulk.json --spectrum examples/single_loss_spectrum.json --loss-window-eV 1 50 --weight-length-A 20 --epsilon-momentum k_total --out runs/single-loss
+          /tmp/wheelenv/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+          import xpsloss
+
+          assert Path(xpsloss.__file__).resolve().is_relative_to(Path("/tmp/wheelenv").resolve())
+          out = Path("runs/single-loss")
+          for name in ("run.json", "single_loss_spectrum.csv", "window_area.csv"):
+              assert (out / name).stat().st_size > 0, name
+          run = json.loads((out / "run.json").read_text(encoding="utf-8"))
+          assert run["status"] == "complete"
+          comparison = run["comparison"]
+          assert comparison["areas"] == comparison["spectrum"] == "not_matched"
+          assert comparison["registration_sha256"] == "250b45f863ccbd1c4c94474f23769976380c5dad5c2671328712ef4acdc7f408"
+          PY
           /tmp/wheelenv/bin/python -m pip check
       - name: Test unpacked sdist, check predictions and reproduce reference-side figures
         run: |
@@ -85,3 +104,16 @@ jobs:
           PYTHONPATH=src python tests/run_suite.py
           PYTHONPATH=src python benchmarks/queels_prereg/evaluate_prereg.py predict --check
           python benchmarks/paper_figures/generate.py --check
+          /tmp/wheelenv/bin/python tests/run_suite.py
+          # Control: plain discovery with the wheel installed must flag exactly the two mix-up checks.
+          /tmp/wheelenv/bin/python - <<'PY'
+          import unittest
+
+          suite = unittest.defaultTestLoader.discover("tests", pattern="test_suite_source.py")
+          result = unittest.TestResult()
+          suite.run(result)
+          failed = sorted(test.id().rsplit(".", 1)[1] for test, _ in result.failures)
+          assert result.testsRun == 4 and not result.errors and not result.skipped, (result.testsRun, result.errors, result.skipped)
+          assert failed == ["test_inheriting_child", "test_same_process"], result.failures
+          assert all("wheelenv" in text for _, text in result.failures), result.failures
+          PY
