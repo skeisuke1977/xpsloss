@@ -1,0 +1,12 @@
+{
+  "schema": "xpsloss-single-loss-spectrum-v0",
+  "axis": "kinetic_energy_eV",
+  "primary": {
+    "kind": "delta",
+    "energies_eV": [1000.0],
+    "intensities": [1.0],
+    "intensity_unit": "arb. unit",
+    "description": "synthetic single delta line, not a measured spectrum"
+  },
+  "output_edges_eV": {"min": 940.0, "max": 1001.0, "step": 1.0}
+}

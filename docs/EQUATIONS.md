@@ -149,3 +149,55 @@ w(x)=\frac{x}{\lambda^2}e^{-x/\lambda},\qquad \int_0^\infty w\,dx=1
 - **精度:** 11出力のそれぞれで、推定誤差が \(\max(\varepsilon_{\rm abs},\varepsilon_{\rm rel}|K_{{\rm sc},j}|)\) 以下になるまでパネルを細分する。満たせなければ `DepthAverageConvergenceError`（`reason` は `budget_not_met`、`panel_floor_exceeds_budget`、`direct_sum_floor_exceeds_budget`、`weight_out_of_range` ほか）で止まる。`quadrature_error` は11出力の推定の最大である。既定は API で \(\varepsilon_{\rm abs}=10^{-12}\) Å⁻¹ eV⁻¹、\(\varepsilon_{\rm rel}=10^{-9}\)、CLI では設定ファイルの `integration`（省略時は \(10^{-9}\)、\(10^{-7}\)）で、limit はともに 200。
 
 実装は `xps_depth_averaged.effective_cross_section_depth_averaged`（深さの閉形式は `_depth_kernel`）、CLI は `xps-depth-averaged`。検証の条件と許容幅は [M3a の事前登録](M3A_PREREG.md)、結果は [VALIDATION.md](VALIDATION.md) の「M3a」にある。
+
+## E7. 法線出射の単一損失スペクトルと有限の損失窓の面積（外から与える一定の長さ）
+
+`simonsen1997_single_loss_spectrum_external_v0`（開発版、M4a）は、原著の式(19)のゼロ損失線と単一損失の衛星を、検出の運動エネルギーのビン積分として返す。有限の損失窓の面積と、窓の下限への感度も返す。核は E6 の深さ平均をそのまま使い、物理は足さない。[Simonsen ら (1997) 式(19)、p. 1615](https://doi.org/10.1103/PhysRevB.56.1612)
+
+原著の式(19)は \(J(E)\propto\cos\theta\,[F(E)+\lambda\int_E^\infty dE'\,F(E')K_{\rm sc}(E_0,E'-E,\theta)]\) である。本実装は \(\theta=0\)、比例定数 1 とし、損失 \(T=E'-E\) の積分を有限の窓 \(W=[a,b]\) に限る。
+
+\[
+J_0(E)=F(E),\qquad
+J_{1,j}(E)=L\int_W F(E+T)\,K_{{\rm sc},j}(E_0,T;L)\,dT,\qquad
+J(E)=J_0(E)+J_{1,\rm total}(E)
+\]
+
+\[
+A_j=\int_a^bK_{{\rm sc},j}(E_0,T;L)\,dT,\qquad
+w_{1,W}=L\,A_{\rm total},\qquad
+H_j=L\,a\,K_{{\rm sc},j}(E_0,a;L)
+\]
+
+| 記号 | 意味 | 単位 |
+| --- | --- | --- |
+| \(F\)、\(I\) | 一次線と強度の単位。δ 線（位置 \(E_i\)、強度 \(s_i\)）か、ビン（端 \(e_m\)、積分強度 \(f_m\)）のどちらか | \(I\) |
+| \(E\)、\(E'\)、\(T\) | 検出の運動エネルギー、一次励起の運動エネルギー、損失。\(E=E'-T\) | eV |
+| \(E_0\) | 核を評価するエネルギー（設定の `electron_energy_eV`）。すべての \(E'\) で同じ値に固定する | eV |
+| \(L\)（`weight_length_A`） | 外から与える一定の長さ。式(18)の重みと式(19)の乗数に同じ値を使う。既定値はない | Å |
+| \(W=[a,b]\)（`loss_window_eV`） | 損失窓。必須で、既定値はない。\(0<a<b<E_0\) | eV |
+| \(K_{{\rm sc},j}\) | E6 の深さ平均の出力（8項、`no_hole`、`hole`、`total`） | Å⁻¹ eV⁻¹ |
+| \(A_j\)（`window_area`） | 窓の面積（11列） | Å⁻¹ |
+| \(w_{1,W}\)（`single_loss_weight`） | 単一損失の面積の比 | 無次元 |
+| \(H_j\)（`cutoff_sensitivity`） | 窓の下限への感度（11列） | 無次元 |
+| \(D\) | 出力の領域。出力の端 \(u_0<\dots<u_N\) のビン \([u_n,u_{n+1})\)（最後だけ右端を含む）と、両側の外 \((-\infty,u_0)\)、\((u_N,\infty)\) | eV |
+
+- **規約:** \(J_0=F\) に足す衛星は `total` の列である。重みの \(L\) と乗数の \(L\) が同じ値になるのは、均質・半無限、一様な生成、法線出射、弾性散乱なし、直線の軌道と一定の速度、ほかに損失しない確率 \(e^{-x/L}\) という仮定の導出の中だけである（\(\int_0^\infty e^{-x/L}dx=L\)、\(\int_0^\infty xe^{-x/L}K_{{\rm eff},j}\,dx=L^2K_{{\rm sc},j}\)）。核は \(E_0\) に固定し、\(E'\) ごとに変えない。導出は [M4a の設計](M4A_DESIGN.md) §2.2。
+- **窓が必須であること:** 原著は、式(19)の積分が発散するので Al の計算を \(E+0.05\) eV から積分し、下限への感度は小さかったと書く（p. 1618）。本実装は下限を既定値にせず、窓 \([a,b]\) を必ず呼び出す側に指定させる。窓の外の損失は評価せず、収支にも入れない。活動線のある材料で、窓がギャップ端をまたぐ場合とギャップ下の場合は拒否する（`window_not_above_gap`）。
+- **\(w_{1,W}\):** 一次線の全強度 \(S=\int F\) が正のとき、全領域の衛星の和と \(S\) の比は \(w_{1,W}=LA_{\rm total}\) になる。確率ではなく、1 を超えうる。
+- **ビン積分:** 領域 \(D\) の値は \(J_0(D)=G_D(0)\)、\(J_{1,j}(D)=L\int_a^bK_{{\rm sc},j}(T)\,G_D(T)\,dT\) で、\(G_D(T)=\int\mathbf 1_D(E'-T)\,F(dE')\) は一次線のうち損失 \(T\) で領域 \(D\) に入る強度である。スペクトルに返すのは `total`、`no_hole`、`hole` の3成分で、8項は面積だけを返す。負の値は切らない。両側の外も同じ定義で直接に積分し、全体からの残差では作らない。密度（`*_per_eV`）はビンの値をビン幅で割ったものである。
+- **収支:** \(\sum_DJ_0=S\)、\(\sum_DJ_{1,j}=SLA_j\)、\(\sum_DJ=S(1+LA_{\rm total})\)。面積でも各領域でも `total = no_hole + hole_charge * hole`。差は `diagnostics.balance` に残し、補正しない。
+- **片側の感度:** 領域ごとの感度は \(H^\pm_{j,D}=L\,a\,K_{{\rm sc},j}(a\pm0)\,G_D(a\pm0)\)（3成分、`cutoff_sensitivity_bins`）。δ 線では \(G_D\) が \(T=a\) で跳びうるので、左右の極限を別々に返す。
+- **逆数の区間:** `inverse_window_area_A` は \(1/A_{\rm total}\)、`inverse_window_area_interval_A` は区間 \([1/(A+e_A),\,1/(A-e_A)]\) である（\(e_A\) は面積の推定誤差。\(A\) と \(e_A\) を厳密な有理数として求め、下端は下へ、上端は上へ丸める）。\(A-e_A\le0\) なら `None` と理由 `nonpositive_or_unresolved_area`、表せなければ `inverse_not_representable` を返す（`inverse_reason`）。この量を平均自由行程とは呼ばない。
+- **単位:** 面積は Å⁻¹、\(w_{1,W}\) と \(H_j\) は無次元、ビン・両側の外・\(H^\pm\) は一次線の強度の単位 \(I\)、密度は \(I\)/eV、逆数は Å。軸は運動エネルギーである。
+- **数値の方法:** 損失の方向を、Chebyshev–Lobatto の 17 点の補間のパネルに分ける。パネルの幅は、強度が正の振動子の最小の線幅、低損失と上端の比 2 の刻み、計算の前に求めた候補の特異点（体積の極と、動く運動量の端の根）からの距離で決める。各パネルで別の 16 点の検証の点を評価する。出力ごとの推定誤差は、補間、検証の残差、核の点の誤差、端、丸めの5項の和である。方法は [M4a の設計](M4A_DESIGN.md) §3。
+- **成功の意味:** 成功は「判定対象の全出力（面積 11 列と、各ビン・両側の外の \(J_0\) と衛星の3成分）で、推定誤差が予算の内」という意味である。予算は、面積が \(\max(\varepsilon_{{\rm abs},A},\varepsilon_{\rm rel}|A_j|)\)、スペクトルが \(\max(\eta S_{\rm abs},\varepsilon_{\rm rel}|y|)\)（\(S_{\rm abs}\) は強度の絶対値の和）。既定は \(\varepsilon_{\rm rel}=10^{-6}\)、\(\varepsilon_{{\rm abs},A}=10^{-10}\) Å⁻¹、\(\eta=10^{-9}\)、`panel_limit` 400、`max_cells` \(2\times10^6\)。E5・E6 と同じ基準で、証明された上界ではない。解像の尺度の根拠の強さは `diagnostics.resolution_basis` に記録する。`fixed_poles_enumerated`（全活動線が無分散でギャップなし、全根を確かめた）、`endpoint_roots_enumerated`（分散ありでギャップなし、端の全根を確かめた）、`computed_candidates_only`（ギャップのある材料、または確かめられない根や列挙の失敗があった実行）の3つである。
+- **失敗:** 入力の誤りは `SingleLossInputError`（`reason` は `invalid_window`、`window_not_above_gap`、`invalid_primary`、`invalid_output_edges`、`invalid_settings`、`invalid_schema`、`cell_limit_exceeded`、`resolution_exceeds_panel_limit`、`panel_width_unresolved`）、未収束は `SingleLossConvergenceError`（`kernel_not_converged`、`kernel_error_exceeds_budget`、`loss_budget_not_met`、`cell_limit_reached`、`panel_width_unresolved`、`nonfinite_output`）である。必要なパネル数が `panel_limit` を超えるときは、核を評価する前に拒否する。
+- **警告:** 常に出すのは、窓の外の損失を含まないこと、\(w_{1,W}\) は確率でないこと、核を \(E_0\) に固定すること、一次線は内因性の損失の衛星を含まないと仮定すること（スペクトルのとき）と、E6 から継承した警告である。条件つきで出すのは、\(b/E_0>0.1\)、\(a\) が一次線の最小のビン幅より小さい、\(E_0\) が正の強度の点の最小と最大の間にない、一次線の台の下端が \(b\) より小さい、`resolution_basis` が `computed_candidates_only`、照合した条件の外、正孔電荷が 1 でない、の各場合である。
+- **照合の表示:** `run.json` の `comparison` は、配布する完了した比較の表 `src/xpsloss/data/m4a_completed_comparisons.json` と入力の条件（正規化した数値の列）を比べる。全条件が登録の記録と一致し、その群の必須キーがすべて合格のときだけ `matched`、核の条件だけが合えば `kernel_conditions_checked`、ほかは `not_matched` である。`physical_validity` は常に `not_established`。
+
+**扱わないもの:** 多重散乱、斜出射、軌道ごとの長さと自己無撞着な長さ、弾性散乱、窓の外の損失、内因性の損失の分離、\(E'\) ごとに変わる核、装置関数と寿命幅の付加、背景の差引き、フィット。QUEELS-XPS の完全なモデルを実装したものではない。
+
+| 式 | 実装 | 検証 |
+| --- | --- | --- |
+| \(A_j\)、\(w_{1,W}\)、\(H_j\)、逆数の区間 | `xps_single_loss.loss_window_area`（パネルは `_loss_panels`、候補の根は `_loss_roots`）。CLI は `xps-loss-window-area` | 解析の参照 R-A、実材料の参照 R-B と CE（[M4a の事前登録](M4A_PREREG.md)、[VALIDATION.md](VALIDATION.md) の「M4a」） |
+| \(J_0\)、\(J_{1,j}\)、\(J\)、両側の外、\(H^\pm_{j,D}\) | `xps_single_loss.single_loss_spectrum`（セルの積分は `_fold`）。CLI は `xps-single-loss` | 同上 |

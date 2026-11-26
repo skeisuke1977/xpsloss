@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- M4a: `loss_window_area` and `single_loss_spectrum` return the finite loss-window areas and the zero-loss and single-loss spectrum of Eq. (19) of Simonsen et al. (1997) at normal emission, with proportionality constant 1 and a required, externally supplied constant length L used both as the weight length of Eq. (18) and as the multiplier. The kernel is the depth-averaged output of M3a, fixed at the configured electron energy. The loss window is required and has no default; losses outside it are not computed. Areas (Å⁻¹) cover all eleven columns, with the single-loss weight L·A_total, the inverse-area interval and the cutoff sensitivity; spectra are bin integrals of the zero-loss term and of the `total`, `no_hole` and `hole` satellites, including the two outside regions and one-sided cutoff sensitivities. Success means that the error estimates are within their budgets; `diagnostics.resolution_basis` records the basis of the loss-axis resolution. Model ID `simonsen1997_single_loss_spectrum_external_v0`. [Design](docs/M4A_DESIGN.md) · [Pre-registration](docs/M4A_PREREG.md) · [Equations](docs/EQUATIONS.md)
+- New public names: `SINGLE_LOSS_MODEL_ID`, `DeltaPrimary`, `BinnedPrimary`, `LossWindowAreaResult`, `SingleLossSpectrumResult`, `SingleLossInputError` (a `ValueError`) and `SingleLossConvergenceError` (a `NumericalConvergenceError`), both with a `reason`.
+- CLI: `xps-loss-window-area` and `xps-single-loss` (`--loss-window-eV`, `--weight-length-A` and `--epsilon-momentum` are required; `xps-single-loss` also requires `--spectrum`, a JSON file with the primary and the output edges). They write `window_area.csv`, `single_loss_spectrum.csv` and `run.json`. `examples/single_loss_spectrum.json` is a synthetic primary for the README example.
+- The table of completed comparisons, `xpsloss/data/m4a_completed_comparisons.json` (version `m4a-1`, 12 records), is distributed in the wheel and the sdist. `run.json` reports `matched` only for runs whose numerical conditions equal a registered record whose required keys all passed.
+
+### Changed
+
+- `capabilities`: `supported` gains `xps_loss_window_area` and `xps_single_loss`, and a new `xps_single_loss` block gives the model ID, scope and unsupported physics. Existing entries are unchanged.
+
+### Verification
+
+- M4a: two independent design proposals were merged and reviewed, and the checks (100 rows, key ledger, tolerances, 23 deliberate faults) were pre-registered before any reference value or implementation existed. Two reference authors separate from the implementer froze their values before comparison. All 2041 reference keys pass (927 analytic, 1048 for Al and Si from the ELF data set, 66 for synthetic moving-endpoint inputs), and all 100 rows end in their registered states. An independent review (no blocker, one major, ten minor findings) was addressed; all 16 required and 7 additional deliberate faults were detected both before and after those fixes. The 332 tests pass from the source tree on Windows with Python 3.12.10 (15 skipped by design). CI has not yet run on this version, and no comparison with measured spectra has been made. [Validation record](docs/VALIDATION.md)
+
 ## [0.2.0] - 2026-11-25
 
 ### Added
