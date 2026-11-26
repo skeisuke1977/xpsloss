@@ -174,6 +174,9 @@ class RegisteredRows(unittest.TestCase):
         table = m.references()  # Verify the frozen inputs before any comparison.
         mutations = os.environ.get("XPSLOSS_M4A2_MUTATIONS") == "1"
         strict = mutations or os.environ.get("XPSLOSS_M4A2_FULL") == "1"
+        if strict:
+            # The table is committed, so the full and mutation profiles require it.
+            self.assertIsNotNone(table, "references_m4a2.json is required in the full and mutation profiles")
         if mutations and not os.environ.get("XPSLOSS_M4A2_ROWS"):
             self.assertCountEqual([r["id"] for r in rows if r["rule"] == "mutation"],
                                   [f"V11-M{i:02d}" for i in range(1, 27)])

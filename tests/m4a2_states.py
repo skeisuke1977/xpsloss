@@ -27,6 +27,8 @@ DIRECTORY = ROOT / "benchmarks/numerics/m4a2"
 RAW = (DIRECTORY / "expected_states_m4a2.json").read_bytes()
 STATES_SHA256 = "4a8264a58b9902efee3d843c10be812569ff6f46d720c9f23ebf37a4f263073f"
 assert hashlib.sha256(RAW).hexdigest() == STATES_SHA256
+# The mapped reference table of the independent author (commit 81e6401), fixed before any comparison.
+REFERENCES_SHA256 = "8c71920ad882daedc4cf53159ee85b46a445931465359e1f1dad21c8c1c79731"
 TABLE = json.loads(RAW)
 ROWS = {r["id"]: r for r in TABLE["rows"]}
 DERIVED = dict(weight_length_kind="inverse_13a_window_area", weight_length_A=None)
@@ -349,6 +351,8 @@ def references():
         return None
     raw = path.read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
+    if digest != REFERENCES_SHA256:
+        raise ValueError(f"mapped reference table hash {digest} differs from the fixed {REFERENCES_SHA256}")
     return ReferenceTable(digest, index_references(json.loads(raw)))
 
 
