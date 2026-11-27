@@ -34,8 +34,10 @@ class _OrderFailure:
         if self.suggestion:
             message += (
                 f": check the first-order mesh and absolute kernel accuracy for {self.key}, "
-                f"then try a smaller {self.suggestion}"
+                "and try lowering epsrel (for example, epsrel=1e-7)"
             )
+            if self.suggestion != "epsrel":
+                message += f". Also check the first-order absolute tolerance {self.suggestion}"
         elif details.get("detail"):
             message += f" ({details['detail']})"
         super().__init__(message)
@@ -112,9 +114,18 @@ def positive_real(value):
 
 
 def preflight(model, requested, window, primary, edges, settings, zero=False):
+    geometry = None
+    if primary is not None:
+        if not isinstance(primary, (BinnedPrimary, DeltaPrimary)):
+            raise SingleLossInputError("invalid_primary")
+        geometry = Geometry(primary, vector(edges, "invalid_output_edges", increasing=True))
+    return plan_orders(model, requested, window, geometry, settings, zero)
+
+
+def plan_orders(model, requested, window, geometry, settings, zero):
     if not isinstance(model, str) or model != MULTIPLE_LOSS_MODEL_ID:
         raise MultipleLossInputError("invalid_model")
-    by_support = isinstance(requested, str) and requested == "display_support" and primary is not None
+    by_support = isinstance(requested, str) and requested == "display_support" and geometry is not None
     if not by_support and not positive_integer(requested):
         raise MultipleLossInputError("invalid_max_order")
     tol = settings["neglect_tolerance_fraction"]
@@ -124,11 +135,15 @@ def preflight(model, requested, window, primary, edges, settings, zero=False):
         check = positive_integer if key in ("order_limit", "max_convolution_points") else positive_real
         if not check(settings[key]):
             raise MultipleLossInputError("invalid_settings", argument=key)
-    geometry, support = None, None
-    if primary is not None:
-        if not isinstance(primary, (BinnedPrimary, DeltaPrimary)):
-            raise SingleLossInputError("invalid_primary")
-        geometry = Geometry(primary, vector(edges, "invalid_output_edges", increasing=True))
+    # Fraction accepts Python binary64, but not every NumPy floating scalar.
+    # Preserve the accepted numerical settings when forming rational budgets.
+    for key, value in settings.items():
+        if isinstance(value, np.floating):
+            settings[key] = float(value)
+        elif isinstance(value, np.integer):
+            settings[key] = int(value)
+    support = None
+    if geometry is not None:
         support = max(0, (Q(geometry.points[-1]) - Q(geometry.edges[0])) // Q(window[0])) if geometry.points else 0
     n = support if by_support else int(requested)
     if n > settings["order_limit"]:

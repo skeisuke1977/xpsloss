@@ -26,7 +26,7 @@ def _order_cell(panel, parts, left, right, g0, g1, multiplier_power):
     width = right - left
     scale = width * norm
     values = panel.values[_fold.COMP_INDEX]
-    folded = _scaled(values @ weights, multiplier_power * scale)
+    folded = [multiplier_power * scale * Q(v) for v in values @ weights]
     # Use the same numerical weights as the single-loss fold. Keep all error
     # products in panel units, even when an individual product is subnormal.
     abs_weights = list(map(Q, abs(weights)))
@@ -52,7 +52,7 @@ def _fold_order(panels, geometry, *, multiplier_power, error_parts):
     """Direct satellite integrals; nodal error sources share the same cell weights."""
     rows = {}
     for region, name in enumerate(geometry.names):
-        values = np.zeros((len(panels), len(COMPONENTS)))
+        values = np.zeros(len(COMPONENTS), dtype=object)
         errors = np.zeros((len(panels), len(COMPONENTS), len(PARTS)), dtype=object)
         for i, (p, parts) in enumerate(zip(panels, error_parts)):
             a, b = Q(p.left_eV), Q(p.right_eV)
@@ -62,30 +62,29 @@ def _fold_order(panels, geometry, *, multiplier_power, error_parts):
                 if not (g0 or g1):
                     continue
                 cell_values, cell_errors = _order_cell(p, parts, left, right, g0, g1, multiplier_power)
-                values[i] += cell_values
+                values += cell_values
                 errors[i] += cell_errors
         for j, c in enumerate(COMPONENTS):
-            totals = _scaled(errors[:, j, :].sum(axis=0), multiplier_power, up=True)
+            totals = multiplier_power * errors[:, j, :].sum(axis=0)
             rows[name + "." + c] = dict(
-                value=math.fsum(values[:, j]), **dict(zip(PARTS, totals)),
-                local_by_panel=_scaled(errors[:, j, 2], multiplier_power, up=True),
+                value=float(values[j]), **dict(zip(PARTS, map(_fold._up, totals))),
+                exact_value=values[j], exact_inherited=totals[0], exact_local=totals[2],
+                local_by_panel=multiplier_power * errors[:, j, 2],
             )
     return rows
 
 
-def _scaled(values, factor, *, up=False):
-    rounding = _fold._up if up else float
-    return np.array([rounding(factor * Q(v)) for v in values])
-
-
 def _judge_inherited(rows, n, phi, s, mass, m, diagnostics):
     exceeded = []
+    severities = []
     for key, c, value, error, is_area in rows:
         absolute = phi[COLUMNS.index(c)] * (
-            m * s["area_epsabs"] if is_area else mass * s["spectrum_epsabs_fraction"]
+            m * Q(s["area_epsabs"]) if is_area else Q(mass) * Q(s["spectrum_epsabs_fraction"])
         )
-        relative = n * s["epsrel"] * abs(value)
-        if error > max(absolute, relative):
+        relative = n * Q(s["epsrel"]) * abs(value)
+        budget = max(absolute, relative)
+        if error > budget:
+            severities.append(error / budget if budget else math.inf)
             side = "relative" if relative >= absolute else "absolute"
             suggestion = (
                 "epsrel" if side == "relative" else "area_epsabs" if is_area else "spectrum_epsabs_fraction"
@@ -93,20 +92,15 @@ def _judge_inherited(rows, n, phi, s, mass, m, diagnostics):
             exceeded.append(
                 dict(
                     key=key,
-                    inherited=error,
-                    budget_relative=relative,
-                    budget_absolute=absolute,
+                    inherited=_fold._up(error),
+                    budget_relative=float(relative),
+                    budget_absolute=float(absolute),
                     side=side,
                     suggestion=suggestion,
                 )
             )
     if exceeded:
-
-        def severity(row):
-            budget = max(row["budget_absolute"], row["budget_relative"])
-            return row["inherited"] / budget if budget else math.inf
-
-        worst = max(exceeded, key=severity)
+        worst = exceeded[max(range(len(exceeded)), key=severities.__getitem__)]
         raise MultipleLossConvergenceError(
             "inherited_error_exceeds_order_budget",
             order=n,
@@ -123,9 +117,9 @@ def _judge_inherited(rows, n, phi, s, mass, m, diagnostics):
 
 
 def _choose_split(contributions, total_error, value, absolute, relative, split):
-    budget = max(absolute, relative * abs(value))
+    budget = max(Q(absolute), Q(relative) * abs(value))
     if total_error > budget:
-        split |= contributions > 0.5 * budget / len(split)
+        split |= contributions > budget / (2 * len(split))
 
 
 def _preliminary_bins(panels, geometry, mass, factor, settings, split):
@@ -138,10 +132,7 @@ def _preliminary_bins(panels, geometry, mass, factor, settings, split):
     cumulative = np.r_[0.0, np.cumsum([float(geometry.lines[i][1]) for i in perm])]
     bins = [(float(a), float(b), float((b - a) * density)) for a, b, density in geometry.bins]
     edges = np.asarray(geometry.edges)
-    try:
-        scale = float(factor)
-    except OverflowError:
-        return  # The exact-rational formal fold still applies.
+    absolute = Q(settings["order_epsabs_fraction"]) * Q(mass) / factor
     # Bound working memory independently of the number of detector edges.
     for start in range(0, len(geometry.names), 128):
         stop = min(start + 128, len(geometry.names))
@@ -156,15 +147,14 @@ def _preliminary_bins(panels, geometry, mass, factor, settings, split):
             weights = np.diff(cdf, axis=0) * (lp.CC * (p.right_eV - p.left_eV) / 2)
             v = p.values[_fold.COMP_INDEX]
             density_error = p.errors[_fold.COMP_INDEX] + (p.coeff_diff + p.verification)[_fold.COMP_INDEX, None]
-            contributions.append((weights @ density_error.T) * scale)
-            values.append((weights @ v.T) * scale)
+            contributions.append(weights @ density_error.T)
+            values.append(weights @ v.T)
         terms = np.array(contributions)
-        budgets = np.maximum(
-            settings["order_epsabs_fraction"] * mass, settings["order_epsrel"] * abs(np.sum(values, axis=0))
-        )
-        failing = terms.sum(axis=0) > budgets
-        if failing.any():
-            split |= (terms[:, failing] > 0.5 * budgets[failing] / len(panels)).any(axis=1)
+        errors, predictions = terms.sum(axis=0), np.sum(values, axis=0)
+        for region, component in np.ndindex(errors.shape):
+            error, value = errors[region, component], predictions[region, component]
+            if math.isfinite(error) and math.isfinite(value):
+                _choose_split(terms[:, region, component], Q(error), Q(value), absolute, settings["order_epsrel"], split)
 
 
 def _adapt(
@@ -230,12 +220,11 @@ def _adapt(
         ]
         panels, envelopes, parts = zip(*items)
         local = np.array([area_terms(p) for p in panels])
-        areas = _scaled(
-            np.sum([p.values @ (lp.CC * ((p.right_eV - p.left_eV) / 2)) for p in panels], axis=0), factor
-        )
+        panel_areas = [p.values @ (lp.CC * ((p.right_eV - p.left_eV) / 2)) for p in panels]
+        areas = [factor * sum(map(Q, col)) for col in zip(*panel_areas)]
         split = np.zeros(len(panels), dtype=bool)
-        local_error = _scaled([sum(map(Q, col)) for col in local.T], factor, up=True)
-        physical_local = np.array([_scaled(terms, factor, up=True) for terms in local])
+        physical_local = np.array([[factor * Q(v) for v in terms] for terms in local])
+        local_error = physical_local.sum(axis=0)
         for c, v in enumerate(areas):
             _choose_split(physical_local[:, c], local_error[c], v, s["order_epsabs_fraction"], s["order_epsrel"], split)
         if geometry and not split.any():
@@ -257,7 +246,7 @@ def _adapt(
                 formal += 1
                 try:
                     folded = _fold_order(list(panels), geometry, multiplier_power=factor, error_parts=list(parts))
-                except ArithmeticError as exc:
+                except (ArithmeticError, ValueError) as exc:
                     raise MultipleLossConvergenceError(
                         "nonfinite_output",
                         order=n,
@@ -268,9 +257,9 @@ def _adapt(
                 for row in folded.values():
                     _choose_split(
                         row["local_by_panel"],
-                        row["local"],
-                        row["value"],
-                        mass * s["order_epsabs_fraction"],
+                        row["exact_local"],
+                        row["exact_value"],
+                        Q(mass) * Q(s["order_epsabs_fraction"]),
                         s["order_epsrel"],
                         split,
                     )
@@ -301,7 +290,7 @@ def _adapt(
             return (
                 list(panels),
                 np.array(envelopes),
-                areas,
+                np.array(areas, dtype=float),
                 local_error,
                 folded,
                 mesh,
@@ -353,6 +342,7 @@ def _empty_mesh():
 def _orders(
     single, panels1, nmax, features, settings, geometry, diagnostics, zero, order_inject, panel_limit, min_width
 ):
+    exact_seeds = seed_errors(single, rounded=False)
     seeds = seed_errors(single)
     diagnostics["first_order"]["fixed_multiplier_area_error"] = seeds
     first = first_order(single, panels1, geometry, features, seeds, zero)
@@ -365,8 +355,8 @@ def _orders(
     right = Polynomials(panels1, env, slice(0, 1))
     rnorm = m * right.norms()[0]
     first_norm = [m * v for v in left.norms()]
-    prev_errors = [list(map(Q, seeds.values())), [0] * 11, [0] * 11]
-    er = Q(seeds["term_13a"])
+    prev_errors = [list(exact_seeds.values()), [0] * 11, [0] * 11]
+    er = exact_seeds["term_13a"]
     for n in range(2, nmax + 1):
         try:
             factor = m**n
@@ -388,18 +378,18 @@ def _orders(
                 prev_norm = [m ** (n - 1) * v for v in left.norms()]
                 inherited, propagated = [], []
                 for norm, (ei, ep, el) in zip(prev_norm, zip(*prev_errors)):
-                    inherited.append(_fold._up(rnorm * ei + norm * er + (ei + ep + el) * er))
-                    propagated.append(_fold._up(rnorm * (ep + el)))
-                phi = [float(rnorm ** (n - 1) + (n - 1) * v * rnorm ** (n - 2)) for v in first_norm]
+                    inherited.append(rnorm * ei + norm * er + (ei + ep + el) * er)
+                    propagated.append(rnorm * (ep + el))
+                phi = [rnorm ** (n - 1) + (n - 1) * v * rnorm ** (n - 2) for v in first_norm]
 
                 def judge(areas, folded):
                     rows = [("area." + c, c, v, e, True) for c, v, e in zip(COLUMNS, areas, inherited)]
                     if folded:
                         rows.extend(
-                            (key, key.split(".")[-1], r["value"], r["inherited"], False)
+                            (key, key.split(".")[-1], r["exact_value"], r["exact_inherited"], False)
                             for key, r in folded.items()
                         )
-                    _judge_inherited(rows, n, phi, settings, mass, float(m), diagnostics)
+                    _judge_inherited(rows, n, phi, settings, mass, m, diagnostics)
 
                 panels, env, values, local, folded, mesh = _adapt(
                     left,
@@ -419,8 +409,8 @@ def _orders(
                 )
                 panel_map[n] = panels
                 left = Polynomials(panels, env, slice(None))
-                parts = [inherited, propagated, local]
-                prev_errors = [list(map(Q, part)) for part in parts]
+                prev_errors = [inherited, propagated, local]
+                parts = [list(map(_fold._up, part)) for part in prev_errors]
             orders.append(
                 higher_order(n, single, first, panels1, geometry, values, parts, folded, mesh, seeds, zero)
             )
@@ -428,7 +418,7 @@ def _orders(
             if exc.diagnostics is None:
                 exc.diagnostics = diagnostics
             raise
-        except (ArithmeticError, FloatingPointError) as exc:
+        except (ArithmeticError, ValueError) as exc:
             raise MultipleLossConvergenceError(
                 "nonfinite_output", order=n, stage="order_refinement", diagnostics=diagnostics
             ) from exc
@@ -513,7 +503,7 @@ def finish(
         )
         ratio = ratio_record(single)
         diag["balance"] = balances(orders, single, geometry, ratio)
-    except ArithmeticError as exc:
+    except (ArithmeticError, ValueError) as exc:
         raise MultipleLossConvergenceError(
             "nonfinite_output", order=n, stage="after_first_order", diagnostics=diag
         ) from exc
@@ -527,14 +517,14 @@ def finish(
     convention = "not_determined_by_convention"
     if single.weight_length_kind == "inverse_13a_window_area" and single.multiplier_convention == "weight_length":
         convention = "below_one" if single.extra_inverse_length_per_A else "exactly_one"
-    minima = {}
+    minima, negative = {}, {}
     for c in ("total", "term_13a"):
         i = COLUMNS.index(c)
         node_min = float(trace["sampled_min"][i]) if trace else min(float(p.values[i].min()) for p in panels)
-        cont_min = min(minimum(p, i) for p in panels)
-        minima[c] = dict(sampled_min=node_min, continuous_min=cont_min)
+        extrema = [minimum(p, i) for p in panels]
+        minima[c] = dict(sampled_min=node_min, continuous_min=min(v for v, _ in extrema))
+        negative[c] = node_min < 0 or any(certified for _, certified in extrema)
     diag["negative_values"] = minima
-    negative = {k: min(v.values()) < 0 for k, v in minima.items()}
     energy = single.electron_energy_eV
     cumulative = float(n * Q(single.loss_window_eV[1]) / Q(energy)) if energy else None
     diag["cumulative_loss_over_E0"] = cumulative
@@ -568,7 +558,7 @@ def finish(
                 zero_loss=single.zero_loss.copy(),
                 zero_loss_error=single.zero_loss_error.copy(),
             )
-        except ArithmeticError as exc:
+        except (ArithmeticError, ValueError) as exc:
             raise MultipleLossConvergenceError("nonfinite_output", stage="truncation", diagnostics=diag) from exc
     codes = list(_WARNINGS)[:5]
     codes.extend(
@@ -690,19 +680,14 @@ def convolve_panels(
     result = {1: panels}
     diag = dict(resources=dict(quadrature_points_total=0, cells_max=0))
     for n in range(2, max_order + 1):
-        panels, env, *_ = _adapt(
-            Polynomials(panels, env, slice(None)),
-            right,
-            window,
-            features,
-            n,
-            settings,
-            None,
-            Q(1),
-            diag,
-            None,
-            order_panel_limit,
-            None,
-        )
+        try:
+            panels, env, *_ = _adapt(
+                Polynomials(panels, env, slice(None)), right, window, features, n, settings,
+                None, Q(1), diag, None, order_panel_limit, None,
+            )
+        except (ArithmeticError, ValueError) as exc:
+            raise MultipleLossConvergenceError(
+                "nonfinite_output", order=n, stage="order_refinement", diagnostics=diag
+            ) from exc
         result[n] = panels
     return result

@@ -12,12 +12,17 @@ from ._order_types import OrderAreas, PARTS, SpectrumOrder
 from ._single_loss_types import COLUMNS, COMPONENTS, EPS
 
 
-def seed_errors(single):
+def seed_errors(single, *, rounded=True):
     m = Q(single.multiplier_A)
-    return {
-        c: _up(m * Q(single.window_area_error[c]) + Q(EPS) * abs(Q(float(m * Q(single.window_area[c])))))
-        for c in COLUMNS
-    }
+    result = {}
+    for c in COLUMNS:
+        area = m * Q(single.window_area[c])
+        # The public seed uses the first-order binary64 area. For the budget
+        # recurrence retain even a product below the smallest subnormal.
+        center = Q(float(area)) if rounded else area
+        error = m * Q(single.window_area_error[c]) + Q(EPS) * abs(center)
+        result[c] = _up(error) if rounded else error
+    return result
 
 
 def unpack_regions(geometry, rows):
@@ -47,9 +52,6 @@ def first_order(single, panels, geometry, features, seeds, zero):
     elif single.multiplier_interval_A is None:
         parts["inherited"]["total"] = errors["total"]
     else:
-        parts["inherited"]["total"] = single.multiplier_A * single.window_area_error["total"] + EPS * abs(
-            area["total"]
-        )
         parts["multiplier_interval"]["total"] = _up(Q(errors["total"]) - Q(parts["inherited"]["total"]))
     edges = edges_of(panels)
     diag = single.diagnostics

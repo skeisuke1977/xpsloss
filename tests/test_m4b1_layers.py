@@ -1,6 +1,7 @@
 """Analytical checks of the numerical layers, independent of the comparison tables."""
 
 import math
+from dataclasses import replace
 from decimal import Decimal, localcontext
 from fractions import Fraction as Q
 import unittest
@@ -59,6 +60,108 @@ class Layers(unittest.TestCase):
             expected = 0.05**2 * 3 * (1 + (-1) ** degree / (2 * degree + 1))
             at_knot = next(p for p in panels[2] if p.right_eV == 7.0)
             self.assertAlmostEqual(at_knot.values[0, -1] / expected, 1.0, places=13)
+
+    def test_tau_grid_upper_edge(self):
+        for a, count in ((1.0, 93), (4.0, 81), (0.4, 100)):
+            with self.subTest(a=a):
+                grid = tau_grid(a)
+                self.assertEqual(len(grid), count)
+                self.assertLessEqual(Q(grid[-1]), 40 / Q(a))
+                self.assertGreater(Q(10 ** (-3 + count / 20)), 40 / Q(a))
+        self.assertEqual(tau_grid(4.0)[-1], 10.0)
+
+    def test_touching_and_negative_interior_minima(self):
+        for center, depth in ((2.0, 0.0), (2.04, 1e-5)):
+            def quadratic(t, side):
+                v, e = box(t, side)
+                v[[0, 8, 10]] = 0.1 * (t - center) ** 2 - depth
+                return v, e
+
+            r, _ = calculate(kernel=quadratic, window=(1., 3.), initial_edges=[1., 3.], max_order=1)
+            codes = {w["code"] for w in r.diagnostics["warnings"]}
+            for key, code in (("term_13a", "negative_13a_kernel"), ("total", "negative_total_kernel")):
+                minimum = r.diagnostics["negative_values"][key]
+                self.assertGreaterEqual(minimum["sampled_min"], 0)
+                self.assertAlmostEqual(minimum["continuous_min"], -depth, places=14)
+                self.assertEqual(code in codes, depth > 0)
+            tail = r.truncation["neglected_total_area"]
+            self.assertEqual(tail["reason"], "repeated_kernel_not_nonnegative" if depth else None)
+            self.assertEqual(tail["value"] is None, depth > 0)
+
+    def test_order_budgets_below_binary64_floor(self):
+        tiny = math.ulp(0.0)
+        for m in (1e-200, tiny):
+            r, _ = calculate(multiplier="external", multiplier_A=m, order_epsabs_fraction=tiny,
+                             primary=DeltaPrimary([1000], [0.01]))
+            for order in r.orders[1:]:
+                self.assertEqual(order.area["total"], 0.)
+                self.assertEqual(order.area_error_parts["inherited"]["total"], tiny)
+                self.assertEqual(order.area_error_parts["local"]["total"], tiny)
+                self.assertTrue(np.any(order.total_error_parts["local"] == tiny))
+                self.assertEqual(order.mesh["stages"], 0)
+        # Both sides round to zero, but a real excess must still nominate the panel.
+        budget = Q(tiny) / 8
+        split = np.array([False])
+        orders._choose_split(np.array([2 * budget]), 2 * budget, Q(0), budget, 1., split)
+        self.assertTrue(split[0])
+
+        tolerances = dict(epsrel=np.float32(1e-6), area_epsabs=np.float32(1e-10),
+                          spectrum_epsabs_fraction=np.float32(1e-9), order_epsrel=np.float32(1e-6),
+                          order_epsabs_fraction=np.float32(1e-9))
+        scalars, _ = calculate(max_order=2, **tolerances)
+        binary64, _ = calculate(max_order=2, **{k: float(v) for k, v in tolerances.items()})
+        np.testing.assert_array_equal(scalars.orders[1].total, binary64.orders[1].total)
+        self.assertEqual(scalars.orders[1].area_error_parts, binary64.orders[1].area_error_parts)
+
+    def test_outward_first_total_with_multiplier_interval(self):
+        r, panels = calculate(max_order=1, primary=None, output_edges_eV=None)
+        # The exact product is halfway between two floats; nearest rounds down.
+        e = 0.25 + 3 * math.ulp(0.25)
+        s = replace(r.single_loss, multiplier_A=1.5, multiplier_interval_A=(1.25, 1.75),
+                    window_area=r.single_loss.window_area | {"total": 0.0},
+                    window_area_error=r.single_loss.window_area_error | {"total": e},
+                    single_loss_weight=-0.0, single_loss_weight_error=0.5)
+        o = orders.first_order(s, panels[1], None, {}, orders.seed_errors(s), False)
+        exact = Q(3, 2) * Q(e)
+        base = o.area_error_parts["inherited"]["total"]
+        self.assertLess(Q(math.nextafter(base, -math.inf)), exact)
+        self.assertGreaterEqual(Q(base), exact)
+        self.assertEqual(o.area_error_parts["multiplier_interval"]["total"], 0.5 - base)
+        self.assertEqual(o.area["total"].hex(), s.single_loss_weight.hex())
+        self.assertEqual(o.area_error["total"].hex(), s.single_loss_weight_error.hex())
+
+    def test_nan_in_order_arithmetic_has_stage_and_reason(self):
+        values, errors = box(lp._nodes(2., 5.)[0], None)
+        panel = lp.Panel.from_lobatto(2., 5., values, errors)
+        with patch.object(orders, "area_terms", return_value=np.full(11, np.nan)):
+            for entry in (lambda: calculate(max_order=2),
+                          lambda: orders.convolve_panels([panel], (2., 5.), features={}, model=MODEL, max_order=2)):
+                with self.assertRaises(MultipleLossConvergenceError) as why:
+                    entry()
+                self.assertEqual((why.exception.reason, why.exception.order, why.exception.stage),
+                                 ("nonfinite_output", 2, "order_refinement"))
+
+        cell = orders._fold._cell_weights
+        order_cell = orders._order_cell
+
+        def weights_with_nan(*args):
+            weights, *rest = cell(*args)
+            return np.full_like(weights, np.nan), *rest
+
+        def invalid(*args):
+            with patch.object(orders._fold, "_cell_weights", weights_with_nan):
+                return order_cell(*args)
+
+        with patch.object(orders, "_order_cell", invalid):
+            with self.assertRaises(MultipleLossConvergenceError) as why:
+                calculate(max_order=2)
+        self.assertEqual((why.exception.reason, why.exception.order, why.exception.stage),
+                         ("nonfinite_output", 2, "order_fold"))
+        self.assertEqual(why.exception.inner["type"], "ValueError")
+
+        with self.assertRaises(MultipleLossInputError) as why:
+            calculate(order_epsrel=math.nan)
+        self.assertEqual((why.exception.reason, why.exception.argument), ("invalid_settings", "order_epsrel"))
 
     def test_box_areas_sensitivity_and_direct_bins(self):
         res, panels = calculate()
@@ -284,7 +387,11 @@ class Layers(unittest.TestCase):
                 )
             exc = why.exception
             self.assertEqual(exc.reason, "inherited_error_exceeds_order_budget")
-            self.assertEqual(next(x for x in exc.exceeded if x["key"] == key)["side"], side)
+            entry = next(x for x in exc.exceeded if x["key"] == key)
+            self.assertEqual(entry["side"], side)
+            self.assertEqual(entry["suggestion"], "epsrel" if side == "relative" else "spectrum_epsabs_fraction")
+            self.assertIn("lowering epsrel", str(exc))
+            self.assertIn("1e-7", str(exc))
 
     def test_reference_models_with_zero_repeat(self):
         def holes(t, side):
