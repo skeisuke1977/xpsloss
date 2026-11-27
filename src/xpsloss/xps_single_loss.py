@@ -204,7 +204,7 @@ def _seed_length(material, energy, window, features, seed_length, extra, kw, bat
 
 def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, charge, settings, batch_size=None,
          *, weight_length_kind="external_constant", extra_inverse_length_per_A=0., weight_length_seed_A=None,
-         multiplier="weight_length", multiplier_A=None):
+         multiplier="weight_length", multiplier_A=None, on_final_panels=None):
     if not isinstance(material, Material):
         raise ValueError("material must be a Material")
     if not isinstance(mode, str) or mode not in EPSILON_MOMENTA:
@@ -287,7 +287,7 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
         raise SingleLossInputError("multiplier_undefined", message_details=dict(argument="multiplier"))
     sampler = _DepthSampler(material, energy, window, kw, batch_size, diag)
     try:
-        result, _ = _loss_panels._integrate(sampler, window, features, length, charge, primary, edges, settings,
+        result, panels = _loss_panels._integrate(sampler, window, features, length, charge, primary, edges, settings,
             diag, kernel_errstate=np.geterr(), energy=energy, mode=mode, gap=material.gap_eV, zero=not active,
             prepared=prepared, multiplier=multiplier, multiplier_A=multiplier_A, weight_interval=weight_interval)
     except (SingleLossInputError, SingleLossConvergenceError) as exc:
@@ -323,6 +323,8 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
         conditions.update(primary=_primary_values(primary), output_edges_eV=edges.tolist())
     diag["comparison"] = _comparison(conditions, edges, diag["resolution_basis"])
     _warnings(result, primary)
+    if on_final_panels is not None:
+        on_final_panels(result, panels)
     return result
 
 

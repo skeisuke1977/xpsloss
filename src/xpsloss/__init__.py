@@ -1,10 +1,5 @@
-"""Independent dielectric response, bulk, fixed-depth and depth-averaged XPS losses,
-and the single-loss spectrum with finite loss-window areas at normal emission.
-
-Not a full QUEELS-XPS implementation: oblique emission, trajectory-dependent
-weight lengths, multiple scattering and full spectra beyond single loss are
-not implemented.
-"""
+"""Independent dielectric response, single-event XPS losses and approximate
+finite-window loss-order spectra at normal emission."""
 
 __version__ = "0.4.0.dev0"
 
@@ -25,6 +20,11 @@ from .xps_single_loss import (
     SingleLossInputError, SingleLossSpectrumResult, loss_window_area, single_loss_spectrum,
 )
 
+from .xps_multiple_loss import (
+    MULTIPLE_LOSS_MODEL_ID, MultipleLossConvergenceError, MultipleLossInputError,
+    MultipleLossOrderAreasResult, MultipleLossSpectrumResult, multiple_loss_order_areas, multiple_loss_spectrum,
+)
+
 __all__ = [
     "DepthAverageConvergenceError", "DepthAveragedResult", "effective_cross_section_depth_averaged",
     "BulkConvergenceError", "NumericalConvergenceError",
@@ -33,4 +33,6 @@ __all__ = [
     "FixedDepthConvergenceError", "FixedDepthGapDomainError", "FixedDepthResult", "effective_cross_section_fixed_depth",
     "SINGLE_LOSS_MODEL_ID", "SINGLE_LOSS_CONVENTIONS_MODEL_ID", "BinnedPrimary", "DeltaPrimary", "LossWindowAreaResult", "SingleLossSpectrumResult",
     "SingleLossInputError", "SingleLossConvergenceError", "loss_window_area", "single_loss_spectrum",
+    "MULTIPLE_LOSS_MODEL_ID", "MultipleLossConvergenceError", "MultipleLossInputError",
+    "MultipleLossOrderAreasResult", "MultipleLossSpectrumResult", "multiple_loss_order_areas", "multiple_loss_spectrum",
 ]

@@ -1,8 +1,9 @@
 """CLI schema and reproducibility records for the two M4a commands."""
 
 import csv
-from dataclasses import fields
+from dataclasses import asdict, fields
 from datetime import datetime, timezone
+from decimal import Decimal
 from fractions import Fraction
 import hashlib
 import io
@@ -17,6 +18,8 @@ import scipy
 
 from . import __version__
 from . import xps_single_loss as api
+from . import xps_multiple_loss as multiple
+from ._order_types import ORDER_DEFAULTS, MultipleLossInputError
 from ._loss_panels import validate_settings
 from ._single_loss_types import COLUMNS, COMPONENTS, QUANTITIES, SingleLossInputError, vector
 from .config import _reject_constant, _unique_object, keys, parse_config
@@ -25,7 +28,8 @@ from .model import BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, finite_number
 from .xps_depth_averaged import DEPTH_AVERAGED_MODEL_ID
 from .xps_fixed_depth import EPSILON_MOMENTA, FIXED_DEPTH_MODEL_ID
 
-COMMANDS = ("xps-loss-window-area", "xps-single-loss")
+MULTIPLE = "xps-multiple-loss"
+COMMANDS = ("xps-loss-window-area", "xps-single-loss", MULTIPLE)
 
 
 def add_commands(sub):
@@ -49,11 +53,16 @@ def add_commands(sub):
         child.add_argument("--theta-deg", type=float, default=0.)
         child.add_argument("--hole-charge", type=float, default=1.)
         defaults = api.AREA_DEFAULTS
-        if name == COMMANDS[1]:
+        if name != COMMANDS[0]:
             child.add_argument("--spectrum", required=True)
             defaults = api.SPECTRUM_DEFAULTS
         for opt, default in defaults.items():
             child.add_argument("--"+opt.replace("_", "-"), type=type(default))
+        if name == MULTIPLE:
+            child.add_argument("--model", required=True)
+            child.add_argument("--max-order", required=True)
+            for opt, default in ORDER_DEFAULTS.items():
+                child.add_argument("--"+opt.replace("_", "-"), type=float if default is None else type(default))
 
 
 def _read(path):
@@ -175,7 +184,8 @@ def run(args):
     start = time.perf_counter()
     raw, digest = _read(args.config)
     config = parse_config(raw, digest)
-    spectrum = args.command == COMMANDS[1]
+    higher = args.command == MULTIPLE
+    spectrum = args.command != COMMANDS[0]
     settings = (api.SPECTRUM_DEFAULTS if spectrum else api.AREA_DEFAULTS).copy()
     sources = dict.fromkeys(settings, "default")
     for k in settings:
@@ -197,15 +207,35 @@ def run(args):
               weight_length_seed_A=args.weight_length_seed_A, multiplier=convention, multiplier_A=args.multiplier_A)
     spectrum_input, primary_record, edges = None, None, None
     if spectrum:
-        primary, edges, spectrum_input = _spectrum_input(args.spectrum, settings["max_cells"])
-        result = api.single_loss_spectrum(config.material, config.electron_energy_eV, primary, edges, **kw)
+        try:
+            primary, edges, spectrum_input = _spectrum_input(args.spectrum, settings["max_cells"])
+        except SingleLossInputError as exc:
+            if higher and exc.reason == "invalid_schema":
+                raise MultipleLossInputError("invalid_schema", detail=getattr(exc,"detail",str(exc))) from exc
+            raise
+        if higher:
+            try:
+                requested = int(args.max_order)
+            except ValueError:
+                requested = args.max_order
+            for k, default in ORDER_DEFAULTS.items():
+                value = getattr(args, k)
+                settings[k] = default if value is None else value
+                sources[k] = "default" if value is None else "cli"
+            expansion = multiple.multiple_loss_spectrum(config.material, config.electron_energy_eV, primary,
+                edges, **kw, model=args.model, max_order=requested, **{k:settings[k] for k in ORDER_DEFAULTS})
+            result = expansion.single_loss
+        else:
+            result = api.single_loss_spectrum(config.material, config.electron_energy_eV, primary, edges, **kw)
         primary_record = {f.name: getattr(primary, f.name) for f in fields(primary)}
         primary_record.update(kind=api._primary_values(primary)["kind"], primary_integral=result.primary_integral,
                               primary_abs_integral=result.primary_abs_integral, support=result.diagnostics["primary_support"])
     else:
         result = api.loss_window_area(config.material, config.electron_energy_eV, **kw)
-    files = {"window_area.csv": _csv(_areas(result))}
-    if spectrum:
+    files = ({"multiple_loss_spectrum.csv": _csv(_order_regions(expansion)),
+              "order_areas.csv": _csv(_order_areas(expansion))}
+             if higher else {"window_area.csv": _csv(_areas(result))})
+    if spectrum and not higher:
         files["single_loss_spectrum.csv"] = _csv(_regions(result))
     # prereg 4.4: results carries every field of 4.1, including the input copies.
     not_results = {"diagnostics", "warnings", "primary"}
@@ -237,6 +267,18 @@ def run(args):
                     effective_settings=settings, effective_settings_sources=sources, primary=primary_record,
                     output_edges_eV=edges, results={k: v for k, v in vars(result).items() if k not in not_results},
                     diagnostics=result.diagnostics, comparison=result.diagnostics["comparison"])
+    if higher:
+        nested = asdict(expansion)
+        nested["single_loss"]["comparison"] = result.diagnostics["comparison"]
+        manifest["dependent_model_ids"]["single_loss"] = result.model_id
+        manifest["spectrum_definition"]["max_order"] = requested
+        manifest["units"].update(area="dimensionless", order_area_ratio="dimensionless")
+        manifest.update({key:getattr(expansion,key) for key in ("model_id","depends_on_model_id","repeated_kernel",
+            "hole_treatment","kernel_energy_policy","truncation","order_area_ratio","convention_ratio",
+            "diagnostics","warnings")})
+        manifest.update(results=nested, comparison=dict.fromkeys(("orders","areas","spectrum"),"not_matched"),
+            physical_validity="not_established", orders_definition=[
+                _order_definition(o.order,result) for o in expansion.orders])
     files["run.json"] = json.dumps(json_value(manifest), ensure_ascii=False, allow_nan=False, indent=2)+"\n"
     # Serialize everything before claiming the directory, then write the
     # completion marker last. Roll back only files this invocation created.
@@ -253,6 +295,35 @@ def run(args):
             path.unlink()
         args.out.rmdir()
         raise
-    return dict(status="complete", model_id=result.model_id, output_dir=str(args.out.resolve()),
-                files=list(files), warning_count=len(result.warnings))
+    return dict(status="complete", model_id=manifest["model_id"], output_dir=str(args.out.resolve()),
+                files=list(files), warning_count=len(manifest["warnings"]))
+
+
+def _order_areas(result):
+    yield ("order","column","area","area_error","cutoff_sensitivity","cutoff_sensitivity_error")
+    for o in result.orders:
+        for c in COLUMNS:
+            yield (o.order,c,o.area[c],o.area_error[c],o.cutoff_sensitivity[c],o.cutoff_sensitivity_error[c])
+
+
+def _order_definition(order, single):
+    power = Fraction(single.multiplier_A)**order
+    # Decimal(int) also converts exact coefficients beyond the interpreter's
+    # decimal digit limit for str(int), without changing process-wide settings.
+    return dict(order=order, multiplier_power=f"{Decimal(power.numerator)}/{Decimal(power.denominator)}",
+                multiplier_A=single.multiplier_A, multiplier_interval_A=single.multiplier_interval_A)
+
+
+def _order_regions(result):
+    fields = [("zero_loss",result.single_loss,"zero_loss")]
+    fields.extend((f"order{o.order}_{c}",o,c) for o in result.orders for c in COMPONENTS)
+    fields.append(("spectrum",result,"spectrum"))
+    yield ["region","edge_low_eV","edge_high_eV",*(label+s for label,_,_ in fields for s in ("","_error"))]
+    edges = result.single_loss.output_edges_eV
+    for i in ["low",*range(len(edges)-1),"high"]:
+        if isinstance(i,int):
+            yield [i,edges[i],edges[i+1],*(getattr(obj,k+s)[i] for _,obj,k in fields for s in ("","_error"))]
+        else:
+            ends = (None,edges[0]) if i=="low" else (edges[-1],None)
+            yield [i,*ends,*(obj.outside[i][k+s] for _,obj,k in fields for s in ("","_error"))]
 

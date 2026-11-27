@@ -1,6 +1,8 @@
 """Loss-energy quadrature and shared error-budget driver (M4a design section 3)."""
 
 from dataclasses import dataclass
+from contextlib import contextmanager
+from contextvars import ContextVar
 from fractions import Fraction as Q
 from functools import cached_property
 import math
@@ -36,6 +38,20 @@ CC = np.array([0. if k % 2 else 2/(1-k*k) for k in range(17)]) @ _fold.CARDINAL
 CARDINAL9 = np.cos(np.pi*np.outer(np.arange(9), np.arange(8, -1, -1))/8)/4
 CARDINAL9[[0, -1], :] *= .5
 CARDINAL9[:, [0, -1]] *= .5
+
+# An order expansion can observe the production mesh without resampling it.
+# Context-local observation also keeps concurrent legacy calls independent.
+_mesh_observer = ContextVar("loss_order_mesh_observer", default=None)
+
+
+@contextmanager
+def observe_mesh():
+    trace = dict(history=[], initial_panel_edges_eV=None, sampled_min=None)
+    token = _mesh_observer.set(trace)
+    try:
+        yield trace
+    finally:
+        _mesh_observer.reset(token)
 
 
 def _midpoint(a, b):
@@ -190,6 +206,8 @@ class Panel:
         return coeff.sum(axis=1)+uncertainty, coeff @ (np.arange(17)**2)+256*uncertainty
 
     def check(self, values, errors):
+        if _mesh_observer.get() is not None:
+            self._verification_min = values.min(axis=1)
         coeff = self.coefficients
         diff = coeff.copy()
         diff[:, :9] -= self.values[:, ::2] @ CARDINAL9.T
@@ -535,6 +553,15 @@ def _integrate(kernel, window, features, length, charge, primary, edges, setting
                             Q(mesh[i][1])-Q(mesh[i][0]), -i))
                 split.fill(False)
                 split[index] = True
+            trace = _mesh_observer.get()
+            if trace is not None and not seed:
+                if stage == 0:
+                    trace["initial_panel_edges_eV"] = bounds
+                trace["history"].append(dict(panels=len(panels), formal=folded is not None,
+                                             passed=not split.any(), split_panels=int(split.sum())))
+                minima = np.min([np.minimum(p.values.min(axis=1), getattr(p, "_verification_min", np.inf))
+                                 for p in panels], axis=0)
+                trace["sampled_min"] = (minima if stage == 0 else np.minimum(minima, trace["sampled_min"]))
             if not np.any(split):
                 if seed:
                     row = outputs[denominator_key]

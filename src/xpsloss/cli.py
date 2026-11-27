@@ -16,6 +16,7 @@ import scipy
 
 from . import __version__
 from . import _single_loss_cli
+from ._order_types import MULTIPLE_LOSS_MODEL_ID, MultipleLossInputError, MultipleLossConvergenceError
 from .xps_single_loss import SINGLE_LOSS_MODEL_ID, SingleLossInputError, SingleLossConvergenceError
 from ._single_loss_types import SINGLE_LOSS_CONVENTIONS_MODEL_ID, MULTIPLIERS, WEIGHT_KINDS
 from .config import load_config
@@ -83,7 +84,15 @@ def capabilities():
         "status": "experimental",
         "supported": ["strict_json_validation", "drude_lindhard_elf", "bulk_diimfp",
                       "causal_dielectric_response", "xps_fixed_depth", "xps_depth_averaged",
-                      "xps_loss_window_area", "xps_single_loss"],
+                      "xps_loss_window_area", "xps_single_loss", "xps_multiple_loss"],
+        "multiple_scattering": {
+            "model_id": MULTIPLE_LOSS_MODEL_ID, "emission": "normal_only",
+            "kernel_energy_policy": "fixed_E0", "status": "approximate",
+            "unsupported_physics": ["oblique_emission", "trajectory_dependent_weight_length", "self_consistent_length",
+                                    "intrinsic_loss_separation", "losses_outside_window", "elastic_scattering",
+                                    "instrument_broadening", "background_subtraction", "energy_dependent_kernel",
+                                    "binding_energy_axis"],
+        },
         "dielectric_model_id": DIELECTRIC_MODEL_ID,
         "bulk_unsupported_physics": list(UNSUPPORTED_PHYSICS),
         "bulk_unsupported_physics_model_id": MODEL_ID,
@@ -474,8 +483,8 @@ def main(argv=None):
     try:
         args = build_parser().parse_args(argv)
         return run(args)
-    except (SingleLossInputError, SingleLossConvergenceError) as exc:
-        status = "not_converged" if isinstance(exc, SingleLossConvergenceError) else "error"
+    except (SingleLossInputError, SingleLossConvergenceError, MultipleLossInputError, MultipleLossConvergenceError) as exc:
+        status = "not_converged" if isinstance(exc, NumericalConvergenceError) else "error"
         emit(_single_loss_cli.json_value(dict(status=status, error_type=type(exc).__name__,
                                               message=str(exc), **vars(exc))), sys.stderr)
         return 2
