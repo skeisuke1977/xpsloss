@@ -27,9 +27,14 @@ def around(x, e):
     return Q(x) - Q(e), Q(x) + Q(e)
 
 
-def area_interval(single, name):
+def exact_area_interval(single, name):
+    """Corners of the multiplier and area intervals in exact rationals (not rounded)."""
     bounds = single.multiplier_interval_A or (single.multiplier_A,) * 2
-    return outward(*times(tuple(map(Q, bounds)), around(single.window_area[name], single.window_area_error[name])))
+    return times(tuple(map(Q, bounds)), around(single.window_area[name], single.window_area_error[name]))
+
+
+def area_interval(single, name):
+    return outward(*exact_area_interval(single, name))
 
 
 def ratio_record(single):
@@ -157,7 +162,9 @@ def log_laplace(panels, col, taus, m):
 def tail_area(single, ratio, n, negative, first_zero, repeat_zero):
     mass = Q(single.primary_integral)
     w = Q(single.single_loss_weight)
-    wi = tuple(map(Q, area_interval(single, "total")))
+    # Prereg 4.2 and 7: four corners in exact rationals, rounded outward once at the end.
+    # Rounding the w interval first would round twice and can widen an end by an ulp.
+    wi = exact_area_interval(single, "total")
 
     def result(value=None, interval=None, reason=None):
         return dict(value=value, interval=interval, reason=reason)
