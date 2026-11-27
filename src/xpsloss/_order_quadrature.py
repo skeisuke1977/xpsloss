@@ -93,7 +93,8 @@ class Polynomials:
         mean = np.einsum("pck,k->pc", self.coeff, np.array([0.0 if k % 2 else 1 / (1 - k * k) for k in range(17)]))
         n = len(self.coeff)
         absolute = self.abs_mean(np.arange(n), np.zeros(n), np.ones(n), mean)
-        return np.sum(absolute * np.diff(self.edges)[:, None], axis=0)
+        widths = [Q(b) - Q(a) for a, b in pairwise(self.edges)]
+        return [sum(Q(v) * w for v, w in zip(column, widths)) for column in absolute.T]
 
 
 def integer_edges(ratios, denominator):

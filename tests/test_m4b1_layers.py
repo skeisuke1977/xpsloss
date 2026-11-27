@@ -1,6 +1,7 @@
 """Analytical checks of the numerical layers, independent of the comparison tables."""
 
 import math
+from decimal import Decimal, localcontext
 from fractions import Fraction as Q
 import unittest
 from unittest.mock import patch
@@ -15,7 +16,8 @@ from xpsloss import (
     MultipleLossInputError,
 )
 from xpsloss import _loss_orders as orders, _loss_panels as lp, _loss_reference_models as models
-from xpsloss._order_quadrature import mandatory_knots, tau_grid
+from xpsloss._order_bounds import log_laplace, log_power
+from xpsloss._order_quadrature import area_terms, mandatory_knots, tau_grid
 
 
 def box(t, side):
@@ -131,12 +133,95 @@ class Layers(unittest.TestCase):
         value = result.orders[1].area_error_parts["inherited"]["hole"]
         self.assertGreaterEqual(value, 0.0006)
         self.assertLess(value, 0.0006 * (1 + 1e-9))
+        self.assertEqual(result.orders[0].mesh["panel_edges_eV"], [2, 4, 5])
+        for run in (result, calculate(**kw, multiplier="external", multiplier_A=1.3)[0]):
+            for order in run.orders[1:]:
+                power = Q(run.single_loss.multiplier_A) ** order.order
+                for column, terms in zip(lp.COLUMNS, zip(*order.mesh["local_area_terms"])):
+                    with self.subTest(order=order.order, column=column, power=power):
+                        exact = power * sum(map(Q, terms))
+                        reported = order.area_error_parts["local"][column]
+                        self.assertGreaterEqual(Q(reported), exact)
+                        self.assertLess(Q(math.nextafter(reported, -math.inf)), exact)
         result, _ = calculate(**kw, multiplier="inverse_window_area")
         one = result.orders[0]
         self.assertEqual(one.area_error["total"], result.single_loss.single_loss_weight_error)
         self.assertEqual(one.area_error_parts["convention"]["total"], one.area_error["total"])
         self.assertEqual(one.area_error_parts["inherited"]["total"], 0.0)
         self.assertGreater(result.diagnostics["first_order"]["fixed_multiplier_area_error"]["total"], 0.001)
+
+    def test_region_error_parts_survive_subnormal_scaling(self):
+        tiny = math.ulp(0.0)
+        zeros = np.zeros((11, 17))
+        errors = np.full_like(zeros, tiny)
+        panel = lp.Panel.from_lobatto(2.0, 5.0, zeros, errors)
+        geometry = orders._fold.Geometry(DeltaPrimary([1000], [1]), [996, 997])
+        parts = dict.fromkeys(("inherited", "propagated", "local"), errors)
+        rows = orders._fold_order([panel], geometry, multiplier_power=Q(1, 16), error_parts=[parts])
+        # Each of the three regions receives one eV of constant nodal uncertainty.
+        for key, row in rows.items():
+            for part in parts:
+                with self.subTest(region_component=key, part=part):
+                    self.assertEqual(row[part], tiny)
+
+    def test_higher_order_errors_cover_the_reported_parts(self):
+        result, _ = calculate(multiplier="inverse_window_area", output_edges_eV=[991.5, 993, 995])
+
+        def check(total, parts):
+            exact = sum(map(Q, parts))
+            self.assertGreaterEqual(Q(total), exact)
+            self.assertLess(Q(math.nextafter(total, -math.inf)), exact)
+
+        for order in result.orders[1:]:
+            for c, error in order.area_error.items():
+                check(error, (p[c] for p in order.area_error_parts.values()))
+            for c in lp.COMPONENTS:
+                errors = getattr(order, c + "_error")
+                parts = getattr(order, c + "_error_parts")
+                for i, error in enumerate(errors):
+                    check(error, (p[i] for p in parts.values()))
+                for side in order.outside.values():
+                    check(side[c + "_error"], side[c + "_error_parts"].values())
+
+    def test_constant_panel_laplace_rounds_outward(self):
+        taus = [0.0, 0.05, 12.0]
+        with localcontext() as ctx:
+            ctx.prec = 80
+            for height, m in ((1e-240, 1e240), (1e240, 1e-240)):
+                panel = lp.Panel.from_lobatto(2.0, 5.0, np.full((11, 17), height), np.zeros((11, 17)))
+                e = Decimal.from_float(area_terms(panel)[0])
+                logs = log_laplace([panel], 0, np.array(taus), m)
+                for tau, reported in zip(taus, logs):
+                    t = Decimal.from_float(tau)
+                    weight = (1 - (-3 * t).exp()) / t if t else Decimal(3)
+                    exact = Decimal.from_float(m) * (-2 * t).exp() * (Decimal.from_float(height) * weight + e)
+                    self.assertGreaterEqual(Decimal.from_float(reported), exact.ln())
+
+    def test_positive_all_axis_bound_underflow(self):
+        def small(t, side):
+            values, errors = box(t, side)
+            return values * 1e-150, errors
+
+        for model in (models.GEOMETRIC, models.FACTORIAL, models.EXCESS):
+            result = models.integrate_orders_reference(
+                small, (2.0, 5.0), features={}, weight_length_A=2.0, max_order=2, model=model,
+                primary=DeltaPrimary([1000], [1]), output_edges_eV=[990, 1001],
+            )
+            self.assertEqual(result.truncation["neglected_total_area_bound"], math.ulp(0.0))
+
+    def test_large_order_log_bounds(self):
+        n = 2**53 + 3
+        logs = np.array([-1.3, 1.3])
+        for v, bound in zip(logs, log_power(logs, n)):
+            self.assertGreaterEqual(Q(bound), n * Q(v))
+        n = 300
+        factorial = models._log_tail(models.FACTORIAL, [], 1.0)
+        bound = factorial(None, n, np.array([-1.0]), None)[0]
+        with localcontext() as ctx:
+            ctx.prec = 80
+            exact = -(n + 1) - Decimal(math.factorial(n + 1)).ln() + Decimal(-1).exp()
+            self.assertGreaterEqual(Decimal.from_float(bound), exact)
+            self.assertLess(Decimal.from_float(bound) - exact, Decimal("1e-9"))
 
     def test_resources_and_failure_timing(self):
         def forbidden(*args):
