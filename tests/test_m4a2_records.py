@@ -678,11 +678,19 @@ def records(row, log):
     elif rule == "capabilities":
         if (m.ROOT / ".git").exists():
             old, new = baseline(rid)
+            # Post-freeze change (owner approval 2026-11-27, docs/VALIDATION.md):
+            # additions registered by a later frozen pre-registration (M4b-1) are
+            # allowed; every block of the baseline still has to match exactly.
+            later = m.old.LATER_BLOCKS
+            old_supported, new_supported = old.get("supported", []), new.get("supported", [])
             log.check(
                 "other_blocks",
                 own_versions(old.get("version"), new.get("version"))
-                and {k: v for k, v in new.items() if k not in ("xps_single_loss", "version")}
-                == {k: v for k, v in old.items() if k not in ("xps_single_loss", "version")},
+                and new_supported[:len(old_supported)] == old_supported
+                and m.old.later_supported_ok(new_supported[len(old_supported):])
+                and not any(k in old for k in later)
+                and {k: v for k, v in new.items() if k not in ("xps_single_loss", "version", "supported") + later}
+                == {k: v for k, v in old.items() if k not in ("xps_single_loss", "version", "supported")},
             )
         else:
             new = cli.capabilities()

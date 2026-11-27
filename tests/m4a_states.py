@@ -35,6 +35,19 @@ TABLE_PATH = ROOT/"benchmarks/numerics/m4a/expected_states_m4a.json"
 TABLE_SHA256 = "250b45f863ccbd1c4c94474f23769976380c5dad5c2671328712ef4acdc7f408"
 RA_PATH = ROOT/"benchmarks/numerics/m4a/references_ra_m4a.json"
 EPS = 2.0**-52
+
+# Post-freeze change (owner approval 2026-11-27, docs/VALIDATION.md): capability
+# additions that a later frozen pre-registration registers. M4b-1
+# (docs/M4B1_PREREG.md section 4.3, row C11) appends xps_multiple_loss to
+# `supported` and adds the top-level block multiple_scattering. Everything that
+# existed in a baseline must still match it exactly.
+LATER_SUPPORTED = ("xps_multiple_loss",)
+LATER_BLOCKS = ("multiple_scattering",)
+
+
+def later_supported_ok(appended):
+    """`appended` is an in-order prefix of the names later stages registered."""
+    return tuple(appended) == LATER_SUPPORTED[:len(appended)]
 COLUMNS = ("term_13a", "term_13b", "term_14", "term_15_T1", "term_15_T2", "term_15_T3",
            "term_16_e", "term_16_h", "no_hole", "hole", "total")
 NO_HOLE = ("term_13a", "term_13b", "term_15_T1", "term_15_T3", "term_16_e")
@@ -1053,7 +1066,9 @@ def check_v_replay(row, out):
         need(o.pop("version") == v["tag"]["version"] and n.pop("version") == v["current"]["version"], "version")
         so, sn = o.pop("supported"), n.pop("supported")
         need(sn[:len(so)] == so, f"supported prefix changed: {sn}")
-        need(sn[len(so):] == row["expect"]["appended_supported"], f"appended names {sn[len(so):]}")
+        registered, appended = row["expect"]["appended_supported"], sn[len(so):]
+        need(appended[:len(registered)] == registered and later_supported_ok(appended[len(registered):]),
+             f"appended names {appended}")
         for key, value in o.items():
             need(key in n and n[key] == value, f"existing block {key} changed")
         return True
