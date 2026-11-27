@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.0] - 2026-11-27
 
 ### Added
 
@@ -15,6 +15,7 @@
 - `capabilities`: `supported` gains `xps_loss_window_area` and `xps_single_loss`, and a new `xps_single_loss` block gives the model ID, scope and unsupported physics. Existing entries are unchanged. With M4a-2 the block also lists `model_ids`, `weight_length_kinds` and `multiplier_conventions`, and its scope reads "constant lengths for the weight and multiplier".
 - `run.json` of both single-loss commands: `model_id` and the success JSON take the model ID of the result. `spectrum_definition.weight` keeps its three keys and, for the window 13a weight, adds the 13a area, its error, the denominator conditions, the interval, c and its source, the seed and the consistency check; `spectrum_definition.multiplier` records the convention, value, interval and source. A `run.json` without these keys replays as an external weight with the default multiplier.
 - CI: the package job runs all eight README commands from the wheel outside the source tree and checks the `xps-single-loss` outputs, including the SHA-256 of the distributed comparison table. It also runs the unpacked-sdist suite with the Python that has the wheel installed and without `PYTHONPATH`, and checks that plain `unittest` discovery fails there; the existing run without the package installed is kept.
+- Tests: the M4a-2 rows that compare with the baseline code `e4e024f` (the four CLI rows of V1 and `V10-caps`) now check that each side reports its own package version, instead of requiring the baseline's version string. With the release version 0.3.0 they failed on that string alone; all other fields still match the baseline. This post-freeze change was approved by the owner and is recorded in the validation record; the frozen pre-registration and expected-state table are unchanged.
 
 ### Fixed
 

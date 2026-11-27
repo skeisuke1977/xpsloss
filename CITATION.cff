@@ -1,16 +1,16 @@
 cff-version: 1.2.0
 message: "If you use xpsloss in your research, please cite this software."
 title: xpsloss
-version: "0.2.0"
-date-released: "2026-11-25"
-doi: 10.5281/zenodo.24543166
+version: "0.3.0"
+date-released: "2026-11-27"
+doi: 10.5281/zenodo.24490457
 identifiers:
-  - type: doi
-    value: 10.5281/zenodo.24543166
-    description: "Version 0.2.0"
   - type: doi
     value: 10.5281/zenodo.24490457
     description: "All versions; resolves to the latest version"
+  - type: doi
+    value: 10.5281/zenodo.24543166
+    description: "Version 0.2.0"
   - type: doi
     value: 10.5281/zenodo.24490458
     description: "Version 0.1.0"
@@ -24,8 +24,10 @@ abstract: >-
   and bulk inelastic scattering in Python. For normal emission, it calculates the
   fixed-depth effective XPS cross section including surface, vacuum, core-hole,
   and interference terms, for gapless materials and accepted materials with a
-  hard band gap, and its average over single-scattering paths with an
-  externally supplied constant weight length.
+  hard band gap, its average over single-scattering paths with an externally
+  supplied constant weight length, and the zero-loss and single-loss spectrum
+  of Eq. (19) of Simonsen, Yubero and Tougaard (1997) with finite loss-window
+  areas, with a choice of weight length and multiplier.
 keywords:
   - X-ray photoelectron spectroscopy
   - dielectric response

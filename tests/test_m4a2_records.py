@@ -372,6 +372,26 @@ def old_length_message(row):
     return "weight_length_A and electron_energy_eV must be positive"
 
 
+@lru_cache(None)
+def base_version():
+    """The __version__ of the e4e024f baseline, read from that commit."""
+    source = subprocess.check_output(
+        ["git", "show", m.TABLE["baseline"] + ":src/xpsloss/__init__.py"], cwd=m.ROOT, text=True
+    )
+    found = [line for line in source.splitlines() if line.startswith("__version__ = ")]
+    assert len(found) == 1, found
+    return found[0].split("=", 1)[1].strip().strip('"')
+
+
+def own_versions(before, after):
+    """Post-freeze change (owner approval 2026-11-27, docs/VALIDATION.md): each side reports its own version.
+
+    The frozen pre-registration (section 3.1) compares the package version with the baseline, which held only
+    while both sides were 0.3.0.dev0. A release changes this string without changing behaviour.
+    """
+    return before == base_version() and after == xpsloss.__version__
+
+
 def legacy_items(log, before, after, prefix=""):
     if isinstance(before, dict):
         additions = set()
@@ -396,6 +416,8 @@ def legacy_items(log, before, after, prefix=""):
                 log.equal(path, after[k], v)
             else:
                 legacy_items(log, v, after[k], path)
+    elif prefix == "manifest.package_version":
+        log.check(prefix, own_versions(before, after))
     else:
         log.equal(prefix, after, before)
 
@@ -656,10 +678,11 @@ def records(row, log):
     elif rule == "capabilities":
         if (m.ROOT / ".git").exists():
             old, new = baseline(rid)
-            log.equal(
+            log.check(
                 "other_blocks",
-                {k: v for k, v in new.items() if k != "xps_single_loss"},
-                {k: v for k, v in old.items() if k != "xps_single_loss"},
+                own_versions(old.get("version"), new.get("version"))
+                and {k: v for k, v in new.items() if k not in ("xps_single_loss", "version")}
+                == {k: v for k, v in old.items() if k not in ("xps_single_loss", "version")},
             )
         else:
             new = cli.capabilities()
