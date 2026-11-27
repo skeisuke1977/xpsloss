@@ -238,3 +238,77 @@ H_j=m\,a\,K_{{\rm sc},j}(E_0,a;L_w)
 | 式 | 実装 | 検証 |
 | --- | --- | --- |
 | \(L_w\)、\(m\)、区間、2段の計算、分母の規則、返す誤差 | `xps_single_loss.loss_window_area`、`single_loss_spectrum`（キーワード `weight_length_kind`、`extra_inverse_length_per_A`、`weight_length_seed_A`、`multiplier`、`multiplier_A`）。分母と再畳み込みは `_loss_panels`、返す誤差は `_fold`。CLI は `--weight-length-inverse-13a-window-area`、`--extra-inverse-length-per-A`、`--weight-length-seed-A`、`--multiplier-A`、`--multiplier-inverse-window-area` | R-B から写像した参照（[M4a-2 の事前登録](M4A2_PREREG.md)、[VALIDATION.md](VALIDATION.md) の「M4a-2」） |
+
+## E8. 法線出射の多重損失（主模型 `first_loss_13a_chain_v0`）
+
+`first_loss_13a_chain_v0`（開発版 0.4.0.dev0、M4b-1）は、E7・E7a のゼロ損失線と単一損失に、同じ損失窓の中の損失を繰り返した次数 \(n\ge2\) の寄与を足す。**近似の模型である。** 最初の損失には E7a の全核（11 列）を使い、2回目以降の損失には 13a の項だけを使う。核（E6）は足さない。軸は運動エネルギーだけである（束縛エネルギーの入出力は M4b-2）。設計は [M4b の設計](M4B_DESIGN.md)（第5版）、検証の条件は [M4b-1 の事前登録](M4B1_PREREG.md) にある。
+
+\[
+K_{1,j}(T)=m\,\mathbf 1_W(T)\,K_{{\rm sc},j}(E_0,T;L_w),\qquad
+R(T)=m\,\mathbf 1_W(T)\,K_{13a}(E_0,T)
+\]
+
+\[
+C_0=\delta,\qquad C_{1,j}=K_{1,j},\qquad C_{n,j}=K_{1,j}*R^{*(n-1)}\ (n\ge2)
+\]
+
+\[
+J_{n,j}(E)=\int C_{n,j}(s)\,F(E+s)\,ds,\qquad
+J^{(N)}(E)=J_0(E)+\sum_{n=1}^{N}J_{n,\rm total}(E)
+\]
+
+\[
+w_{n,j}=m\,A_j\,r^{\,n-1},\qquad r=m\,A_{13a}
+\]
+
+| 記号 | 意味 | 単位 |
+| --- | --- | --- |
+| \(W=[a,b]\)、\(L_w\)、\(m\)、\(F\)、\(E_0\)、\(A_j\) | E7・E7a と同じ（損失窓、重みの長さ、乗数、一次線、核を評価するエネルギー、窓の面積） | — |
+| \(K_{1,j}\) | 1回目の損失の核。\(j\) は 11 列（8項、`no_hole`、`hole`、`total`） | eV⁻¹ |
+| \(R\) | 繰り返しの核。13a の列だけ（`repeated_kernel` は `term_13a`） | eV⁻¹ |
+| \(C_{n,j}\) | 次数 \(n\) の損失の分布。台は \([na,nb]\)。\(s\) は累積の損失 | eV⁻¹ |
+| \(J_{n,j}\) | 次数 \(n\) の寄与。領域ごとのビン積分で返す（`orders[n-1]` の `total`、`no_hole`、`hole`） | \(I\) |
+| \(J^{(N)}\)（`spectrum`） | 次数 \(N\) までの和 | \(I\) |
+| \(w_{n,j}\)（`area`） | 次数 \(n\) の全軸の面積の比（11 列）。確率ではない | 無次元 |
+| \(r\)（`order_area_ratio`） | 隣り合う次数の面積の比 | 無次元 |
+| \(N\)（`max_order`） | 計算する最大の次数。必須で、既定値はない | — |
+
+- **根拠:** 原著は、式(18)の核が最初の非弾性散乱だけを表し、分けられない内因性の部分を含むので、繰り返しの畳み込みで全スペクトルを作れないと書く [Simonsen ら (1997) p. 1615](https://doi.org/10.1103/PhysRevB.56.1612)。そこで全核は1回目にだけ使う。全核をそのまま繰り返す文献の式は、各次数の係数が文献の間で食い違うので、公開の模型にしない（[M4b の設計](M4B_DESIGN.md) §2。式(19)と多重散乱の式の原典の Tougaard と Sigmund (1982) などは論文庫になく、その記述は二次文献による）。
+- **正孔・干渉・表面・真空は高々1回:** 2回目以降に入るのは 13a だけである。13b、14、15-T1、15-T2、15-T3、16-e、16-h は1回目の核にだけ入る（`hole_treatment` は `first_event_only`）。\(\bar g=K_{1,\rm total}-R\) とおくと \(\sum_nC_{n,\rm total}=(\delta+\bar g)*\sum_{k\ge0}R^{*k}\) で、\(\bar g\) は軌道に高々1回入る。繰り返しの 13a は、1回目と同じ運動量の指定の列である。分散のある `k_parallel` の 13a は無限媒質のバルクの値と一般に違うので、警告を出す。
+- **各次数の係数:** 半無限・一様な生成・法線出射・直線の軌道・一定の速度・弾性散乱なしで、ほかに損失しない確率を \(e^{-x/L}\) とすると、次数 \(n\) の係数は \(L^n\) になる（[M4b の設計](M4B_DESIGN.md) §3）。そこで繰り返しの因子にも1回目と同じ乗数 \(m\) を掛け、次数 \(n\) は \(m^n\) に比例する。\(L_w\) は1回目の核の深さの重みにだけ入る。\(m\ne L_w\) の組はこの導出の外にある（E7a の W-len を引き継ぐ）。
+- **核は \(E_0\) に固定:** 全次数で同じ \(E_0\) の核を使い、次数ごとにエネルギーを下げない（`kernel_energy_policy` は `fixed_E0`）。\(Nb/E_0>0.1\) なら警告する。
+- **成分と符号:** \(C_n\) は \(K_1\) に線形なので、各次数・各領域・面積で `total = no_hole + hole_charge * hole` が成り立つ。非負の \(F\)、\(K_{1,\rm total}\)、\(R\) から作る `total` は全次数で非負である。`hole` は負になりうる。負の値は切らない。`total` と 13a の核の、評価点の最小と連続区間の最小を `diagnostics["negative_values"]` に残し、負なら警告する。
+- **面積:** 次数 \(n\ge2\) の \(w_{n,j}\) は、その次数のパネルの面積から求める。恒等値 \(w_{1,j}\hat r^{\,n-1}\) で上書きしない。`order_area_ratio` は \(\hat r=\hat mA_{13a}\) とその誤差・区間である。`convention_ratio` は、規約から決まる \(r\) の性質を別に示す（窓の 13a の重みと乗数 `weight_length` の組で \(c=0\) なら `exactly_one`、\(c>0\) なら `below_one`。ほかは `not_determined_by_convention`）。`area_zero_kind` は、面積が 0 の列を `exact_zero`（構造の証拠がある）と `rounded_zero`（中心の値が 0 に丸まっただけ）に分ける。今の実装が `exact_zero` とするのは、強度がゼロの材料の場合だけである。
+- **窓の下限への感度:** \(h_{1,j}=m\,a\,K_{{\rm sc},j}(a)\)（E7・E7a の \(H_j\)）、\(n\ge2\) で \(h_{n,j}=h_{1,j}\,r^{\,n-1}+(n-1)\,w_{1,j}\,h_r\,r^{\,n-2}\)、\(h_r=h_{1,13a}\)。\(m\)、\(L_w\)、\(b\)、\(E_0\)、正孔電荷を固定した偏感度である（E7a の W-sens）。ビンごとの片側の感度は1次だけ（E7 のまま）。
+- **`max_order` は必須:** 整数 \(N\ge1\) か `"display_support"` を与える。既定値はない。正の強度の一次線の台 \([p_{\min},p_{\max}]\) と出力の下端 \(d_{\min}\) から、表示のビンに届く次数の上限は \(N_D=\max(0,\lfloor(p_{\max}-d_{\min})/a\rfloor)\)（`truncation.support_order`。入力の binary64 を厳密な有理数として計算し、等号の次数は残す）。`"display_support"` は \(N=N_D\) とする。面積だけの入口は整数だけを受け付ける。
+- **打ち切りの状態（`truncation.state`）:** \(N\ge N_D\) なら `complete_on_display`。そうでなく、`neglect_tolerance_fraction`（既定値なし）を与え、表示のビンすべての上界が許容 \(\times S_{\rm abs}\) 以下なら `bounded_on_display`。許容を与えなければ `truncated` で、成功として返す（落とした次数は上界つきで返すだけで、警告を出す）。許容を与えて上界が超えれば `truncation_bound_exceeds_tolerance`（必要な次数の見積りつき）、上界が求まらなければ `truncation_bound_unavailable` で止まる。両側の外は判定に入れない。
+- **落とした次数の上界（領域ごとの累積）:** 領域 \(D\) の下端を \(d_D\)、\(U_D=p_{\max}-d_D\)、\(\Lambda_f(\tau)=\int_We^{-\tau t}|f(t)|\,dt\) とすると、\(\Lambda_R(\tau)<1\) の \(\tau>0\) で、次数 \(>N\) のうち損失 \(\le U_D\) に落ちる絶対の量は
+
+\[
+S_{\rm abs}\,e^{\tau U_D}\,\Lambda_{K_1}(\tau)\,\frac{\Lambda_R(\tau)^N}{1-\Lambda_R(\tau)}
+\]
+
+  以下である。`truncation.neglected_at_or_above_region_bound` は、この式の \(\tau\) の格子（\(\tau_i=10^{-3+i/20}\) eV⁻¹ のうち \(\tau_i\le40/a\) のもの。\(\|R\|_1\) の上側の値が 1 未満なら \(\tau\to0\) も候補）での最小である。**ビンごとの値ではなく、「領域 \(D\) とそれより高い運動エネルギーの側の全部に落ちる量」の累積の上界である。** \(\Lambda_f\) はパネルごとの上側の値（乗数の区間の上端と、パネルの誤差を含む）で作り、対数で計算して外向きに丸める。上流が推定の誤差なので、推定の誤差を入れた上界であり、数学的な保証ではない。\(N\) より高い次数が届かないビンは 0（`bound_reason` は `complete`）、使える \(\tau\) がなければ `None`（`no_usable_tau`）、表せなければ `None`（`not_representable`）。
+- **落とした次数の全軸の面積（`truncation.neglected_total_area`）:** \(S=0\) か1回目の核がゼロなら 0。\(R=0\) なら \(N\ge1\) で 0（\(N=0\) では \(Sw\)）。繰り返しの核が非負なら、\(\hat r\) の区間の上端が 1 未満のとき \(S\,w\,r^N/(1-r)\) とその区間、下端が 1 以上なら `None`（`diverges`）、区間が 1 をまたげば `None`（`undetermined`）。繰り返しの核に負の値があれば `None`（`repeated_kernel_not_nonnegative`）。両側の外の値には、落とした次数を足さない。
+- **数値の方法:** 1次は E7・E7a の計算を同じ引数で1回だけ行い、その最終のパネル（17 点の補間）を受け取る。次数 0 と 1 の出力は E7・E7a の結果そのもので、ビット単位で同じである（結果の `single_loss`）。次数 \(n\ge2\) は \(C_n(s)=\int C_{n-1}(s-t)R(t)\,dt\) を、両方のパネルの境で区切った区間ごとに 17 点のガウス・ルジャンドル則で積分し、17 点の補間のパネルに入れ直す。外側の網は、窓の端の \(n\) 個の和 \(ka+(n-k)b\)（\(k=0..n\)）を必須の節にして始め（有理数で作り、重複を除いて1回だけ丸める）、二分で細かくする。領域への畳み込みは E7 と同じ幾何とセルの規則で、各次数の最終の網に行う。乗数は有理数の \(\hat m^n\) を最後に1回掛ける。
+- **誤差の3つの分け方:** 次数 \(n\) の誤差を、(i) 1次のパネルから継承した分（`inherited`）、(ii) \(2..n-1\) 次の網で生じて伝わった分（`propagated`）、(iii) \(n\) 次の網で生じた分（`local`）に分けて返す（`*_error_parts`）。\(n\) 次の網の二分で減るのは (iii) だけである。
+  - (iii) は `order_epsrel`（\(\varepsilon_o\)）、`order_epsabs_fraction`（\(\eta_o\)）で判定する。予算は、ビンが \(\max(\eta_oS_{\rm abs},\varepsilon_o|y|)\)、面積が \(\max(\eta_o,\varepsilon_o|w_n|)\)。満たすまで二分し、上限に当たれば `order_budget_not_met`。
+  - (i) は1次の設定 `epsrel`（\(\varepsilon\)）、`spectrum_epsabs_fraction`（\(\eta\)）、`area_epsabs`（\(\eta_A\)）で判定する。\(\hat w_{{\rm abs},j}=\|\hat K_{1,j}\|_1\)、\(\hat r_{\rm abs}=\|\hat R\|_1\)、\(\phi_{n,j}=\hat r_{\rm abs}^{\,n-1}+(n-1)\hat w_{{\rm abs},j}\hat r_{\rm abs}^{\,n-2}\) として、予算は、ビンが \(\max(\phi_{n,j}\,\eta\,S_{\rm abs},\ n\varepsilon|y|)\)、面積が \(\max(\phi_{n,j}\,\hat m\,\eta_A,\ n\varepsilon|w_{n,j}|)\)。1次のパネルは作り直さないので、超えたら `inherited_error_exceeds_order_budget` で止まる（次数、超えたキー、相対と絶対のどちらの側か、下げる設定の名前つき）。
+  - (ii) は実額を返す。合否の判定は課さない。
+  - **既定の `epsrel`（\(10^{-6}\)、E7 と同じ）では、`max_order` が 2 以上の典型の実行（Al、δ の一次線、1 eV のビン。滑らかな解析の核でも）が、2次で `inherited_error_exceeds_order_budget` で止まる。`epsrel=1e-7` を与えると通る。** 既定値は E7 と同じに保ち、例外の文で `epsrel=1e-7` を案内する（利用者の決定、2026-11-27）。
+  - 高次の誤差の内訳と、乗数を含む集計は、有理数で足して外向きに丸める。パネルに由来する誤差そのものは E7 と同じ推定で、証明された上界ではない。各次数の判定を通っても、伝播の分と乗数の区間で、高次の返す誤差は1次の設定より大きくなりうる。
+- **乗数の区間:** 乗数に区間 \([m_-,m_+]\) があるとき（E7a）、\(\rho_n=\max(1-(m_-/\hat m)^n,\ (m_+/\hat m)^n-1)\) として、返す誤差を \(e_f+\rho_n(|\hat y|+e_f)\) とする（\(e_f\) は固定の乗数 \(\hat m\) での (i)–(iii) の和。上へ丸める）。再帰には固定の乗数の誤差だけを渡し、区間は各次数の最終の出力に1回だけ当てる（内訳の `multiplier_interval`）。\(L_w\) の区間が核を通して出力を動かす分は、E7a と同じく誤差に入れない。
+- **和の誤差:** `spectrum_error` は \(J_0\) と各次数の返す誤差の絶対和に、加算の丸めを足したものである。和そのものに予算は課さない。
+- **資源の上限:** `order_limit`（既定 64）、`max_convolution_points`（既定 \(2\times10^8\)。積分した区間の数 \(\times17\) の、2次から \(N\) 次までの累計）、`max_cells`（既定 \(2\times10^6\)、次数ごと）。入力だけで決まる超過は核を評価する前に `MultipleLossInputError`（`order_limit_exceeded`、`work_lower_bound_exceeded`）、1次の後の見積りの超過は `convolution_work_limit_exceeded`、適応の途中の超過は `convolution_work_limit_reached`。資源の上限であって、物理の既定値ではない。
+- **失敗:** 入力の誤りは `MultipleLossInputError`（`reason` は `invalid_model`、`invalid_max_order`、`invalid_neglect_tolerance`、`invalid_settings`、`order_limit_exceeded`、`work_lower_bound_exceeded`、CLI の `invalid_schema`）、未収束は `MultipleLossConvergenceError`（`order_budget_not_met`、`inherited_error_exceeds_order_budget`、`order_mesh_unresolved`、`convolution_work_limit_exceeded`、`convolution_work_limit_reached`、`truncation_bound_exceeds_tolerance`、`truncation_bound_unavailable`、`nonfinite_output`。`order`、`stage`、`inner` を持つ）。E7・E7a の例外はそのまま通す。E7 の入力の検査（材料、運動量、角度、エネルギー、長さと窓、数値の設定、規約、出力の端）を同じ順に行い、その後、核を評価する前に、模型・次数・資源を調べる。
+- **構造的なゼロ:** 一次線の強度がすべて 0 なら、ビンと両側の外は厳密に 0 で、面積は計算する。強度がゼロの材料では、高次の値・誤差・面積は厳密に 0 で \(J=J_0\)（E7a の未定義の規約の拒否が先）。
+- **警告:** 常に出すのは、模型が近似であること、表面・正孔・干渉は1回目にだけ入ること、軌道ごとの深さの相関を落とすこと、弾性散乱を含まないこと、次数の面積は確率でないことと、E7・E7a から継承した警告である。条件つきで出すのは、状態が `truncated`、\(\hat r\) の区間の上端が 1 以上、\(m\ne L_w\)、\(Nb/E_0>0.1\)、`total` か 13a の核に負の値、分散のある `k_parallel`、\(E_0>5\) keV、の各場合である。
+- **照合の表示:** `run.json` の `comparison` は、群 `orders`、`areas`、`spectrum` が常に `not_matched` である（完了した比較の表は M4b-1 では作らない）。`physical_validity` は常に `not_established`。数値の検証が確かめたのは、次数ごとの畳み込みが、与えた核と模型の定義に対して正しいことだけで、模型の物理の妥当性は確かめていない。
+- **近似の大きさ（模型の不確かさ、設計の試算）:** 表面・正孔などの超過もポアソンで数える模型との差は、2次の全軸の面積で Al 15.0 %、Si 17.4 %。軌道ごとの深さの相関を切ることによる差は、交差項の面積では 1 % 未満だが、形では同じ桁になりうる（[M4b の設計](M4B_DESIGN.md) §4.4。設計の判断のための試算で、検証した値ではない）。
+
+**扱わないもの:** 束縛エネルギーの入出力（M4b-2）、実測スペクトルとの比較（M4b-3）、斜出射、弾性散乱、軌道ごとの長さと自己無撞着な長さ、窓の外の損失、内因性の損失の分離、\(E'\) や次数ごとに変わる核、装置関数の付加、背景の差引き、フィット。全核の繰り返しなどの比較用の模型は非公開で、API・CLI・`capabilities` に出さない。QUEELS-XPS の完全なモデルを実装したものではない。
+
+| 式 | 実装 | 検証 |
+| --- | --- | --- |
+| \(C_{n,j}\)、\(J_{n,j}\)、\(J^{(N)}\)、打ち切りの状態と上界 | `xps_multiple_loss.multiple_loss_spectrum`（高次の網・誤差の内訳・判定は `_loss_orders`、区間ごとの求積と必須の節は `_order_quadrature`、上界・感度・区間は `_order_bounds`、次数ごとの結果と和は `_order_results`、結果と例外の型は `_order_types`）。1次は `xps_single_loss` の計算を1回呼ぶ。CLI は `xps-multiple-loss`（`--model`、`--max-order` は必須） | 解析の参照 R-A、実材料の参照 R-B、期待する状態の 109 行、変異 29 件（[M4b-1 の事前登録](M4B1_PREREG.md)、[VALIDATION.md](VALIDATION.md) の「M4b-1」） |
+| \(w_{n,j}\)、\(h_{n,j}\)、\(\hat r\) と区間 | `xps_multiple_loss.multiple_loss_order_areas`（一次線と出力の端を取らない。整数の `max_order` だけ） | 同上 |

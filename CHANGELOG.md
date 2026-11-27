@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+Development version 0.4.0.dev0.
+
+### Added
+
+- M4b-1: `multiple_loss_spectrum` and `multiple_loss_order_areas` return an approximate multiple-loss spectrum and the per-order areas at normal emission on the kinetic-energy axis, with the model `first_loss_13a_chain_v0` (`MULTIPLE_LOSS_MODEL_ID`). The first loss uses the full kernel of M4a and M4a-2 (all eleven columns); every later loss uses the 13a term only, C_n = K_1 * R^{*(n-1)}, so the hole, interference, surface and vacuum terms enter at most once. The basis is the caution of Simonsen et al. (1997), p. 1615, that the kernel of Eq. (18) describes only the first inelastic scattering and cannot be convolved repeatedly into a full spectrum. Each repetition carries the same multiplier m, and the kernel is fixed at the configured electron energy for every order. `model` and `max_order` (an integer of at least 1, or `"display_support"` for the spectrum) are required and have no defaults. The result reports the truncation state (`complete_on_display`, `bounded_on_display` with a caller-supplied `neglect_tolerance_fraction`, or `truncated`), a cumulative bound on the dropped orders for each displayed bin and the dropped total area. Higher-order errors are split into inherited, propagated and local parts plus the multiplier interval. Order 1 is bit-identical to the M4a and M4a-2 result, which is returned as `single_loss`. `comparison` is always `not_matched` and `physical_validity` is `not_established`. [Design](docs/M4B_DESIGN.md) · [Pre-registration](docs/M4B1_PREREG.md) · [Equations](docs/EQUATIONS.md)
+- New public names: `MULTIPLE_LOSS_MODEL_ID`, `multiple_loss_spectrum`, `multiple_loss_order_areas`, `MultipleLossSpectrumResult`, `MultipleLossOrderAreasResult`, `MultipleLossInputError` (a `ValueError`) and `MultipleLossConvergenceError` (a `NumericalConvergenceError`), both with a `reason`.
+- CLI: `xps-multiple-loss` (`--model` and `--max-order` are required, in addition to the required arguments of `xps-single-loss`; optional `--neglect-tolerance-fraction`, `--order-limit`, `--max-convolution-points`, `--order-epsrel` and `--order-epsabs-fraction`). It writes `multiple_loss_spectrum.csv`, `order_areas.csv` and `run.json`.
+- With the default `epsrel` (1e-6, unchanged from M4a), a typical run with `max_order` of 2 or more stops at order 2 with `inherited_error_exceeds_order_budget`; it passes with `epsrel=1e-7`, and the error message suggests that value.
+
+### Changed
+
+- `capabilities`: `supported` gains `xps_multiple_loss` at the end, and a new `multiple_scattering` block gives the model ID, `emission: "normal_only"`, `kernel_energy_policy: "fixed_E0"`, `status: "approximate"` and the unsupported physics. Existing entries are unchanged.
+- Tests: the frozen `capabilities` rows of M4a (`V08`) and M4a-2 (`V1-old-V08`, `V10-caps`) now accept, in order, the additions registered by a later frozen pre-registration (`xps_multiple_loss` and the `multiple_scattering` block); every field present in the baseline is still compared as before. Without this, the three rows fail as soon as the registered M4b-1 additions exist. This post-freeze change was approved by the owner on 2026-11-27 and is recorded in the validation record; it changes test code only (`tests/m4a_states.py`, `tests/test_m4a2_records.py`), and the frozen pre-registrations and expected-state tables are unchanged.
+- Internal: `_run` of the single-loss module gains private hooks that hand the final panels to the multiple-loss code. The public single-loss functions, their results and their defaults are unchanged.
+
+### Verification
+
+- M4b-1: two independent design proposals were merged and reviewed, a trial run preceded the freeze, and the checks (109 rows, 90 of them in CI, key ledger, tolerances, time limits, 29 deliberate faults) were pre-registered and frozen before any reference value or implementation existed. Two reference sets from authors separate from the implementer were frozen before comparison: 3,572 analytic keys computed without the package, and 6,096 keys for Al and Si from the ELF data set computed from the point values of the public depth-averaged function. At commit `ac1b656` all 109 rows end in their registered states and all reference keys pass. The first integration run found one error part rounded to nearest instead of outward, which was fixed. An independent review (no blocker, no major, ten minor findings) was addressed, and all 29 deliberate faults were detected both before and after those fixes. Of the 400 tests, 384 pass from the source tree on Windows and 16 are skipped. The checks cover the numerics of the convolution; the physical validity of the model is not established, and no comparison with measured spectra has been made. CI results will be recorded after the push. [Validation record](docs/VALIDATION.md)
+
 ## [0.3.0] - 2026-11-27
 
 ### Added
