@@ -6,7 +6,7 @@ weight lengths, multiple scattering and full spectra beyond single loss are
 not implemented.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0.dev0"
 
 from .dielectric import (
     DielectricConvergenceError, DielectricResponse, dielectric_response,
