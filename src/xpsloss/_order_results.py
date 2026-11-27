@@ -6,7 +6,7 @@ import math
 import numpy as np
 
 from ._fold import _up
-from ._order_bounds import corrected, multiplier_rho, sensitivity
+from ._order_bounds import corrected, error_from_parts, multiplier_rho, sensitivity
 from ._order_quadrature import area_terms, edges_of
 from ._order_types import OrderAreas, PARTS, SpectrumOrder
 from ._single_loss_types import COLUMNS, COMPONENTS, EPS
@@ -138,8 +138,7 @@ def higher_order(n, single, first, panels1, geometry, values, parts, folded, mes
     area_parts["multiplier_interval"] = {}
     errors = {}
     for c, y in areas.items():
-        fixed = _up(sum(Q(area_parts[p][c]) for p in PARTS))
-        errors[c], area_parts["multiplier_interval"][c] = corrected(y, fixed, rho)
+        errors[c], area_parts["multiplier_interval"][c] = error_from_parts(y, (area_parts[p][c] for p in PARTS), rho)
     h, he = sensitivity(first, panels1, seeds, single, n, rho)
     kw = dict(
         order=n,
@@ -159,8 +158,7 @@ def higher_order(n, single, first, panels1, geometry, values, parts, folded, mes
         for c in COMPONENTS:
             data = folded[name + "." + c]
             y = data["value"]
-            fixed = _up(sum(Q(data[p]) for p in PARTS))
-            err, extra = corrected(y, fixed, rho)
+            err, extra = error_from_parts(y, (data[p] for p in PARTS), rho)
             row[c], row[c + "_error"] = y, err
             row[c + "_error_parts"] = {**{p: data[p] for p in PARTS}, "multiplier_interval": extra}
         rows.append(row)

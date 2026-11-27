@@ -5,7 +5,6 @@ from itertools import chain, pairwise
 import math
 
 import numpy as np
-from numpy.polynomial.chebyshev import chebvander
 
 from . import _fold, _loss_panels as lp
 from ._order_bounds import ratio_record, truncation
@@ -19,40 +18,57 @@ from ._order_types import (
     MultipleLossSpectrumResult,
     preflight,
 )
-from ._single_loss_types import COLUMNS, COMPONENTS
+from ._single_loss_types import COLUMNS, COMPONENTS, EPS
+
+
+def _order_cell(panel, parts, left, right, g0, g1, multiplier_power):
+    weights, products, norm, mass_error, coord_error = _fold._cell_weights(panel, left, right, g0, g1)
+    width = right - left
+    scale = width * norm
+    values = panel.values[_fold.COMP_INDEX]
+    folded = _scaled(values @ weights, multiplier_power * scale)
+    # Use the same numerical weights as the single-loss fold. Keep all error
+    # products in panel units, even when an individual product is subnormal.
+    abs_weights = list(map(Q, abs(weights)))
+    abs_products = list(map(Q, products))
+    envelope, slope = panel.component_bounds
+    errors = []
+    for j, i in enumerate(_fold.COMP_INDEX):
+        inherited, propagated, local = (
+            sum(Q(v) * w for v, w in zip(parts[part][i], abs_weights)) for part in PARTS
+        )
+        uncertain = (abs(Q(v)) + Q(e) for v, e in zip(values[j], parts["local"][i]))
+        rounding = 48 * Q(EPS) * sum(v * w for v, w in zip(uncertain, abs_products))
+        interpolation = min(width * Q(panel.coeff_diff[i]), Q(panel.interpolation[i]))
+        local_error = (
+            scale * (local + Q(panel.verification[i]) + rounding + coord_error * Q(slope[j]))
+            + norm * interpolation + width * mass_error * Q(envelope[j])
+        )
+        errors.append((scale * inherited, scale * propagated, local_error))
+    return folded, errors
 
 
 def _fold_order(panels, geometry, *, multiplier_power, error_parts):
     """Direct satellite integrals; nodal error sources share the same cell weights."""
     rows = {}
     for region, name in enumerate(geometry.names):
-        sums = np.zeros((len(panels), 3, 4))
+        values = np.zeros((len(panels), len(COMPONENTS)))
+        errors = np.zeros((len(panels), len(COMPONENTS), len(PARTS)), dtype=object)
         for i, (p, parts) in enumerate(zip(panels, error_parts)):
             a, b = Q(p.left_eV), Q(p.right_eV)
             for left, right in pairwise(chain((a,), geometry.breaks(region, a, b), (b,))):
                 g0 = geometry.mass(region, left, "right")
                 g1 = geometry.mass(region, right, "left")
-                norm = max(abs(g0), abs(g1))
-                if not norm:
+                if not (g0 or g1):
                     continue
-                # _cell processes the local nodal uncertainty, interpolation,
-                # verification, exact-edge and coordinate rounding exactly once.
-                vals, local = _fold._cell(p, left, right, g0, g1, multiplier_power)
-                sums[i, :, 0] += vals
-                sums[i, :, 3] += np.sum(local, axis=1)
-                mid = float((left + right - a - b) / (b - a))
-                half = float((right - left) / (b - a))
-                basis = chebvander(mid + half * _fold.GX, 16) @ _fold.CARDINAL
-                masses = float(g0 / norm) * (1 - _fold.GX) + float(g1 / norm) * (1 + _fold.GX)
-                weights = abs((masses * (_fold.GW / 4)) @ basis)
-                scale = multiplier_power * (right - left) * norm
-                for j, part in enumerate(PARTS[:2], 1):
-                    nodal = parts[part][_fold.COMP_INDEX] @ weights
-                    sums[i, :, j] += [_fold._up(scale * Q(v)) for v in nodal]
+                cell_values, cell_errors = _order_cell(p, parts, left, right, g0, g1, multiplier_power)
+                values[i] += cell_values
+                errors[i] += cell_errors
         for j, c in enumerate(COMPONENTS):
-            totals = [math.fsum(col) for col in sums[:, j, :].T]
+            totals = _scaled(errors[:, j, :].sum(axis=0), multiplier_power, up=True)
             rows[name + "." + c] = dict(
-                value=totals[0], **dict(zip(PARTS, totals[1:])), local_by_panel=sums[:, j, 3]
+                value=math.fsum(values[:, j]), **dict(zip(PARTS, totals)),
+                local_by_panel=_scaled(errors[:, j, 2], multiplier_power, up=True),
             )
     return rows
 
@@ -106,9 +122,9 @@ def _judge_inherited(rows, n, phi, s, mass, m, diagnostics):
         )
 
 
-def _choose_split(contributions, value, absolute, relative, split):
+def _choose_split(contributions, total_error, value, absolute, relative, split):
     budget = max(absolute, relative * abs(value))
-    if math.fsum(contributions) > budget:
+    if total_error > budget:
         split |= contributions > 0.5 * budget / len(split)
 
 
@@ -218,9 +234,10 @@ def _adapt(
             np.sum([p.values @ (lp.CC * ((p.right_eV - p.left_eV) / 2)) for p in panels], axis=0), factor
         )
         split = np.zeros(len(panels), dtype=bool)
+        local_error = _scaled([sum(map(Q, col)) for col in local.T], factor, up=True)
         physical_local = np.array([_scaled(terms, factor, up=True) for terms in local])
         for c, v in enumerate(areas):
-            _choose_split(physical_local[:, c], v, s["order_epsabs_fraction"], s["order_epsrel"], split)
+            _choose_split(physical_local[:, c], local_error[c], v, s["order_epsabs_fraction"], s["order_epsrel"], split)
         if geometry and not split.any():
             _preliminary_bins(panels, geometry, mass, factor, s, split)
             # A cheap prediction cannot reject a run at a resource boundary.
@@ -251,6 +268,7 @@ def _adapt(
                 for row in folded.values():
                     _choose_split(
                         row["local_by_panel"],
+                        row["local"],
                         row["value"],
                         mass * s["order_epsabs_fraction"],
                         s["order_epsrel"],
@@ -284,7 +302,7 @@ def _adapt(
                 list(panels),
                 np.array(envelopes),
                 areas,
-                _scaled(local.sum(axis=0), factor, up=True),
+                local_error,
                 folded,
                 mesh,
             )
@@ -345,8 +363,8 @@ def _orders(
     env = first_envelopes(panels1)
     left = Polynomials(panels1, env, slice(None))
     right = Polynomials(panels1, env, slice(0, 1))
-    rnorm = m * Q(right.norms()[0])
-    first_norm = [m * Q(v) for v in left.norms()]
+    rnorm = m * right.norms()[0]
+    first_norm = [m * v for v in left.norms()]
     prev_errors = [list(map(Q, seeds.values())), [0] * 11, [0] * 11]
     er = Q(seeds["term_13a"])
     for n in range(2, nmax + 1):
@@ -367,7 +385,7 @@ def _orders(
                 mesh = _empty_mesh()
                 panel_map[n] = []
             else:
-                prev_norm = [m ** (n - 1) * Q(v) for v in left.norms()]
+                prev_norm = [m ** (n - 1) * v for v in left.norms()]
                 inherited, propagated = [], []
                 for norm, (ei, ep, el) in zip(prev_norm, zip(*prev_errors)):
                     inherited.append(_fold._up(rnorm * ei + norm * er + (ei + ep + el) * er))

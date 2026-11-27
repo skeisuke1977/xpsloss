@@ -123,8 +123,8 @@ class Folded:
     support_widths: dict
 
 
-def _cell(panel, left, right, g0, g1, length):
-    """Nine Gauss points integrate a degree-16 polynomial times affine G."""
+def _cell_weights(panel, left, right, g0, g1):
+    """Nine-point weights and geometry errors shared by both detector folds."""
     width = right-left
     p0, p1 = Q(panel.left_eV), Q(panel.right_eV)
     middle = float((left+right-p0-p1)/(p1-p0))
@@ -136,21 +136,27 @@ def _cell(panel, left, right, g0, g1, length):
     products = gauss_mass[:, None]*basis
     weights = products.sum(axis=0)
     abs_products = np.abs(products).sum(axis=0)
+    # Exact cell endpoints and exact affine overlaps leave only the rounding
+    # of the normalized endpoint masses: integral |delta G| <= width *
+    # (|delta G0| + |delta G1|)/2.
+    mass_error = (abs(g0-Q(start)*norm)+abs(g1-Q(stop)*norm))/2
+    # |T_k'(x)| <= k^2 bounds the effect of rounding local Gauss coordinates.
+    coordinate_error = (abs(Q(middle)-(left+right-p0-p1)/(p1-p0))
+                        + abs(Q(span)-width/(p1-p0)) + Q(3*EPS)*(abs(Q(middle))+Q(span)))
+    return weights, abs_products, norm, mass_error, coordinate_error
+
+
+def _cell(panel, left, right, g0, g1, length):
+    weights, abs_products, norm, mass_error, coordinate_error = _cell_weights(panel, left, right, g0, g1)
+    width = right-left
     scale = Q(length)*width*norm
     values, errors = panel.values[COMP_INDEX], panel.errors[COMP_INDEX]
     point_error = errors @ abs(weights)
     # Rounding in the weights acts on the uncertain nodal values as well.
     uncertain_nodes = np.abs(values)+errors
     roundoff = 48*EPS*(uncertain_nodes @ abs_products)
-    # Exact cell endpoints and exact affine overlaps leave only the rounding
-    # of the normalized endpoint masses: integral |delta G| <= width *
-    # (|delta G0| + |delta G1|)/2.
     envelope, slope = panel.component_bounds
-    mass_error = (abs(g0-Q(start)*norm)+abs(g1-Q(stop)*norm))/2
     edge_scale = Q(length)*width*mass_error
-    # |T_k'(x)| <= k^2 bounds the effect of rounding local Gauss coordinates.
-    coordinate_error = (abs(Q(middle)-(left+right-p0-p1)/(p1-p0))
-                        + abs(Q(span)-width/(p1-p0)) + Q(3*EPS)*(abs(Q(middle))+Q(span)))
     roundoff += float(coordinate_error)*slope
     vals = [_scaled(v, scale) for v in values @ weights]
     parts = []

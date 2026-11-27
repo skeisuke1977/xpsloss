@@ -7,8 +7,11 @@ from types import SimpleNamespace
 import numpy as np
 
 from . import _loss_panels as lp
+from ._fold import _up
 from ._loss_orders import _adapt
-from ._order_bounds import corrected, log_laplace, multiplier_rho, truncation
+from ._order_bounds import (
+    error_from_parts, exp_bound, log_geometric_factor, log_laplace, log_power, log_up, multiplier_rho, truncation,
+)
 from ._order_quadrature import Polynomials, first_envelopes
 from ._order_results import first_order, seed_errors
 from ._order_types import MULTIPLE_LOSS_MODEL_ID, MultipleLossConvergenceError, preflight
@@ -57,20 +60,39 @@ def _log_tail(model, panels, m):
         if model == GEOMETRIC:
             ans = np.full(len(logk), np.inf)
             ok = logk < 0
-            ans[ok] = (n + 1) * logk[ok] - np.log(-np.expm1(logk[ok]))
+            ans[ok] = log_up(log_power(logk[ok], n + 1) + log_geometric_factor(logk[ok]))
             return ans
         if model == FACTORIAL:
             # exp(k) bounds the ratio of the remaining series to its first term.
-            return (n + 1) * logk - math.lgamma(n + 2) + np.exp(logk)
+            return factorial_tail(logk, n)
         ok = logr < 0
         ans = np.full(len(logk), np.inf)
         logg, logr = log_laplace(panels, AUX[0], taus, m)[ok], logr[ok]
-        terms = [(n + 1) * logr]
+        terms = [log_power(logr, n + 1)]
         for j in range(1, n + 1):
-            terms.append(j * logg - math.lgamma(j + 1) + (n + 1 - j) * logr)
-        terms.append((n + 1) * logg - math.lgamma(n + 2) + np.exp(logg))
-        ans[ok] = np.logaddexp.reduce(terms) - np.log(-np.expm1(logr))
+            coeff = log_up(log_power(logg, j) - log_factorial_lower(j))
+            terms.append(log_up(coeff + log_power(logr, n + 1 - j)))
+        terms.append(factorial_tail(logg, n))
+        total = terms[0]
+        for term in terms[1:]:
+            total = log_up(np.logaddexp(total, term))
+        ans[ok] = log_up(total + log_geometric_factor(logr))
         return ans
+
+    def log_factorial_lower(n):
+        # The coefficients of the registered reference chains have small integer orders.
+        if n <= 256:
+            return math.nextafter(math.log(math.factorial(n)), -math.inf)
+        # Large support orders can occur in the tolerance search. The
+        # Stirling expansion through -1/(360*n**3) is a lower bound.
+        log_n = Q(math.nextafter(math.log(n), -math.inf))
+        log_two_pi = Q(math.nextafter(math.log(2 * math.pi), -math.inf))
+        lower = (n + Q(1, 2)) * log_n - n + log_two_pi / 2 + Q(1, 12 * n) - Q(1, 360 * n**3)
+        return -_up(-min(lower, Q(np.finfo(float).max)))
+
+    def factorial_tail(logk, n):
+        first = log_up(log_power(logk, n + 1) - log_factorial_lower(n + 1))
+        return log_up(first + np.nextafter(np.exp(logk), np.inf))
 
     return evaluate
 
@@ -197,15 +219,15 @@ def integrate_orders_reference(
             i = COLUMNS.index(c)
             record["area"][c] = area[i]
             point_error = sum(
-                (Q(p.right_eV) - Q(p.left_eV)) * Q(float(e[:2, i].sum())) for p, e in zip(left_panels, env)
+                (Q(p.right_eV) - Q(p.left_eV)) * sum(map(Q, e[:2, i])) for p, e in zip(left_panels, env)
             )
-            record["area_error"][c] = corrected(area[i], float(point_error * m**n) + local[i], rho)[0]
+            record["area_error"][c] = error_from_parts(area[i], (point_error * m**n, local[i]), rho)[0]
         if geometry:
             record["outside"] = {"low": {}, "high": {}}
             for c in COMPONENTS:
                 rows = [folded[name + "." + c] for name in geometry.names]
                 errors = [
-                    corrected(r["value"], math.fsum(r[k] for k in ("inherited", "propagated", "local")), rho)[0]
+                    error_from_parts(r["value"], (r[k] for k in ("inherited", "propagated", "local")), rho)[0]
                     for r in rows
                 ]
                 for key, items in ((c, [r["value"] for r in rows]), (c + "_error", errors)):
@@ -233,6 +255,7 @@ def integrate_orders_reference(
         t = np.array([0.0])
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
             logs = tail_model(t, count, log_laplace(panels, TOTAL, t, upper), log_laplace(panels, 0, t, upper))
-            bound = single.primary_abs_integral * np.exp(logs[0])
-        result.truncation["neglected_total_area_bound"] = float(bound) if math.isfinite(bound) else None
+            mass = single.primary_abs_integral
+            bound = exp_bound(float(log_up(math.nextafter(math.log(mass), math.inf) + logs[0]))) if mass else 0.0
+        result.truncation["neglected_total_area_bound"] = bound
     return result

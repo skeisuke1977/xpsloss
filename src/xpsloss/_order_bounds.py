@@ -50,6 +50,13 @@ def corrected(value, fixed, rho):
     return _up(Q(fixed) + extra), _up(extra)
 
 
+def error_from_parts(value, parts, rho):
+    """The higher-order total encloses the sum of the reported parts."""
+    fixed = sum(map(Q, parts))
+    extra = _up(rho * (abs(Q(value)) + Q(_up(fixed))))
+    return _up(fixed + Q(extra)), extra
+
+
 def sensitivity(first, panels, seeds, single, n, rho):
     center, error = {}, {}
     h = single.cutoff_sensitivity
@@ -76,6 +83,37 @@ def sensitivity(first, panels, seeds, single, n, rho):
     return center, error
 
 
+def log_up(value):
+    """Round toward +infinity, preserving log(0) for an absent term."""
+    return np.where(np.isneginf(value), -np.inf, np.nextafter(value, np.inf))
+
+
+def log_geometric_factor(logr):
+    """Upper estimate of -log(1-R) for an upper log(R) strictly below zero."""
+    denominator = np.nextafter(-np.expm1(logr), 0.0)
+    return log_up(-np.log(denominator))
+
+
+def log_power(log_value, n):
+    if not n:
+        return np.zeros_like(log_value)
+    # The support-based tolerance search can supply an integer beyond 2**53.
+    limit = np.finfo(float).max
+    lo, hi = outward(Q(n), Q(n)) if n <= int(limit) else (limit, math.inf)
+    scaled = np.where(log_value > 0, hi, lo) * log_value
+    return np.where(np.isneginf(log_value), -np.inf, np.nextafter(scaled, np.inf))
+
+
+def exp_bound(log_value):
+    """Convert a log upper estimate, rounding a positive underflow to the first subnormal."""
+    if log_value == -math.inf:
+        return 0.0
+    if not log_value <= math.log(np.finfo(float).max):
+        return None
+    bound = math.nextafter(math.exp(log_value), math.inf)
+    return bound if math.isfinite(bound) else None
+
+
 def log_laplace(panels, col, taus, m):
     """Integrate an upper envelope against the exponential, separately from the L1 error."""
     total = np.full(len(taus), -np.inf)
@@ -94,20 +132,26 @@ def log_laplace(panels, col, taus, m):
             heights = np.maximum(y[:-1], y[1:]) + remainder + 64 * EPS * abs(coeff).sum()
             edges = np.linspace(a, b, 65)
         for left, right, height in zip(edges[:-1], edges[1:], heights):
-            w = right - left
+            w = _up(Q(right) - Q(left))
             if height == 0 or w == 0:
                 continue
-            log_weights = np.full(len(taus), math.log(w))
+            log_weights = np.full(len(taus), math.nextafter(math.log(w), math.inf))
             nz = taus > 0
-            z = taus[nz] * w
+            z = np.nextafter(taus[nz] * w, np.inf)
             small = z < EPS
-            log_weights[nz] = np.log(-np.expm1(-np.where(small, 1.0, z))) - np.log(taus[nz])
-            log_weights[np.flatnonzero(nz)[small]] = math.log(w)
-            total = np.logaddexp(total, math.log(height) + log_weights - taus * left)
+            # For very small tau*w the width itself is an upper estimate.
+            use = np.flatnonzero(nz)[~small]
+            numerator = np.nextafter(-np.expm1(-z[~small]), np.inf)
+            log_weights[use] = log_up(log_up(np.log(numerator)) - np.nextafter(np.log(taus[use]), -np.inf))
+            log_mass = log_up(math.nextafter(math.log(height), math.inf) + log_weights)
+            attenuation = np.maximum(0.0, np.nextafter(taus * left, -np.inf))
+            total = log_up(np.logaddexp(total, log_up(log_mass - attenuation)))
         error = area_terms(p)[col]
         if error:
-            total = np.logaddexp(total, math.log(error) - taus * a)
-    return total + math.log(m) + math.log1p(64 * EPS)
+            attenuation = np.maximum(0.0, np.nextafter(taus * a, -np.inf))
+            log_error = log_up(math.nextafter(math.log(error), math.inf) - attenuation)
+            total = log_up(np.logaddexp(total, log_error))
+    return log_up(log_up(total + math.nextafter(math.log(m), math.inf)) + math.log1p(64 * EPS))
 
 
 def tail_area(single, ratio, n, negative, first_zero, repeat_zero):
@@ -155,8 +199,8 @@ def truncation(
             if tail_model is not None:
                 return tail_model(taus, count, logk, logr)
             log_tail = np.full(len(taus), np.inf)
-            power = float(count) * logr[available] if count else 0.0
-            log_tail[available] = logk[available] + power - np.log(-np.expm1(logr[available]))
+            power = log_power(logr[available], count)
+            log_tail[available] = log_up(log_up(logk[available] + power) + log_geometric_factor(logr[available]))
             return log_tail
 
     # Each grid value is an independent upper estimate. Work in log space
@@ -167,21 +211,20 @@ def truncation(
             return 0.0, "complete", None
         log_tail = tail_at_order(count)
         with np.errstate(invalid="ignore", over="ignore"):
-            candidates = math.log(mass) + taus * float(u) + log_tail
+            log_scale = log_up(math.nextafter(math.log(mass), math.inf) + log_up(taus * _up(u)))
+            candidates = log_up(log_scale + log_tail)
         if np.all(np.isposinf(log_tail)):
             return None, "no_usable_tau", None
         # An overflowing exponent combined with a vanishing tail carries no
         # finite binary64 estimate; another grid point may still suffice.
         candidates = np.where(np.isnan(candidates), np.inf, candidates)
         i = int(np.argmin(candidates))
-        if candidates[i] > math.log(np.finfo(float).max):
-            return None, "not_representable", None
         if np.isneginf(log_tail[0]) and (np.isneginf(logk[0]) or (count and np.isneginf(logr[0]))):
             return 0.0, None, float(taus[i])
-        value = math.nextafter(math.exp(float(candidates[i])), math.inf)
-        if not math.isfinite(value):
+        value = exp_bound(float(candidates[i]))
+        if value is None:
             return None, "not_representable", None
-        return value, None, float(taus[i])
+        return max(value, math.ulp(0.0)), None, float(taus[i])
 
     rows = [bound(i, n) for i in range(len(geometry.edges) - 1)]
     values, reasons, best = map(list, zip(*rows))
