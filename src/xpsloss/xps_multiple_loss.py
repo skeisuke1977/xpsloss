@@ -5,7 +5,7 @@ uses only term 13a at the same E0. The multiplier is constant across events.
 """
 
 from . import _loss_orders, xps_single_loss as single
-from ._loss_panels import checked_window, observe_mesh
+from ._loss_panels import observe_mesh
 from ._order_types import (
     MULTIPLE_LOSS_MODEL_ID,
     ORDER_DEFAULTS,
@@ -13,10 +13,9 @@ from ._order_types import (
     MultipleLossInputError,
     MultipleLossOrderAreasResult,
     MultipleLossSpectrumResult,
-    preflight,
+    plan_orders,
 )
 from ._single_loss_types import BinnedPrimary, DeltaPrimary, SingleLossInputError
-from .model import Material
 from .xps_fixed_depth import FIXED_ABS, FIXED_REL
 
 __all__ = [
@@ -33,11 +32,12 @@ __all__ = [
 def _run_orders(material, electron_energy_eV, primary, edges, args, defaults):
     first_settings = {k: args[k] for k in defaults}
     settings = {**first_settings, **{k: args.get(k, v) for k, v in ORDER_DEFAULTS.items()}}
-    window = checked_window(args["loss_window_eV"], electron_energy_eV)
-    if not isinstance(material, Material):
-        raise ValueError("material must be a Material")
-    active = [o for o in material.oscillators if o.strength_eV2]
-    plan = preflight(args["model"], args["max_order"], window, primary, edges, settings, zero=not active)
+    plan = None
+
+    def validate_orders(window, geometry, zero):
+        nonlocal plan
+        plan = plan_orders(args["model"], args["max_order"], window, geometry, settings, zero)
+
     conventions = {
         k: args[k]
         for k in (
@@ -59,15 +59,17 @@ def _run_orders(material, electron_energy_eV, primary, edges, args, defaults):
             electron_energy_eV,
             primary,
             edges,
-            window,
+            args["loss_window_eV"],
             args["weight_length_A"],
             args["epsilon_momentum"],
             args["theta_deg"],
             args["hole_charge"],
             first_settings,
+            on_validated=validate_orders,
             on_final_panels=receive,
             **conventions,
         )
+    active = [o for o in material.oscillators if o.strength_eV2]
     dispersive = args["epsilon_momentum"] == "k_parallel" and any(o.dispersion for o in active)
     return _loss_orders.finish(
         result,

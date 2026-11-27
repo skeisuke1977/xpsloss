@@ -136,3 +136,18 @@ class PublicOrders(unittest.TestCase):
                 multiplier="inverse_window_area",
             )
         self.assertEqual(why.exception.reason, "multiplier_undefined")
+
+    def test_first_order_validation_precedes_order_settings(self):
+        bad_edges = [999., 980.]
+        for invalid in ({"theta_deg": 5.}, {"weight_length_A": -1.}, {"loss_window_eV": (0., 5.)},
+                        {"epsrel": -1.}, {"multiplier": "external"}, {}):
+            kw = self.args | invalid
+            with self.subTest(invalid=invalid), patch.object(legacy, "_call_kernel", side_effect=AssertionError):
+                with self.assertRaises(ValueError) as old:
+                    x.single_loss_spectrum(self.mat, 1000, self.p, bad_edges, **kw)
+                with self.assertRaises(ValueError) as current:
+                    x.multiple_loss_spectrum(self.mat, 1000, self.p, bad_edges,
+                                             **kw, model="invalid", max_order=0)
+                self.assertIs(type(current.exception), type(old.exception))
+                self.assertEqual(str(current.exception), str(old.exception))
+                self.assertEqual(vars(current.exception), vars(old.exception))

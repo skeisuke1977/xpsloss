@@ -2,7 +2,7 @@
 
 from bisect import bisect_left, bisect_right
 from fractions import Fraction as Q
-from itertools import islice, pairwise
+from itertools import count, islice, pairwise
 import math
 
 import numpy as np
@@ -181,18 +181,46 @@ def build_panel(left, right, bounds, order, charge, inject, transform=None):
     return p, env, dict(zip(("inherited", "propagated", "local"), inter[1:]))
 
 
+def _negative_at_extremum(panel, values, x, value):
+    """Certify the sign against interpolation at the actual binary64 sample sites."""
+    a, b = Q(panel.left_eV), Q(panel.right_eV)
+    t = (a + b + Q(x) * (b - a)) / 2
+    nodes = list(map(Q, _nodes(panel.left_eV, panel.right_eV)[0]))
+    if t in nodes:
+        return values[nodes.index(t)] < 0
+    # The exact Lagrange interpolant accounts jointly for the rounded node
+    # coordinates, the coefficient transform and evaluation at this candidate.
+    weights = [math.prod((t - v) / (u - v) for v in nodes if v != u) for u in nodes]
+    interpolated = sum(w * Q(y) for w, y in zip(weights, values))
+    nodal_roundoff = Q(math.ulp(max(abs(values)))) / 2 * sum(map(abs, weights))
+    bound = abs(Q(value) - interpolated) + nodal_roundoff
+    return Q(value) + bound < 0
+
+
 def minimum(panel, column):
     values = panel.values[column]
     if np.all(values == values[0]):
-        return float(values[0])
+        return float(values[0]), bool(values[0] < 0)
     coeff = panel.coefficients[column]
     roots = cheb.chebroots(cheb.chebder(coeff))
     x = roots.real[(abs(roots.imag) < 64 * EPS) & (abs(roots.real) < 1)]
-    return min(float(values[0]), float(values[-1]), *(cheb.chebval(x, coeff).tolist()))
+    interior = cheb.chebval(x, coeff)
+    raw = min(float(values[0]), float(values[-1]), *interior.tolist())
+    negative = bool(values.min() < 0) or any(
+        _negative_at_extremum(panel, values, u, y) for u, y in zip(x, interior) if y < 0
+    )
+    return raw, negative
 
 
 def tau_grid(a):
-    top = min(math.log10(np.finfo(float).max), math.log10(40.0) - math.log10(a))
-    return np.array(
-        [10 ** (-3 + i / 20) for i in range(max(0, math.floor((top + 3) * 20) + 1)) if -3 + i / 20 <= top]
-    )
+    upper = 40 / Q(a)
+    points = []
+    for i in count():
+        try:
+            tau = 10 ** (-3 + i / 20)
+        except OverflowError:
+            break
+        if Q(tau) > upper:
+            break
+        points.append(tau)
+    return np.array(points)

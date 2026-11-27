@@ -8,8 +8,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from xpsloss import cli, DeltaPrimary, MULTIPLE_LOSS_MODEL_ID, multiple_loss_spectrum
+from xpsloss import cli, DeltaPrimary, MULTIPLE_LOSS_MODEL_ID, MultipleLossConvergenceError, multiple_loss_spectrum
 from xpsloss.config import load_config
 from xpsloss._single_loss_types import COLUMNS, COMPONENTS
 
@@ -132,3 +133,15 @@ class MultipleCLI(unittest.TestCase):
         self.assertEqual(caps["supported"][-1], "xps_multiple_loss")
         self.assertEqual(caps["multiple_scattering"]["model_id"], MULTIPLE_LOSS_MODEL_ID)
         self.assertIn("binding_energy_axis", caps["multiple_scattering"]["unsupported_physics"])
+
+    def test_inherited_budget_message_keeps_machine_readable_suggestion(self):
+        why = MultipleLossConvergenceError("inherited_error_exceeds_order_budget", order=2,
+            stage="order_fold", key="bin[2].hole", side="absolute", suggestion="spectrum_epsabs_fraction")
+        with patch("xpsloss.xps_multiple_loss.multiple_loss_spectrum", side_effect=why):
+            status, err = self.invoke("--max-order", "2")
+        self.assertEqual((status, err["status"], err["reason"]), (2, "not_converged", why.reason))
+        self.assertEqual(err["message"], str(why))
+        self.assertIn("lowering epsrel", err["message"])
+        self.assertIn("1e-7", err["message"])
+        self.assertEqual((err["side"], err["suggestion"]), ("absolute", "spectrum_epsabs_fraction"))
+        self.assertFalse(self.out.exists())

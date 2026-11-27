@@ -204,7 +204,7 @@ def _seed_length(material, energy, window, features, seed_length, extra, kw, bat
 
 def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, charge, settings, batch_size=None,
          *, weight_length_kind="external_constant", extra_inverse_length_per_A=0., weight_length_seed_A=None,
-         multiplier="weight_length", multiplier_A=None, on_final_panels=None):
+         multiplier="weight_length", multiplier_A=None, on_final_panels=None, on_validated=None):
     if not isinstance(material, Material):
         raise ValueError("material must be a Material")
     if not isinstance(mode, str) or mode not in EPSILON_MOMENTA:
@@ -259,32 +259,38 @@ def _run(material, energy, primary, edges, loss_window_eV, length, mode, theta, 
               epsabs=settings["kernel_epsabs"], epsrel=settings["kernel_epsrel"], limit=settings["kernel_limit"])
     prepared = None
     weight_interval = None
-    if not legacy:
+    if not legacy or on_validated is not None:
         try:
             with np.errstate(over="raise", divide="raise", invalid="raise"):
                 prepared = _loss_panels._prepare(window, features, primary, edges, settings, diag, energy,
                                                  material.gap_eV, None if active else window)
-                _loss_panels.preflight(prepared, settings, diag)
+                if not legacy:
+                    _loss_panels.preflight(prepared, settings, diag)
         except ArithmeticError as exc:
+            if legacy:
+                raise
             raise SingleLossConvergenceError("nonfinite_output", diagnostics=diag) from exc
-    if derived:
+    if derived and not active:
+        if not extra:
+            raise SingleLossInputError("weight_length_undefined", message_details=dict(argument="weight_length_kind"))
         seed_diag = _loss_panels._diagnostics({k: settings[k] for k in AREA_DEFAULTS})
+        center, interval = _loss_panels._denominator(dict(value=0., estimate=0.), extra,
+            settings["epsrel"], "weight_length", None, seed_diag)
+        seed = dict(length_A=center, interval_A=interval, area13=0., error13=0.,
+                    seed_skipped="structural_zero", consistency="not_applicable")
+    if not active and multiplier == "inverse_window_area":
+        raise SingleLossInputError("multiplier_undefined", message_details=dict(argument="multiplier"))
+    if on_validated is not None:
+        on_validated(window, prepared[0], not active)
+    if derived:
         if active:
+            seed_diag = _loss_panels._diagnostics({k: settings[k] for k in AREA_DEFAULTS})
             seed = _seed_length(material, energy, window, features, seed_length, extra, kw, batch_size, seed_diag)
-        else:
-            if not extra:
-                raise SingleLossInputError("weight_length_undefined", message_details=dict(argument="weight_length_kind"))
-            center, interval = _loss_panels._denominator(dict(value=0., estimate=0.), extra,
-                settings["epsrel"], "weight_length", None, seed_diag)
-            seed = dict(length_A=center, interval_A=interval, area13=0., error13=0.,
-                        seed_skipped="structural_zero", consistency="not_applicable")
         length, weight_interval = seed["length_A"], seed["interval_A"]
         kw["weight_length_A"] = length
         diag["weight_length"] = dict(**seed, seed_A=seed_length, extra_inverse_length_per_A=extra,
             **{k: seed_diag[k] for k in ("kernel_calls", "effective_settings", "denominator", "final_panels",
                                           "stages", "warnings", "error_budget")})
-    if not active and multiplier == "inverse_window_area":
-        raise SingleLossInputError("multiplier_undefined", message_details=dict(argument="multiplier"))
     sampler = _DepthSampler(material, energy, window, kw, batch_size, diag)
     try:
         result, panels = _loss_panels._integrate(sampler, window, features, length, charge, primary, edges, settings,
