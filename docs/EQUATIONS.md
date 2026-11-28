@@ -241,7 +241,7 @@ H_j=m\,a\,K_{{\rm sc},j}(E_0,a;L_w)
 
 ## E8. 法線出射の多重損失（主模型 `first_loss_13a_chain_v0`）
 
-`first_loss_13a_chain_v0`（開発版 0.4.0.dev0、M4b-1）は、E7・E7a のゼロ損失線と単一損失に、同じ損失窓の中の損失を繰り返した次数 \(n\ge2\) の寄与を足す。**近似の模型である。** 最初の損失には E7a の全核（11 列）を使い、2回目以降の損失には 13a の項だけを使う。核（E6）は足さない。軸は運動エネルギーだけである（束縛エネルギーの入出力は M4b-2）。設計は [M4b の設計](M4B_DESIGN.md)（第5版）、検証の条件は [M4b-1 の事前登録](M4B1_PREREG.md) にある。
+`first_loss_13a_chain_v0`（開発版 0.4.0.dev0、M4b-1）は、E7・E7a のゼロ損失線と単一損失に、同じ損失窓の中の損失を繰り返した次数 \(n\ge2\) の寄与を足す。**近似の模型である。** 最初の損失には E7a の全核（11 列）を使い、2回目以降の損失には 13a の項だけを使う。核（E6）は足さない。計算の軸は運動エネルギーである（束縛エネルギーの入出力は、入口と出口の変換として E8a に書く）。設計は [M4b の設計](M4B_DESIGN.md)（第5版。E8a の BE の台の判定は第6版）、検証の条件は [M4b-1 の事前登録](M4B1_PREREG.md) にある。
 
 \[
 K_{1,j}(T)=m\,\mathbf 1_W(T)\,K_{{\rm sc},j}(E_0,T;L_w),\qquad
@@ -306,9 +306,71 @@ S_{\rm abs}\,e^{\tau U_D}\,\Lambda_{K_1}(\tau)\,\frac{\Lambda_R(\tau)^N}{1-\Lamb
 - **照合の表示:** `run.json` の `comparison` は、群 `orders`、`areas`、`spectrum` が常に `not_matched` である（完了した比較の表は M4b-1 では作らない）。`physical_validity` は常に `not_established`。数値の検証が確かめたのは、次数ごとの畳み込みが、与えた核と模型の定義に対して正しいことだけで、模型の物理の妥当性は確かめていない。
 - **近似の大きさ（模型の不確かさ、設計の試算）:** 表面・正孔などの超過もポアソンで数える模型との差は、2次の全軸の面積で Al 15.0 %、Si 17.4 %。軌道ごとの深さの相関を切ることによる差は、交差項の面積では 1 % 未満だが、形では同じ桁になりうる（[M4b の設計](M4B_DESIGN.md) §4.4。設計の判断のための試算で、検証した値ではない）。
 
-**扱わないもの:** 束縛エネルギーの入出力（M4b-2）、実測スペクトルとの比較（M4b-3）、斜出射、弾性散乱、軌道ごとの長さと自己無撞着な長さ、窓の外の損失、内因性の損失の分離、\(E'\) や次数ごとに変わる核、装置関数の付加、背景の差引き、フィット。全核の繰り返しなどの比較用の模型は非公開で、API・CLI・`capabilities` に出さない。QUEELS-XPS の完全なモデルを実装したものではない。
+**扱わないもの:** 実測スペクトルとの比較（M4b-3）、斜出射、弾性散乱、軌道ごとの長さと自己無撞着な長さ、窓の外の損失、内因性の損失の分離、\(E'\) や次数ごとに変わる核、装置関数の付加、背景の差引き、フィット。全核の繰り返しなどの比較用の模型は非公開で、API・CLI・`capabilities` に出さない。QUEELS-XPS の完全なモデルを実装したものではない。
 
 | 式 | 実装 | 検証 |
 | --- | --- | --- |
 | \(C_{n,j}\)、\(J_{n,j}\)、\(J^{(N)}\)、打ち切りの状態と上界 | `xps_multiple_loss.multiple_loss_spectrum`（高次の網・誤差の内訳・判定は `_loss_orders`、区間ごとの求積と必須の節は `_order_quadrature`、上界・感度・区間は `_order_bounds`、次数ごとの結果と和は `_order_results`、結果と例外の型は `_order_types`）。1次は `xps_single_loss` の計算を1回呼ぶ。CLI は `xps-multiple-loss`（`--model`、`--max-order` は必須） | 解析の参照 R-A、実材料の参照 R-B、期待する状態の 109 行、変異 29 件（[M4b-1 の事前登録](M4B1_PREREG.md)、[VALIDATION.md](VALIDATION.md) の「M4b-1」） |
 | \(w_{n,j}\)、\(h_{n,j}\)、\(\hat r\) と区間 | `xps_multiple_loss.multiple_loss_order_areas`（一次線と出力の端を取らない。整数の `max_order` だけ） | 同上 |
+
+### E8a. 束縛エネルギーの入出力と測定の記録（M4b-2）
+
+開発版 0.4.0.dev0（M4b-2）は、E8 の `multiple_loss_spectrum` に、フェルミ準位を基準にした束縛エネルギー（BE）の入口と出口を足す（`energy_axis=`。CLI は `xps-multiple-loss` の新しいスキーマ `xpsloss-measured-spectrum-v0`）。**物理は足さない。** 内部の計算と既存の API は運動エネルギー（KE）のままで、BE は入口と出口の変換だけである。`energy_axis=None`（既定）は E8 の経路そのもので、結果は M4b-1 とビット単位で同じである。`multiple_loss_order_areas` と E7・E7a の入口は `energy_axis` を取らない。設計は [M4b の設計](M4B_DESIGN.md)（第6版）の §5・§7・§9、検証の条件は [M4b-2 の事前登録](M4B2_PREREG.md) にある。
+
+\[
+E=C-B,\qquad
+C=h\nu-\phi\ \ \text{または}\ \ C=B_\star+E_\star,\qquad
+E_x={\rm RN}\big(C-{\rm Q}(B_x)\big)
+\]
+
+\[
+U_{B,i}={\rm Q}(B_{d_i})-\min_{p\in P}{\rm Q}(B_p),\qquad
+U_{K,i}=\max_{p\in P}{\rm Q}(E_p)-{\rm Q}(E_{d_i}),\qquad
+U_i=\max(U_{B,i},U_{K,i})
+\]
+
+\[
+S_j=\max\Big(0,\Big\lfloor\frac{\max_iU_{j,i}}{{\rm Q}(a)}\Big\rfloor\Big)\ (j={\rm B},{\rm K}),\qquad
+S=\max(S_B,S_K)
+\]
+
+| 記号 | 意味 | 単位 |
+| --- | --- | --- |
+| \(B\)、\(E\) | BE（フェルミ準位を基準に正の向き。損失は \(B\mapsto B+s\)）、KE | eV |
+| \(C\)（`conversion_constant_exact`、`conversion_constant_eV`） | 換算の定数。既約分数の文字列と、記録だけに使う \({\rm RN}(C)\) | eV |
+| \(h\nu\)（`photon_energy_eV`）、\(\phi\)（`kinetic_energy_offset_eV`） | 光子エネルギー（どちらの形でも必須）、KE の目盛りのずれ（KE が共通のフェルミ準位から測った校正済みの値なら 0、分光器の真空準位から測った値なら既知の分光器の仕事関数） | eV |
+| \((B_\star,E_\star)\)（`binding_anchor_eV`、`kinetic_anchor_eV`） | 同じ校正の座標での対応点 | eV |
+| \(B_{\rm ref}\)（`primary_reference_binding_eV`） | 一次線の代表位置（記録） | eV |
+| \({\rm Q}(x)\)、\({\rm RN}(x)\)、\(\lceil x\rceil_{64}\) | binary64 の \(x\) を厳密な有理数として読んだ値、実数を最も近い binary64 に1回丸めた値（偶数への丸め）、\(x\) 以上の最小の binary64 | — |
+| \(P\) | 台の点。正の強度の δ の位置と、強度が正の一次線のビンの両端の、異なる点の集合 | — |
+| \(d_i\) | 表示のビン \(i\)（入力の順）の高い BE の端 | — |
+| \(U_{B,i}\)、\(U_{K,i}\)、\(U_i\)（`region_loss_upper_eV` は \(\lceil U_i\rceil_{64}\)） | ビン \(i\) の高い BE の端までの損失の幅。元の BE の厳密な差、丸めた KE の厳密な差、その大きい方 | eV |
+| \(S_B\)、\(S_K\)、\(S\)（`support_order_binding`、`support_order_kinetic`、`truncation.support_order`） | 表示のビンに届く次数の上限。BE の側、KE の側、その大きい方 | — |
+
+- **換算:** 1回の測定で \(E=C-B\)。密度の変換は \(|dE/dB|=1\)。\(C\) は入力の binary64 から厳密な有理数で作る。`photon_and_offset` は \(C={\rm Q}(h\nu)-{\rm Q}(\phi)\)、`paired_anchor` は \(C={\rm Q}(B_\star)+{\rm Q}(E_\star)\)。2つの形は排他で、選ばなかった形の欄を与えると拒否する。`paired_anchor` の含意されるずれ \({\rm RN}({\rm Q}(h\nu)-C)\)（`implied_offset_eV`）は記録するだけで、\(C\) にも補正にも使わない。
+- **丸めは1回:** 一次線の位置・ビンの端と出力の端の各座標は、入力の数から \(C-B\) までを有理数で計算し、最後に1回だけ最も近い binary64 に丸める。\(C\) を binary64 に丸めてから使わない。全座標の \(|{\rm RN}(C-B)-(C-B)|\) の最大を上へ丸めた値を `rounding_max_eV` に残す（すべて厳密なら `0.0`）。
+- **単射（全座標の合併）:** 一次線の位置（強度 0 の線も含む）・一次線のビンの端・出力の端の全部を合わせた、異なる BE の座標の集合を昇順に並べ、隣り合う \(x<y\) で \({\rm RN}(C-x)>{\rm RN}(C-y)\) を求める。成り立たない組があれば `axis_conversion_not_injective` で拒否し、BE の昇順で最初の組（2つの BE、その KE、出所 `roles`）を返す。元から等しい座標と、同じ位置の δ の重複は許す。\(B_{\rm ref}\) と対応点は入れない。配列ごとの検査では足りない。[反例] \(C=8192\) eV、BE の端 \([0,1,2]\)、δ の位置 \(1+2^{-45}\) eV では、各配列は単独で単射だが、内部の境と δ がともに KE 8191 に丸まり、δ の所属が逆になる（[M4b の設計](M4B_DESIGN.md) §7）。
+- **負の KE:** 座標の KE が負か有限でなければ `invalid_energy_axis`（`negative_kinetic_energy`、`not_finite`）。KE がちょうど 0 は受け付ける。負の BE と、減少の順の端は受け付ける。
+- **両側の台（設計 §5 第6版）:** 表示のビンに届く次数を、元の BE の厳密な差と、丸めた KE の厳密な差の両方で求め、主張を弱い側に取る。台の次数は \(S=\max(S_B,S_K)\)（`"display_support"` は \(N=S\)）。\(P\) が空なら両側とも 0 で、幅は全部 `None`。
+  - **ビンごとの `complete`:** 次数 \(N\) まで計算したとき、ビン \(i\) の上界が台を根拠に `(0.0, "complete", None)` になるのは、\(P\) が空か、両方の側で \(U_{j,i}<(N+1)\,{\rm Q}(a)\) のときだけである。等号は届く側とする。比較と床は有理数のまま行う。
+  - **上界の幅:** 届くビンの上界（E8 の式）の \(U_D\) には \(\lceil U_i\rceil_{64}\) を使う。全部のビンで常に大きい方を取る。上界は、そのビンから低い BE 側の全部に落ちる量の累積の上界である（E8 の「高い運動エネルギーの側」を写したもの）。\(\tau\) の候補、外向きの丸め、`no_usable_tau`、`not_representable` は E8 のまま。
+  - **状態:** `complete_on_display` は \(N\ge S\) のときだけ。ほかの状態と2つの打ち切りの例外は E8 と同じ規則を、両側の幅で使う。`neglected_total_area` は軸に依らない全軸の量で、KE の実行の値のまま。
+  - **食い違いは拒否しない:** 計算した次数 \(n\le N\) では、\(P\) の各点と出力の各端の差の \(n\,{\rm Q}(a)\)、\(n\,{\rm Q}(b)\) に対する大小・等号を、次の次数では各ビンの \(U_{B,i}\)、\(U_{K,i}\) の \((N+1)\,{\rm Q}(a)\) に対する大小・等号を、2つの側で比べる。\(S_B\ne S_K\) か、違う組が1つでもあれば、警告 `axis_conversion_support_disagreement` を1件出し、全件数（`computed_relation_mismatch_count`、`next_relation_mismatch_count`）、届く・届かないが違うビン（`next_reachability_mismatch_bins`）、順序つきの先頭 8 例（`first_mismatches`）を `energy_axis["support_comparison"]` に残す。例の `primary_index` は、同じ位置の線があれば、強度によらず入力で最初の添字である。[反例] \(C=8192\) eV、一次線は \(B=0\) の δ、出力の BE の端 \([0,\,2+2^{-43}]\)、\(a=1+2^{-45}\) eV では、全座標の合併は単射だが、高い BE の端の KE は 8190 に丸まり、\(S_B=2\)、\(S_K=1\) になる。KE の側だけを見ると \(N=1\) で誤って完全と表示しうるので、`truncated` と正の上界を返す（設計 §5）。設計の第5版までは食い違いを拒否するとしていた。十進の BE の格子でも食い違いは珍しくなく（事前登録の確かめで、実測に近い 720 通りのうち 60 通り）、入力を動かす以外に避けられない拒否になるので、第6版で改めた（利用者の了解、2026-11-28）。
+- **返す数値は、丸めた KE の座標の問題の値である。** 換算の丸め（`rounding_max_eV`）は返す誤差に入れない。δ の所属は単射で保たれる。ビンの一次線の積分強度は、換算した KE の幅に一様に配る。したがって、丸めが起きるビンの一次線では、ゼロ損失や各次数のビンの値が、元の BE の厳密な重なりから作った値と丸めの水準を超えて違いうる。
+- **出力の向きと外の名前:** 計算は KE の昇順で行い、出力は入力の BE の端の向きに戻す。`bin[i]` は常に入力の端の \(i\) 番目と \(i+1\) 番目の間のビンである（最上位と各次数の `zero_loss`・`spectrum`・3成分・誤差・誤差の内訳、`truncation` のビンごとの3つのリスト）。外の領域は `outside.high_binding`（出力の最高の BE より高い側。KE の `outside.low`）と `outside.low_binding`（最低の BE より低い側。KE の `outside.high`）で、入力の向きで名前は変わらない。面積、感度、\(\hat r\)、`mesh`、`neglected_total_area` は軸に依らない。
+- **境の上の δ:** 出力の端を昇順に \(\beta_0<\dots<\beta_{n_b}\) として、最低の BE のビンは \([\beta_0,\beta_1]\)、ほかのビンは \((\beta_j,\beta_{j+1}]\)、`outside.low_binding` は \((-\infty,\beta_0)\)、`outside.high_binding` は \((\beta_{n_b},\infty)\)。内部の境の上の δ は低い BE 側のビンへ、全体の両端の上の δ は端のビンへ入る。E7 の KE の規則（左閉右開、最高の KE のビンだけ右も閉）を \(E=C-B\) で写したものである。
+- **`single_loss` は KE のまま:** 結果の `single_loss` は内部の KE の結果そのもので、KE の昇順、`outside` は `low`・`high`、`primary` は換算した KE の型である。`diagnostics` の中の領域の名前と、E7・E8 から通った例外の `key`・`exceeded` も KE の索引のままである。BE の実行の打ち切りの例外が持つビンごとのリストは、BE の向きに直す（この例外は \(S_B\)、\(S_K\)、幅を持たない）。
+- **\(E_0\):** `electron_energy_eV` をそのまま核に渡す。BE から決めない。\(C-B_{\rm ref}\) の丸めた値（`primary_reference_kinetic_eV`）と、\(E_0\) との差（`electron_energy_minus_reference_eV`）を記録する。差に警告の境は置かない。
+- **軸をずらさない（設計 §7、U6）:** 入力は、すでに校正・補正の済んだフェルミ準位基準の目盛りにあるとみなす。パッケージは軸をずらさず、試料の仕事関数、帯電の量、分析器のバイアス、接触電位を補わない。光子エネルギーは測定ごとに必須で、線源の名前から数値を補わない。`calibration.applied_shift_eV`、`charge_correction.shift_eV`、`emission_angle_deg` は「何をしたか」の記録で、計算に使わない。真空準位を基準にした BE は扱わない。
+- **測定の記録:** `source`、`calibration`、`charge_correction`、`core_level`、`emission_angle_deg`、`acceptance_half_angle_deg` の6欄と、`paired_anchor` の線の名前・出典、`primary_reference_choice` は `"not_recorded"` を許し、警告する（`energy_axis["not_recorded"]` に欄の名前を並べる）。数値の光子エネルギー、選んだ基準の形の値、\(B_{\rm ref}\) は `"not_recorded"` にできない。記録の辞書は所定のキーだけを持つ（API では、余分なキーの `detail` は `"type"` になる）。受け付けた記録は深く写して持つ。観測の計数・誤差の欄は置かない（比較の入力は M4b-3）。
+- **検査の順と失敗:** `energy_axis` の型と値（`invalid_energy_axis`。`field` と `detail` を持つ）、一次線が BE の型であること、出力の BE の端の形（E7 の `invalid_output_edges`）、換算、単射（`axis_conversion_not_injective`）の順に、KE の型を作る前に調べる。この2つの新しい理由（どちらも `MultipleLossInputError`）は、核の評価 0 回で出る。その後は E7・E8 の検査のままである。CLI は、JSON の構造（`invalid_schema`）、軸と記録の値、一次線と出力の端、換算と単射の順に調べる。
+- **警告（E8 の警告の後に、この順）:** `binding_axis_assumed_calibrated`（`energy_axis` を与えたとき常に）、`energy_axis_field_not_recorded`（`"not_recorded"` の欄があるとき1件）、`recorded_emission_angle_differs_from_theta`（記録した出射角が数値で、計算の `theta_deg` と違うとき）、`axis_conversion_support_disagreement`（上）。
+- **照合の表示:** E8 のまま、`comparison` は常に `not_matched`、`physical_validity` は常に `not_established` である。検証が確かめたのは、換算、単射、両側の台、出力の向きと所属、記録の形と、BE の実行が、独立に換算した KE の軸での同じ入口の実行とビット単位で同じことである。模型の物理の妥当性は確かめていない。
+
+**扱わないもの:** 実測スペクトルとの比較、準位ごとの実行の合算、帯の比、基線（M4b-3）、観測の計数の入力、仕事関数・帯電の推定、真空準位を基準にした BE、E8 の「扱わないもの」。
+
+| 式 | 実装 | 検証 |
+| --- | --- | --- |
+| \(E=C-B\)、\(C\) の2つの形、1回の丸め、単射、記録の検査 | `_binding_axis`（公開の型 `BindingEnergyAxis`、`EnergyAxisReference`、`BindingDeltaPrimary`、`BindingBinnedPrimary`。`xpsloss` と `xpsloss.xps_multiple_loss` から公開）。入口は `xps_multiple_loss.multiple_loss_spectrum(..., energy_axis=...)` | 期待する状態の 82 行、有理数の参照 R-C 1,771 キー、変異 14 件（[M4b-2 の事前登録](M4B2_PREREG.md)、[VALIDATION.md](VALIDATION.md) の「M4b-2」） |
+| \(S_B\)、\(S_K\)、\(S\)、\(U_i\)、食い違いの診断、出力の向きと外の名前 | `_binding_support`（次数の事前の判定は `_order_types`、上界への幅の受け渡しは `_loss_orders`、上界の式は `_order_bounds` のまま） | 同上 |
+| 測定のスキーマ、BE の CSV と `run.json` | `_spectrum_schema`、`_single_loss_cli`（CLI は `xps-multiple-loss` の `--spectrum`。スキーマ `xpsloss-measured-spectrum-v0`） | 同上（BC の群、再生） |

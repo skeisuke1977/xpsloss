@@ -1,0 +1,28 @@
+{
+  "schema": "xpsloss-measured-spectrum-v0",
+  "axis": "binding_energy_eV",
+  "measurement": {
+    "photon_energy_eV": 1253.5,
+    "reference": {"kind": "photon_and_offset", "kinetic_energy_offset_eV": 4.25},
+    "primary_reference_binding_eV": 249.25,
+    "primary_reference_choice": "synthetic delta position, not a measured peak",
+    "source": {
+      "name": "synthetic source, not a real instrument",
+      "monochromatic": true,
+      "satellite_treatment": "none (synthetic)"
+    },
+    "calibration": "not_recorded",
+    "charge_correction": {"applied": false, "method": null, "shift_eV": null},
+    "core_level": "synthetic level",
+    "emission_angle_deg": 0.0,
+    "acceptance_half_angle_deg": "not_recorded"
+  },
+  "primary": {
+    "kind": "delta",
+    "binding_energies_eV": [249.25],
+    "intensities": [1.0],
+    "intensity_unit": "arb. unit",
+    "description": "synthetic single delta line, not a measured spectrum"
+  },
+  "output_binding_edges_eV": {"min": 248.25, "max": 309.25, "step": 1.0}
+}

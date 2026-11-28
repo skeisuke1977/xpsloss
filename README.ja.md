@@ -2,7 +2,7 @@
 
 公開理論に基づくXPSの誘電損失計算を、Python APIとCLIで再現するためのパッケージです。0.3.0 の対象は M0、M1、M2-1、硬いギャップのある材料の固定深さ（M2-2）、外から与える一定の長さでの法線出射の深さ平均（M3a）と、法線出射の単一損失スペクトルと有限の損失窓の面積（M4a）、その重みの長さと乗数を分ける規約（M4a-2）です（v0.1.0 は M0、M1、M2-1。0.2.0 で M2-2 と M3a を加えた）。開発版（0.4.0.dev0、未公開）には、法線出射の多重損失の近似の模型（M4b-1、下記）が入っています。[English README](README.md)
 
-**現時点で動くのは、次の6つです（6つ目は 0.3.0 から）。開発版（0.4.0.dev0）には7つ目があります。**
+**現時点で動くのは、次の6つです（6つ目は 0.3.0 から）。開発版（0.4.0.dev0）には7つ目と8つ目があります。**
 - **振動子で表した損失関数**
 - **その因果的な複素誘電応答**
 - **均質・等方な無限媒質のバルク非弾性散乱**
@@ -10,6 +10,7 @@
 - **法線出射の深さ平均（原著の式(18)、外から与える一定の長さ）**
 - **法線出射の単一損失スペクトルと有限の損失窓の面積（原著の式(19)。重みの長さと乗数を選べる）**
 - **（開発版 0.4.0.dev0）法線出射の多重損失の近似（最初の損失は全核、2回目以降は 13a の項だけ。次数の上限 `max_order` は必須）**
+- **（開発版 0.4.0.dev0）その多重損失の束縛エネルギーの入出力と測定の記録（入口と出口の変換だけ。光子エネルギーは必須。パッケージは軸をずらさない）**
 
 **斜出射、軌道ごとの長さや自己無撞着な長さでの深さ平均は未実装です。多重散乱は、開発版に上の近似の模型が1つあるだけで、物理の妥当性は確かめていません。QUEELS-XPSの完全再現版ではありません。分散のあるAlでは、QUEELS-XPS v2.1 との比較で、両方の運動量指定が事前の基準を満たしませんでした。**
 
@@ -35,9 +36,10 @@
 | ギャップ下の減衰のない表面モード（ε = −1）の寄与、ギャップ端の広がり | 未実装（該当する損失は拒否） |
 | 法線出射の深さ平均、外から与える一定の長さ（0.2.0、M3a） | 実装済み・テストあり・別担当がレビュー。実装担当とは別の担当がパッケージを使わずに多倍長で計算した参照値498キーと、事前登録の許容幅で一致した。事前登録の全2041実行が、登録した状態（成功、拒否、未収束）になった。公開の固定深さを数値で深さ求積した経路とは、値のある630点で一致し、26点は経路の値がなく未完了。`k_parallel` の独立経路 I3 との照合（V9）は計算量のため行っていない |
 | 法線出射の単一損失スペクトルと有限の損失窓の面積、外から与える一定の長さ（0.3.0、M4a。重みの長さと乗数の規約は M4a-2） | 実装済み・テストあり・別担当がレビュー。原著の式(19)のゼロ損失線と単一損失の衛星を、損失窓の中だけで計算する。事前登録の 100 行が登録した状態になり、実装担当とは別の2つの担当が作った参照の 2041 キー（解析の参照 927、ELF データ集の Al・Si の通し経路 1048、動く端の合成入力 66）と、事前登録の許容幅で一致した。成功は推定誤差が予算の内という意味で、証明された上界ではない。実測スペクトルとは比べていない |
-| 法線出射の多重損失の近似 `first_loss_13a_chain_v0`（開発版 0.4.0.dev0、M4b-1。運動エネルギーの軸だけ） | 実装済み・テストあり・別担当がレビュー。最初の損失は M4a の全核、2回目以降は 13a の項だけを繰り返す。事前登録の 109 行が登録した状態になり、実装担当とは別の担当が作った参照（解析の参照 3,572 キー、ELF データ集の Al・Si の参照 6,096 キー）と、事前登録の許容幅で一致した。確かめたのは、与えた核と模型の定義に対する畳み込みの数値で、模型の物理の妥当性は確かめていない。実測スペクトルとは比べていない |
+| 法線出射の多重損失の近似 `first_loss_13a_chain_v0`（開発版 0.4.0.dev0、M4b-1。計算の軸は運動エネルギー） | 実装済み・テストあり・別担当がレビュー。最初の損失は M4a の全核、2回目以降は 13a の項だけを繰り返す。事前登録の 109 行が登録した状態になり、実装担当とは別の担当が作った参照（解析の参照 3,572 キー、ELF データ集の Al・Si の参照 6,096 キー）と、事前登録の許容幅で一致した。確かめたのは、与えた核と模型の定義に対する畳み込みの数値で、模型の物理の妥当性は確かめていない。実測スペクトルとは比べていない |
 | 軌道ごとの長さ・自己無撞着な長さでの深さ平均 | 未実装 |
-| 束縛エネルギーの入出力（M4b-2）、実測スペクトルとの比較（M4b-3） | 未実装 |
+| 上の多重損失の束縛エネルギーの入出力と測定の記録（開発版 0.4.0.dev0、M4b-2） | 実装済み・テストあり・別担当がレビュー。フェルミ準位基準の束縛エネルギーを、入口と出口で E = C − B と換算するだけで、物理は足さない。光子エネルギーは必須で、パッケージは軸をずらさない。事前登録の 82 行が登録した状態になり、実装担当とは別の担当が有理数で作った参照（1,771 キー）を含む台帳の 25,948 キーがすべて合格した。模型の物理の妥当性は確かめていない。実測スペクトルとは比べていない |
+| 実測スペクトルとの比較（M4b-3） | 未実装 |
 | 上の近似のほかの多重散乱の模型、窓の外の損失、内因性の損失の分離、装置関数、背景の差引き | 未実装 |
 | Quanty接続、CoO物性値、フィッティング | 未実装 |
 | 元のQUEELS-XPSとの数値一致 | 主張しない（上記） |
@@ -100,7 +102,7 @@ py -m venv .venv
 
 ### 多重損失（開発版 0.4.0.dev0、M4b-1）
 
-**公開した 0.3.0 には入っていません。** 開発版のソースツリーで使えます。`multiple_loss_spectrum`、`multiple_loss_order_areas` と `xps-multiple-loss` は、単一損失（M4a）に、同じ損失窓の中の損失を繰り返した次数 n ≥ 2 の寄与を足します。模型は `first_loss_13a_chain_v0` の1つだけで、近似です。法線出射、運動エネルギーの軸だけを扱います。
+**公開した 0.3.0 には入っていません。** 開発版のソースツリーで使えます。`multiple_loss_spectrum`、`multiple_loss_order_areas` と `xps-multiple-loss` は、単一損失（M4a）に、同じ損失窓の中の損失を繰り返した次数 n ≥ 2 の寄与を足します。模型は `first_loss_13a_chain_v0` の1つだけで、近似です。法線出射だけを扱います。計算の軸は運動エネルギーです。束縛エネルギーの軸での入出力は、下の M4b-2 の節にあります。
 
 ```powershell
 .\.venv\Scripts\python.exe -m xpsloss xps-multiple-loss examples/synthetic_bulk.json --spectrum examples/single_loss_spectrum.json --loss-window-eV 1 50 --weight-length-A 20 --epsilon-momentum k_total --model first_loss_13a_chain_v0 --max-order 3 --epsrel 1e-7 --out runs/multiple-loss-demo
@@ -133,9 +135,63 @@ print([order.area["total"] for order in areas.orders])
 - **精度の設定:** 既定の `epsrel`（1e-6、M4a と同じ）では、`max_order` が 2 以上の典型の実行（ELF データ集の Al、δ の一次線、1 eV のビンなど）が、2次で `inherited_error_exceeds_order_budget` で止まります。1次の推定誤差を高次に引き継いだ分が、高次の予算を超えるためです。**`epsrel=1e-7`（CLI は `--epsrel 1e-7`）を指定すると通ります。** 上の例もこの値を指定しています。この設定での Al の例は 34 秒で、同じ引数の M4a は 16 秒でした。
 - **成功の意味と失敗:** 成功は、推定誤差が予算の内という意味で、証明された誤差の上界ではありません。未収束は `MultipleLossConvergenceError`、入力の誤りは `MultipleLossInputError`（どちらも `reason` つき）で、CLI は終了コード2で止まり、出力先を作りません。M4a・M4a-2 の例外はそのまま通します。
 - **照合の表示:** `run.json` の `comparison` は常に `not_matched`、`physical_validity` は常に `not_established` です。検証で確かめたのは、与えた核と模型の定義に対する次数ごとの畳み込みの数値です。模型の物理の妥当性は確かめていません。実測スペクトルとは比べていません。
-- **範囲の外:** 束縛エネルギーの入出力（M4b-2）、実測スペクトルとの比較（M4b-3）、斜出射、弾性散乱、軌道ごとの長さや自己無撞着な長さ、窓の外の損失、内因性の損失の分離、装置関数、背景の差引き、フィットは扱いません。QUEELS-XPS の完全な実装ではありません。
+- **範囲の外:** 実測スペクトルとの比較（M4b-3）、斜出射、弾性散乱、軌道ごとの長さや自己無撞着な長さ、窓の外の損失、内因性の損失の分離、装置関数、背景の差引き、フィットは扱いません。QUEELS-XPS の完全な実装ではありません。
 
 [数式と単位（E8）](docs/EQUATIONS.md)・[M4b の設計](docs/M4B_DESIGN.md)・[M4b-1 の事前登録](docs/M4B1_PREREG.md)・[検証記録](docs/VALIDATION.md)
+
+### 束縛エネルギーの入出力（開発版 0.4.0.dev0、M4b-2）
+
+**公開した 0.3.0 には入っていません。** `multiple_loss_spectrum` のキーワード引数 `energy_axis` と、`xps-multiple-loss` の `--spectrum` の新しいスキーマ `xpsloss-measured-spectrum-v0` で、一次線と出力の端をフェルミ準位基準の束縛エネルギーの軸で与え、結果を同じ軸で受け取り、測定の条件を記録できます。物理は足しません。計算は M4b-1 の模型のまま運動エネルギーの軸で行い、束縛エネルギーは入口と出口の変換 E = C − B だけです。`energy_axis` を与えなければ（既定）、結果は M4b-1 とビット単位で同じです。`multiple_loss_order_areas` と単一損失の関数は `energy_axis` を取りません。`examples/measured_spectrum.json` は合成の入力です。スキーマの名前に measured とありますが、実測のデータではなく、測定の記録の値もすべて例のために作ったものです。
+
+```powershell
+.\.venv\Scripts\python.exe -m xpsloss xps-multiple-loss examples/synthetic_bulk.json --spectrum examples/measured_spectrum.json --loss-window-eV 1 50 --weight-length-A 20 --epsilon-momentum k_total --model first_loss_13a_chain_v0 --max-order 3 --epsrel 1e-7 --out runs/multiple-loss-binding
+```
+
+```python
+import numpy as np
+from xpsloss import (BindingDeltaPrimary, BindingEnergyAxis, EnergyAxisReference, Material, Oscillator,
+                     multiple_loss_spectrum)
+
+material = Material("synthetic_single_oscillator_not_real_material", 0.0, (Oscillator(15.0, 180.0, 2.0, 0.5),))
+axis = BindingEnergyAxis(  # synthetic values, not a real measurement
+    photon_energy_eV=1253.5,
+    reference=EnergyAxisReference(kind="photon_and_offset", kinetic_energy_offset_eV=4.25),
+    primary_reference_binding_eV=249.25,
+    primary_reference_choice="synthetic delta position, not a measured peak",
+    source={"name": "synthetic source, not a real instrument", "monochromatic": True,
+            "satellite_treatment": "none (synthetic)"},
+    calibration="not_recorded",
+    charge_correction={"applied": False, "method": None, "shift_eV": None},
+    core_level="synthetic level",
+    emission_angle_deg=0.0,
+    acceptance_half_angle_deg="not_recorded",
+)
+primary = BindingDeltaPrimary([249.25], [1.0])
+edges = np.arange(248.25, 309.75, 1.0)
+
+result = multiple_loss_spectrum(material, 1000.0, primary, edges, loss_window_eV=(1.0, 50.0),
+                                weight_length_A=20.0, epsilon_momentum="k_total",
+                                model="first_loss_13a_chain_v0", max_order=3, epsrel=1e-7, energy_axis=axis)
+info = result.energy_axis
+print(info["conversion_constant_eV"], info["kinetic_output_edges_eV"][[0, -1]], info["not_recorded"])
+print(info["support_order_binding"], info["support_order_kinetic"], result.truncation["state"])
+print(result.spectrum[:3], sorted(result.outside))
+```
+
+2つの例は、M4b-1 の例と同じ合成の入力を、C = 1249.25 eV で束縛エネルギーの軸に移したものです。`epsrel=1e-7` も同じです。249.25 eV の δ の一次線は 1000 eV に写ります。この線は内部のビンの境の上にあり、低い束縛エネルギーの側のビンに入ります。
+
+- **換算:** `reference.kind` で2つの形のどちらかを選びます。`photon_and_offset` は、`photon_energy_eV` と `kinetic_energy_offset_eV` から C = hν − φ とします。`paired_anchor` は、同じ校正の目盛りの上の対応点 `binding_anchor_eV`・`kinetic_anchor_eV`（線の名前と出典つき）から C = B⋆ + E⋆ とします。2つの形は排他です。`paired_anchor` の含意されるずれ hν − C は記録するだけで、計算に使いません。各座標は、入力の数から C − B までを厳密に計算し、最後に1回だけ最も近い倍精度の数に丸めます。丸めの最大は `rounding_max_eV` に残ります。
+- **光子エネルギーは必須です。** `photon_energy_eV` は、どちらの形でも数値で与えます。線源の名前から数値を補いません。`"not_recorded"` にもできません。
+- **測定の記録:** `source`、`calibration`、`charge_correction`、`core_level`、`emission_angle_deg`、`acceptance_half_angle_deg` は必須の欄ですが、`"not_recorded"` を書けます（対応点の線の名前と出典、`primary_reference_choice` も同じ）。そのときは警告 `energy_axis_field_not_recorded` を出し、欄の名前を `energy_axis["not_recorded"]` に並べます。記録は結果と `run.json` に写すだけで、計算に使いません。観測の計数を入れる欄はありません。
+- **パッケージは軸をずらしません。** 入力は、すでに校正・補正の済んだフェルミ準位基準の目盛りにあるとみなします（警告 `binding_axis_assumed_calibrated` を常に出します）。記録した校正のずれ、帯電の補正の量、出射角は「何をしたか」の記録です。仕事関数や帯電の量を推測しません。真空準位を基準にした束縛エネルギーは扱いません。`electron_energy_eV`（E0）はこれまでどおり明示し、束縛エネルギーから決めません。C − B_ref との差は記録に残ります。
+- **拒否:** 負の束縛エネルギーと、減少の順の端は受け付けます。運動エネルギーが負になる座標は `invalid_energy_axis` で拒否します。一次線の位置・一次線のビンの端・出力の端の全部を合わせた異なる座標が、丸めの後に順序を保たなければ、`axis_conversion_not_injective` で拒否します。どちらも `MultipleLossInputError` で、核を評価する前に出ます。
+- **出力の向き:** 配列は、入力の束縛エネルギーの端の向き（増加でも減少でも）で返します。`bin[i]` は常に入力の端の i 番目と i+1 番目の間のビンです。外の領域の名前は、入力の向きによらず `outside["low_binding"]`・`outside["high_binding"]` です。`multiple_loss_spectrum.csv` の端の列は `binding_edge_low_eV`、`binding_edge_high_eV`、`kinetic_edge_low_eV`、`kinetic_edge_high_eV` の4つです。内部の境の上の δ は、低い束縛エネルギーの側のビンに入ります。
+- **`single_loss` は運動エネルギーのままです。** 結果に入っている M4a の結果 `result.single_loss` は変えません（運動エネルギーの昇順、`outside["low"]`・`outside["high"]`）。
+- **台の判定は両側で行います。** 表示のビンに届く次数の上限を、元の束縛エネルギーの厳密な差と、丸めた運動エネルギーの差の両方で求め（`support_order_binding`、`support_order_kinetic`）、弱い側の主張を返します。`truncation.support_order` は大きい方、ビンが `complete` になるのは両側とも届かないときだけ、上界には大きい方の幅を使います。ビンの上界は、そのビンと、それより低い束縛エネルギーの側の全部に落ちる量の累積の上界です。2つの側が食い違っても拒否せず、警告 `axis_conversion_support_disagreement` を出し、件数と先頭 8 件までの例を `energy_axis["support_comparison"]` に残します。返す数値は、丸めた運動エネルギーの座標の問題の値で、換算の丸めは返す誤差に入れません。
+- **照合の表示:** `comparison` は常に `not_matched`、`physical_validity` は常に `not_established` です。検証で確かめたのは、換算、向き、記録と、束縛エネルギーの実行が、独立に換算した運動エネルギーの入力での同じ実行とビット単位で同じことです。模型の物理の妥当性は確かめていません。
+- **範囲の外:** 実測スペクトルとの比較（M4b-3）、斜出射、弾性散乱、軌道ごとの長さ、内因性の損失の分離、装置関数、観測の計数の入力は扱いません。QUEELS-XPS の完全な実装ではありません。
+
+[数式と単位（E8a）](docs/EQUATIONS.md)・[M4b の設計](docs/M4B_DESIGN.md)・[M4b-2 の事前登録](docs/M4B2_PREREG.md)・[検証記録](docs/VALIDATION.md)
 
 文献由来の固定入力と実行例は [benchmarks/README.md](benchmarks/README.md)、出典・帰属表示・和則の検算は [docs/BENCHMARK_INPUTS.md](docs/BENCHMARK_INPUTS.md)、複素誘電応答の設計と規約は [docs/DIELECTRIC_DESIGN.md](docs/DIELECTRIC_DESIGN.md) にあります。
 
@@ -181,6 +237,7 @@ Keisuke Sato がコードを MIT、自作文書を CC BY 4.0 で提供します�
 - `docs/M4A_PREREG.md`: M4a の検証の条件、許容幅、期待する結果（参照値と実装の前に固定）と、参照値の凍結の記録。
 - `docs/M4B_DESIGN.md`: 法線出射の多重損失（M4b）の設計と決定。
 - `docs/M4B1_PREREG.md`: M4b-1 の検証の条件、許容幅、期待する結果（参照値と実装の前に固定）と、参照値の凍結の記録。
+- `docs/M4B2_PREREG.md`: M4b-2（束縛エネルギーの入出力と測定の記録）の検証の条件、許容幅、期待する結果（参照値と実装の前に固定）と、参照値の凍結の記録。
 - `docs/DIELECTRIC_DESIGN.md`: 複素誘電応答の方式比較、符号・幅の規約、ギャップ端と極の扱い。
 - `docs/BENCHMARK_INPUTS.md`: 固定入力の出典、利用条件、光学和則の監査。
 - `docs/PROJECT_PLAN.md`: 完全モデルとQuanty接続へ進むための設計。
@@ -189,4 +246,4 @@ Keisuke Sato がコードを MIT、自作文書を CC BY 4.0 で提供します�
 
 試験は、ソースのフォルダーで `tests/run_suite.py` を実行します。ランナーは、常にこのフォルダーの `src` を試験します。モジュールの探索先と、子プロセスに渡す `PYTHONPATH` の先頭に `src` を置き、試験するパスを表示し、読み込んだ xpsloss が `src` のものでなければ止まります。テストが0件のときも失敗します。`python -m unittest discover -s tests -v` を使うときは、`PYTHONPATH` に `src` を設定するか（PowerShell では `$env:PYTHONPATH = 'src'`、bash では `PYTHONPATH=src`）、編集可能な導入（`pip install -e .`）にしてください。そうでなければ導入済みの別の版を試験することになり、`tests/test_suite_source.py` が失敗します。試験ファイルを1つだけ指定して `unittest` で実行すると、この確認は働きません。
 
-開発版（0.4.0.dev0、M4b-1、コミット `ac1b656`）では、Windows の作業ツリーから400件中384件が合格し、16件は skip です。M4b-1 の事前登録の109行は、すべて登録した状態になりました。実装担当とは別の担当が作った解析の参照の3,572キー（パッケージのコードを使わない）と、ELF データ集の Al・Si の参照の6,096キー（公開の深さ平均の点の値だけを共有する別の経路）は、すべて事前登録の許容幅で合格しました。1次の欄は M4a・M4a-2 とビット単位で同じで、独立レビュー（blocker 0、major 0、minor 10）の指摘を直した前と後の2回とも、事前登録した29の変異がすべて検出されました。これらが確かめるのは畳み込みの数値で、模型の物理の妥当性ではありません。実測スペクトルとは比べていません。コミット `e7fa6a3`（CI が Linux と macOS で見つけた DS0 の全軸の残りの区間の丸めを直した版）では、CI（run 46072925415）の全5ジョブに合格しました。テストの各ジョブでは401件中385件が合格して16件が skip、Git の履歴がない展開した sdist では382件が合格して19件が skip でした。0.3.0（M4a、段階 R4 のランナーの修正、M4a-2 を含む）では、Windows の Python 3.12.10 で、作業ツリーから347件中332件が合格し、15件は skip です（求めたときだけ動く全件の検査と、行わなかった V9 の検査）。M4a-2 の事前登録の465行は、すべて登録した状態になりました。実装担当とは別の担当が、パッケージのコードを使わずに、凍結した M4a の参照の表から写像した4,176キーはすべて合格し、重みの長さと乗数の既定の選び方は M4a とビット単位で同じで、事前登録した26の変異はすべて検出されました。この写像したキーが確かめるのは、乗数・重みの長さ・分母の配線と別経路の積分で、核の値の独立な照合ではありません。M4a-2 のコミット `c20ac79`（0.3.0.dev0、同じコード）では、CI（run 45902228392）の全5ジョブに合格しました。テストの各ジョブでは347件中332件が合格して15件が skip、Git の履歴がない展開した sdist では329件が合格して18件が skip でした。段階 R4 では337件中322件が合格していました。段階 R4 のコミット `e4e024f` では、CI（run 45761092337）の全5ジョブに合格しました。テストの各ジョブでは337件中322件が合格して15件が skip、Git の履歴がない展開した sdist では319件が合格して18件が skip でした。段階 R4 の前の M4a のコミット `25bf472` では、333件中318件が合格し（15件は skip）、CI（run 45748442743）の Linux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）と配布物のジョブにも合格し、2つの照合も合格しました。0.2.0 では、Windows の Python 3.12.10 で、作業ツリーから275件中262件が合格し、13件は skip です（求めたときだけ動く全件の検査と、行わなかった V9 の検査）。コミット `30286b7`（0.2.0.dev0、同じコード）では、CI（run 45578321049）のLinux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）と配布物のジョブにも合格し、2つの照合も合格しました。M3a の前の全208件は、Windows の Python 3.12.10 で作業ツリーから、Python 3.10.19（依存の最低版）で書き出したコピーから合格しました。コミット `fd31dcd` では、CI（run 45481433276）の Linux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）と配布物のジョブにも合格し、2つの照合も合格しました。0.1.0 の全157件は、Windows の Python 3.12.10 と 3.10.22（依存の最低版）で、作業ツリーから合格しました。最後の修正（段階4f）の前の公開候補では、全119件が、Windows の Python 3.12.10（NumPy 2.5.5、SciPy 1.18.1）と Python 3.10.22（NumPy 1.24.0、SciPy 1.10.0）で、作業ツリーから合格しました。Python 3.12.10 では、展開した sdist からも合格しました。UTF-8 モードを使わず、リダイレクトした出力は既定の文字コード（cp932）でした。その前の版の全112件は、両方の環境で展開した sdist からも合格しました。別担当も、Windows の Python 3.11.14（NumPy 2.4.6、SciPy 1.17.1）で、展開した sdist の全112件を確認しました。以前の版のテスト（75件）は、CI で Linux（Python 3.10 と依存の最低版、3.12）、Windows（3.12）、macOS（3.13）と、wheel の導入・展開した sdist のテストのジョブに合格しました。コミット `9b29e01` の公開候補（157件）は、CI（run 45325087478）で Linux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）と配布物のジョブに合格しました。2つの照合も合格しました。その前の公開候補 `5625455`（131件）と `c7fdd22`（119件）も、同じジョブに合格しています。詳細は `docs/VALIDATION.md` を参照してください。
+開発版（0.4.0.dev0、M4b-2、コミット `7a11252`）では、Windows の作業ツリーから433件中417件が合格し、16件は skip です。M4b-2 の事前登録の82行は、すべて登録した状態になり、台帳の25,948キーはすべて合格しました。このうち1,771キーは、実装担当とは別の担当が、パッケージのコードを使わずに有理数で作った参照との照合です。`energy_axis` を与えない呼び出しは M4b-1 のコードとビット単位で同じで、事前登録した14の変異はすべて検出されました。独立レビューの指摘は blocker 0、major 0、minor 5 で、1件を直し（コミット `7a11252`。上の数はこのコードでのもの）、4件は既知の点として記録しました。これらが確かめるのは換算、向き、記録で、模型の物理の妥当性ではありません。実測スペクトルとは比べていません。CI の結果は push の後に記録します。M4b-1（コミット `ac1b656`）では、Windows の作業ツリーから400件中384件が合格し、16件は skip でした。M4b-1 の事前登録の109行は、すべて登録した状態になりました。実装担当とは別の担当が作った解析の参照の3,572キー（パッケージのコードを使わない）と、ELF データ集の Al・Si の参照の6,096キー（公開の深さ平均の点の値だけを共有する別の経路）は、すべて事前登録の許容幅で合格しました。1次の欄は M4a・M4a-2 とビット単位で同じで、独立レビュー（blocker 0、major 0、minor 10）の指摘を直した前と後の2回とも、事前登録した29の変異がすべて検出されました。これらが確かめるのは畳み込みの数値で、模型の物理の妥当性ではありません。実測スペクトルとは比べていません。コミット `e7fa6a3`（CI が Linux と macOS で見つけた DS0 の全軸の残りの区間の丸めを直した版）では、CI（run 46072925415）の全5ジョブに合格しました。テストの各ジョブでは401件中385件が合格して16件が skip、Git の履歴がない展開した sdist では382件が合格して19件が skip でした。0.3.0（M4a、段階 R4 のランナーの修正、M4a-2 を含む）では、Windows の Python 3.12.10 で、作業ツリーから347件中332件が合格し、15件は skip です（求めたときだけ動く全件の検査と、行わなかった V9 の検査）。M4a-2 の事前登録の465行は、すべて登録した状態になりました。実装担当とは別の担当が、パッケージのコードを使わずに、凍結した M4a の参照の表から写像した4,176キーはすべて合格し、重みの長さと乗数の既定の選び方は M4a とビット単位で同じで、事前登録した26の変異はすべて検出されました。この写像したキーが確かめるのは、乗数・重みの長さ・分母の配線と別経路の積分で、核の値の独立な照合ではありません。M4a-2 のコミット `c20ac79`（0.3.0.dev0、同じコード）では、CI（run 45902228392）の全5ジョブに合格しました。テストの各ジョブでは347件中332件が合格して15件が skip、Git の履歴がない展開した sdist では329件が合格して18件が skip でした。段階 R4 では337件中322件が合格していました。段階 R4 のコミット `e4e024f` では、CI（run 45761092337）の全5ジョブに合格しました。テストの各ジョブでは337件中322件が合格して15件が skip、Git の履歴がない展開した sdist では319件が合格して18件が skip でした。段階 R4 の前の M4a のコミット `25bf472` では、333件中318件が合格し（15件は skip）、CI（run 45748442743）の Linux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）と配布物のジョブにも合格し、2つの照合も合格しました。0.2.0 では、Windows の Python 3.12.10 で、作業ツリーから275件中262件が合格し、13件は skip です（求めたときだけ動く全件の検査と、行わなかった V9 の検査）。コミット `30286b7`（0.2.0.dev0、同じコード）では、CI（run 45578321049）のLinux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）と配布物のジョブにも合格し、2つの照合も合格しました。M3a の前の全208件は、Windows の Python 3.12.10 で作業ツリーから、Python 3.10.19（依存の最低版）で書き出したコピーから合格しました。コミット `fd31dcd` では、CI（run 45481433276）の Linux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）と配布物のジョブにも合格し、2つの照合も合格しました。0.1.0 の全157件は、Windows の Python 3.12.10 と 3.10.22（依存の最低版）で、作業ツリーから合格しました。最後の修正（段階4f）の前の公開候補では、全119件が、Windows の Python 3.12.10（NumPy 2.5.5、SciPy 1.18.1）と Python 3.10.22（NumPy 1.24.0、SciPy 1.10.0）で、作業ツリーから合格しました。Python 3.12.10 では、展開した sdist からも合格しました。UTF-8 モードを使わず、リダイレクトした出力は既定の文字コード（cp932）でした。その前の版の全112件は、両方の環境で展開した sdist からも合格しました。別担当も、Windows の Python 3.11.14（NumPy 2.4.6、SciPy 1.17.1）で、展開した sdist の全112件を確認しました。以前の版のテスト（75件）は、CI で Linux（Python 3.10 と依存の最低版、3.12）、Windows（3.12）、macOS（3.13）と、wheel の導入・展開した sdist のテストのジョブに合格しました。コミット `9b29e01` の公開候補（157件）は、CI（run 45325087478）で Linux（Python 3.10 と依存の最低版、3.12）、macOS（3.13）、Windows（3.12）と配布物のジョブに合格しました。2つの照合も合格しました。その前の公開候補 `5625455`（131件）と `c7fdd22`（119件）も、同じジョブに合格しています。詳細は `docs/VALIDATION.md` を参照してください。

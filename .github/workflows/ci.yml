@@ -80,6 +80,8 @@ jobs:
           /tmp/wheelenv/bin/xpsloss xps-depth-averaged examples/synthetic_bulk.json --weight-length-A 20 --epsilon-momentum k_total --out runs/depth-averaged
           /tmp/wheelenv/bin/xpsloss xps-loss-window-area examples/synthetic_bulk.json --loss-window-eV 1 50 --weight-length-A 20 --epsilon-momentum k_total --out runs/loss-window-area
           /tmp/wheelenv/bin/xpsloss xps-single-loss examples/synthetic_bulk.json --spectrum examples/single_loss_spectrum.json --loss-window-eV 1 50 --weight-length-A 20 --epsilon-momentum k_total --out runs/single-loss
+          /tmp/wheelenv/bin/xpsloss xps-multiple-loss examples/synthetic_bulk.json --spectrum examples/single_loss_spectrum.json --loss-window-eV 1 50 --weight-length-A 20 --epsilon-momentum k_total --model first_loss_13a_chain_v0 --max-order 3 --epsrel 1e-7 --out runs/multiple-loss
+          /tmp/wheelenv/bin/xpsloss xps-multiple-loss examples/synthetic_bulk.json --spectrum examples/measured_spectrum.json --loss-window-eV 1 50 --weight-length-A 20 --epsilon-momentum k_total --model first_loss_13a_chain_v0 --max-order 3 --epsrel 1e-7 --out runs/multiple-loss-binding
           /tmp/wheelenv/bin/python - <<'PY'
           import json
           from pathlib import Path
@@ -94,6 +96,14 @@ jobs:
           comparison = run["comparison"]
           assert comparison["areas"] == comparison["spectrum"] == "not_matched"
           assert comparison["registration_sha256"] == "250b45f863ccbd1c4c94474f23769976380c5dad5c2671328712ef4acdc7f408"
+          for name, axis in (("runs/multiple-loss", "kinetic_energy_eV"), ("runs/multiple-loss-binding", "binding_energy_eV")):
+              out = Path(name)
+              for file in ("run.json", "multiple_loss_spectrum.csv", "order_areas.csv"):
+                  assert (out / file).stat().st_size > 0, (name, file)
+              run = json.loads((out / "run.json").read_text(encoding="utf-8"))
+              assert run["status"] == "complete" and run["physical_validity"] == "not_established", name
+              assert set(run["comparison"].values()) == {"not_matched"}, name
+              assert run["spectrum_definition"]["axis"] == axis, name
           PY
           /tmp/wheelenv/bin/python -m pip check
       - name: Test unpacked sdist, check predictions and reproduce reference-side figures
