@@ -67,6 +67,18 @@ ORDER_NAMES = ("order_epsrel", "order_epsabs_fraction", "order_limit", "max_conv
 UNSUPPORTED = ["oblique_emission", "trajectory_dependent_weight_length", "self_consistent_length",
                "intrinsic_loss_separation", "losses_outside_window", "elastic_scattering", "instrument_broadening",
                "background_subtraction", "energy_dependent_kernel", "binding_energy_axis"]
+# Removals from UNSUPPORTED registered by later frozen pre-registrations (post-freeze test change
+# approved by the owner on 2026-11-28; docs/M4B2_PREREG.md section 9.1, frozen at 62c1153).
+LATER_REMOVED_UNSUPPORTED = ("binding_energy_axis",)
+
+
+def unsupported_ok(actual):
+    """The frozen list, with any subset of the registered removals taken out; order is kept."""
+    removed = [name for name in UNSUPPORTED if name not in actual]
+    return (set(removed) <= set(LATER_REMOVED_UNSUPPORTED)
+            and actual == [name for name in UNSUPPORTED if name not in removed])
+
+
 _CACHE = {}
 
 
@@ -1621,7 +1633,7 @@ def check_cli_diagnostic(row, out, key, index):
             block = caps["multiple_scattering"]
             need(block["model_id"] == table()["model_id"] and block["emission"] == "normal_only"
                  and block["kernel_energy_policy"] == "fixed_E0" and block["status"] == "approximate"
-                 and block["unsupported_physics"] == UNSUPPORTED, "multiple_scattering block")
+                 and unsupported_ok(block["unsupported_physics"]), "multiple_scattering block")
             need(not any(name in record["stdout"] for name in table()["reference_only_models"]),
                  "a reference-only model id appears in capabilities")
         return None

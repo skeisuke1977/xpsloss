@@ -132,7 +132,9 @@ class MultipleCLI(unittest.TestCase):
         caps = cli.capabilities()
         self.assertEqual(caps["supported"][-1], "xps_multiple_loss")
         self.assertEqual(caps["multiple_scattering"]["model_id"], MULTIPLE_LOSS_MODEL_ID)
-        self.assertIn("binding_energy_axis", caps["multiple_scattering"]["unsupported_physics"])
+        # M4b-2 implements the binding-energy axis and removes it from the list (post-freeze test
+        # change approved by the owner on 2026-11-28; docs/M4B2_PREREG.md section 9.1).
+        self.assertNotIn("binding_energy_axis", caps["multiple_scattering"]["unsupported_physics"])
 
     def test_inherited_budget_message_keeps_machine_readable_suggestion(self):
         why = MultipleLossConvergenceError("inherited_error_exceeds_order_budget", order=2,
