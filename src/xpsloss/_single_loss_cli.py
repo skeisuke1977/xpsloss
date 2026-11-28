@@ -86,8 +86,9 @@ def _edge_hash(edges):
 def _spectrum_input(path, max_cells, higher):
     try:
         spec, digest = _read(path, measured_errors=higher)
-        if higher and isinstance(spec, dict) and (spec.get("schema") == schema.SCHEMA or
-                (spec.get("schema") != "xpsloss-single-loss-spectrum-v0" and "measurement" in spec)):
+        # The schema identifier alone selects the reader (prereg section 4.6); any other file takes
+        # the kinetic-energy path and fails there exactly as in the M4b-1 baseline.
+        if higher and isinstance(spec, dict) and spec.get("schema") == schema.SCHEMA:
             primary, edges, axis, measurement = schema.parse_measured(spec, max_cells)
             record = dict(file=str(path), sha256=digest, schema=schema.SCHEMA,
                           binding_output_edges_sha256_float64_le=_edge_hash(edges))

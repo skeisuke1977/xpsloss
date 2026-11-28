@@ -56,13 +56,18 @@ class MeasuredSpectrumCLI(unittest.TestCase):
         spec["primary"]["intensities"] = [-1.]
         for write in (lambda: dict(spec, observed_counts=[]),
                       lambda: dict(spec, output_binding_edges_eV=dict(min=0., max=1.)),
-                      lambda: dict(spec, schema="unknown"),
                       lambda: json.dumps(spec).replace('"axis":', '"axis":0,"axis":'),
                       lambda: json.dumps(spec).replace('"schema"', r'"\u0073chema"')[:-1],
                       lambda: json.dumps(spec)[:-1]):
             code, err = self.invoke(write())
             self.assertEqual((code, err["reason"], err["error_type"]), (2, "invalid_schema", "MultipleLossInputError"))
             self.assertTrue(err["detail"])
+        # Only the schema identifier selects the measured reader: an unknown identifier (or none)
+        # goes to the kinetic-energy reader and fails as in the M4b-1 baseline (no detail field).
+        for other in (dict(spec, schema="unknown"), {k: v for k, v in spec.items() if k != "schema"}):
+            code, err = self.invoke(other)
+            self.assertEqual((code, err["reason"], err["error_type"]), (2, "invalid_schema", "MultipleLossInputError"))
+            self.assertNotIn("detail", err)
         code, err = self.invoke(spec)
         self.assertEqual((code, err["reason"], err["field"], err["detail"]),
                          (2, "invalid_energy_axis", "photon_energy_eV", "not_recorded_not_allowed"))
