@@ -5,6 +5,7 @@ uses only term 13a at the same E0. The multiplier is constant across events.
 """
 
 from . import _loss_orders, xps_single_loss as single
+from ._binding_axis import BindingBinnedPrimary, BindingDeltaPrimary, BindingEnergyAxis, EnergyAxisReference, convert
 from ._loss_panels import observe_mesh
 from ._order_types import (
     MULTIPLE_LOSS_MODEL_ID,
@@ -19,6 +20,7 @@ from ._single_loss_types import BinnedPrimary, DeltaPrimary, SingleLossInputErro
 from .xps_fixed_depth import FIXED_ABS, FIXED_REL
 
 __all__ = [
+    "BindingBinnedPrimary", "BindingDeltaPrimary", "BindingEnergyAxis", "EnergyAxisReference",
     "MULTIPLE_LOSS_MODEL_ID",
     "MultipleLossInputError",
     "MultipleLossConvergenceError",
@@ -29,14 +31,14 @@ __all__ = [
 ]
 
 
-def _run_orders(material, electron_energy_eV, primary, edges, args, defaults):
+def _run_orders(material, electron_energy_eV, primary, edges, args, defaults, display=None):
     first_settings = {k: args[k] for k in defaults}
     settings = {**first_settings, **{k: args.get(k, v) for k, v in ORDER_DEFAULTS.items()}}
     plan = None
 
     def validate_orders(window, geometry, zero):
         nonlocal plan
-        plan = plan_orders(args["model"], args["max_order"], window, geometry, settings, zero)
+        plan = plan_orders(args["model"], args["max_order"], window, geometry, settings, zero, display)
 
     conventions = {
         k: args[k]
@@ -82,6 +84,7 @@ def _run_orders(material, electron_energy_eV, primary, edges, args, defaults):
         zero=not active,
         dispersive=dispersive,
         trace=trace,
+        display=display,
     )[0]
 
 
@@ -116,16 +119,25 @@ def multiple_loss_spectrum(
     weight_length_seed_A=None,
     multiplier="weight_length",
     multiplier_A=None,
+    energy_axis=None,
 ) -> MultipleLossSpectrumResult:
-    """Fold each loss order directly into detector bins and both outside regions (KE in eV).
+    """Fold each loss order directly into detector bins and both outside regions.
+
+    With a BindingEnergyAxis, positions and edges are in binding eV, and the
+    displayed bins follow the input edge order. single_loss retains its KE axis.
 
     max_order is a positive integer or 'display_support'. A positive optional
     tolerance limits the estimated missing cumulative display intensity as a
     fraction of the primary intensity. Order areas are dimensionless weights.
     """
-    if not isinstance(primary, (BinnedPrimary, DeltaPrimary)):
+    display = None
+    if energy_axis is not None:
+        display = convert(energy_axis, primary, output_edges_eV, electron_energy_eV)
+        primary = display.info["kinetic_primary"]
+        output_edges_eV = display.info["kinetic_output_edges_eV"]
+    elif not isinstance(primary, (BinnedPrimary, DeltaPrimary)):
         raise SingleLossInputError("invalid_primary")
-    return _run_orders(material, electron_energy_eV, primary, output_edges_eV, locals(), single.SPECTRUM_DEFAULTS)
+    return _run_orders(material, electron_energy_eV, primary, output_edges_eV, locals(), single.SPECTRUM_DEFAULTS, display)
 
 
 def multiple_loss_order_areas(

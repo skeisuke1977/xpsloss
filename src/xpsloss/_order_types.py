@@ -30,6 +30,10 @@ class _OrderFailure:
             "diagnostics"
         ).split():
             setattr(self, field, details.get(field))
+        if reason == "invalid_energy_axis":
+            self.field, self.detail = details.get("field"), details.get("detail")
+        elif reason == "axis_conversion_not_injective":
+            self.binding_eV, self.kinetic_eV, self.roles = (details.get(k) for k in ("binding_eV", "kinetic_eV", "roles"))
         message = reason
         if self.suggestion:
             message += (
@@ -94,12 +98,15 @@ class MultipleLossOrderAreasResult:
 
 @dataclass(kw_only=True)
 class MultipleLossSpectrumResult(MultipleLossOrderAreasResult):
+    """Displayed bins follow the input axis. single_loss always retains the ascending KE bins."""
+
     zero_loss: np.ndarray
     zero_loss_error: np.ndarray
     spectrum: np.ndarray
     spectrum_error: np.ndarray
     outside: dict
     truncation: dict
+    energy_axis: dict | None = None
 
 
 def positive_integer(value):
@@ -113,16 +120,16 @@ def positive_real(value):
         return False
 
 
-def preflight(model, requested, window, primary, edges, settings, zero=False):
+def preflight(model, requested, window, primary, edges, settings, zero=False, display=None):
     geometry = None
     if primary is not None:
         if not isinstance(primary, (BinnedPrimary, DeltaPrimary)):
             raise SingleLossInputError("invalid_primary")
         geometry = Geometry(primary, vector(edges, "invalid_output_edges", increasing=True))
-    return plan_orders(model, requested, window, geometry, settings, zero)
+    return plan_orders(model, requested, window, geometry, settings, zero, display)
 
 
-def plan_orders(model, requested, window, geometry, settings, zero):
+def plan_orders(model, requested, window, geometry, settings, zero, display=None):
     if not isinstance(model, str) or model != MULTIPLE_LOSS_MODEL_ID:
         raise MultipleLossInputError("invalid_model")
     by_support = isinstance(requested, str) and requested == "display_support" and geometry is not None
@@ -143,7 +150,9 @@ def plan_orders(model, requested, window, geometry, settings, zero):
         elif isinstance(value, np.integer):
             settings[key] = int(value)
     support = None
-    if geometry is not None:
+    if display is not None:
+        support = display.support_order(window[0])
+    elif geometry is not None:
         support = max(0, (Q(geometry.points[-1]) - Q(geometry.edges[0])) // Q(window[0])) if geometry.points else 0
     n = support if by_support else int(requested)
     if n > settings["order_limit"]:

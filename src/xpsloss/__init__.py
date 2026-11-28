@@ -21,11 +21,13 @@ from .xps_single_loss import (
 )
 
 from .xps_multiple_loss import (
+    BindingBinnedPrimary, BindingDeltaPrimary, BindingEnergyAxis, EnergyAxisReference,
     MULTIPLE_LOSS_MODEL_ID, MultipleLossConvergenceError, MultipleLossInputError,
     MultipleLossOrderAreasResult, MultipleLossSpectrumResult, multiple_loss_order_areas, multiple_loss_spectrum,
 )
 
 __all__ = [
+    "BindingBinnedPrimary", "BindingDeltaPrimary", "BindingEnergyAxis", "EnergyAxisReference",
     "DepthAverageConvergenceError", "DepthAveragedResult", "effective_cross_section_depth_averaged",
     "BulkConvergenceError", "NumericalConvergenceError",
     "DielectricConvergenceError", "DielectricResponse", "Material", "Oscillator",

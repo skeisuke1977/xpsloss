@@ -7,6 +7,7 @@ import math
 import numpy as np
 
 from . import _fold, _loss_panels as lp
+from ._binding_axis import convert
 from ._order_bounds import ratio_record, truncation
 from ._order_quadrature import Polynomials, area_terms, build_panel, first_envelopes, mandatory_knots, minimum
 from ._order_results import balances, first_order, higher_order, seed_errors, spectrum_sum
@@ -457,6 +458,7 @@ def finish(
     order_panel_limit=None,
     order_min_panel_width_eV=None,
     trace=None,
+    display=None,
 ):
     n, support, geometry, lower = plan
     estimate = 0 if zero else 280.5 * sum(k * (len(panels) + k - 1) for k in range(2, n + 1))
@@ -543,7 +545,7 @@ def finish(
             kw["truncation"] = truncation(
                 single,
                 panels,
-                geometry,
+                geometry if display is None else display.bound_geometry,
                 requested,
                 n,
                 support,
@@ -558,6 +560,10 @@ def finish(
                 zero_loss=single.zero_loss.copy(),
                 zero_loss_error=single.zero_loss_error.copy(),
             )
+        except MultipleLossConvergenceError as exc:
+            if display is not None and exc.stage == "truncation":
+                display.orient_truncation(exc.diagnostics["truncation"])
+            raise
         except (ArithmeticError, ValueError) as exc:
             raise MultipleLossConvergenceError("nonfinite_output", stage="truncation", diagnostics=diag) from exc
     codes = list(_WARNINGS)[:5]
@@ -580,7 +586,11 @@ def finish(
         *(dict(source="xps_multiple_loss", code=c, message=_WARNINGS[c]) for c in codes),
     ]
     kw["warnings"] = tuple(w["message"] for w in diag["warnings"])
-    return (MultipleLossSpectrumResult(**kw) if geometry else MultipleLossOrderAreasResult(**kw)), panel_map
+    result = MultipleLossSpectrumResult(**kw) if geometry else MultipleLossOrderAreasResult(**kw)
+    if display is not None:
+        display.compare(single.loss_window_eV, n)
+        display.orient_result(result)
+    return result, panel_map
 
 
 def integrate_orders(
@@ -611,7 +621,13 @@ def integrate_orders(
     order_inject=None,
     order_panel_limit=None,
     order_min_panel_width_eV=None,
+    energy_axis=None,
 ):
+    display = None
+    if energy_axis is not None:
+        display = convert(energy_axis, primary, output_edges_eV)
+        primary = display.info["kinetic_primary"]
+        output_edges_eV = display.info["kinetic_output_edges_eV"]
     window = lp.checked_window(loss_window_eV)
     first = dict(
         epsrel=epsrel,
@@ -628,7 +644,7 @@ def integrate_orders(
         order_epsabs_fraction=order_epsabs_fraction,
         neglect_tolerance_fraction=neglect_tolerance_fraction,
     )
-    plan = preflight(model, max_order, window, primary, output_edges_eV, settings)
+    plan = preflight(model, max_order, window, primary, output_edges_eV, settings, display=display)
     with lp.observe_mesh() as trace:
         single, panels = lp.integrate_window(
             kernel,
@@ -655,6 +671,7 @@ def integrate_orders(
         order_panel_limit=order_panel_limit,
         order_min_panel_width_eV=order_min_panel_width_eV,
         trace=trace,
+        display=display,
     )
 
 

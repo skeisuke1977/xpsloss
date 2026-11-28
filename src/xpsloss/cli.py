@@ -88,10 +88,11 @@ def capabilities():
         "multiple_scattering": {
             "model_id": MULTIPLE_LOSS_MODEL_ID, "emission": "normal_only",
             "kernel_energy_policy": "fixed_E0", "status": "approximate",
+            "energy_axes": ["kinetic_energy_eV", "binding_energy_eV"],
+            "measured_spectrum_schema": "xpsloss-measured-spectrum-v0",
             "unsupported_physics": ["oblique_emission", "trajectory_dependent_weight_length", "self_consistent_length",
                                     "intrinsic_loss_separation", "losses_outside_window", "elastic_scattering",
-                                    "instrument_broadening", "background_subtraction", "energy_dependent_kernel",
-                                    "binding_energy_axis"],
+                                    "instrument_broadening", "background_subtraction", "energy_dependent_kernel"],
         },
         "dielectric_model_id": DIELECTRIC_MODEL_ID,
         "bulk_unsupported_physics": list(UNSUPPORTED_PHYSICS),

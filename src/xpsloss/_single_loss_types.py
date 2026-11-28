@@ -45,7 +45,7 @@ class SingleLossConvergenceError(_Failure, NumericalConvergenceError):
     pass
 
 
-def vector(value, reason, *, increasing=False):
+def vector(value, reason, *, increasing=False, binding=False):
     try:
         if isinstance(value, np.ndarray) and value.dtype.kind in "fiu":
             arr = value
@@ -59,19 +59,21 @@ def vector(value, reason, *, increasing=False):
         if arr.ndim != 1 or not arr.size:
             raise ValueError
         arr = np.array(arr, dtype=np.float64)
-        if not np.isfinite(arr).all() or np.any(arr < 0):
+        if not np.isfinite(arr).all() or (not binding and np.any(arr < 0)):
             raise ValueError
-        if increasing and (len(arr) < 2 or np.any(arr[:-1] >= arr[1:])):
-            raise ValueError
+        if increasing:
+            ordered = arr[::-1] if binding and arr[0] > arr[-1] else arr
+            if len(arr) < 2 or np.any(ordered[:-1] >= ordered[1:]):
+                raise ValueError
     except (TypeError, ValueError, OverflowError) as exc:
         raise SingleLossInputError(reason) from exc
     arr.setflags(write=False)
     return arr
 
 
-def _primary(obj, field, binned):
+def _primary(obj, field, binned, *, binding=False):
     reason = "invalid_primary"
-    energies = vector(getattr(obj, field), reason, increasing=binned)
+    energies = vector(getattr(obj, field), reason, increasing=binned, binding=binding)
     intensities = vector(obj.intensities, reason)
     if (len(energies) != len(intensities) + binned
             or np.any((intensities > 0) & (intensities < 2.**-900))

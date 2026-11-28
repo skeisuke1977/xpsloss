@@ -19,9 +19,10 @@ import scipy
 from . import __version__
 from . import xps_single_loss as api
 from . import xps_multiple_loss as multiple
+from . import _spectrum_schema as schema
 from ._order_types import ORDER_DEFAULTS, MultipleLossInputError
 from ._loss_panels import validate_settings
-from ._single_loss_types import COLUMNS, COMPONENTS, QUANTITIES, SingleLossInputError, vector
+from ._single_loss_types import COLUMNS, COMPONENTS, QUANTITIES, SingleLossInputError
 from .config import _reject_constant, _unique_object, keys, parse_config
 from .dielectric import DIELECTRIC_MODEL_ID
 from .model import BOHR_RADIUS_A, HBAR2_OVER_2ME_EV_A2, finite_number
@@ -65,33 +66,32 @@ def add_commands(sub):
                 child.add_argument("--"+opt.replace("_", "-"), type=float if default is None else type(default))
 
 
-def _read(path):
+def _read(path, *, measured_errors=False):
     raw = Path(path).read_bytes()
-    obj = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+    try:
+        obj = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+    except ValueError as exc:
+        # A malformed file cannot be dispatched from a parsed JSON object.
+        # Preserve legacy errors unless it identifies the measured schema.
+        if measured_errors and schema.declares_measured_schema(raw):
+            raise schema.schema_error(exc) from exc
+        raise
     return obj, hashlib.sha256(raw).hexdigest()
 
 
-def _edges(spec, max_cells):
-    if isinstance(spec, dict):
-        keys(spec, ("min", "max", "step"), label="output_edges_eV")
-        lo, hi, step = (finite_number(spec[k], k) for k in ("min", "max", "step"))
-        if not 0 <= lo < hi or step <= 0:
-            raise ValueError("invalid output edge range")
-        # The compact JSON form describes a decimal grid. Check its exact
-        # interval count before rounding the expanded endpoints to binary64.
-        intervals = (Fraction(str(hi))-Fraction(str(lo)))/Fraction(str(step))
-        if intervals.denominator != 1:
-            raise ValueError("nonintegral output edge count")
-        if intervals+2 > max_cells:
-            raise SingleLossInputError("cell_limit_exceeded",
-                                       message_details=dict(cells_at_least=int(intervals)+2, max_cells=max_cells))
-        spec = np.linspace(lo, hi, int(intervals)+1)
-    return vector(spec, "invalid_output_edges", increasing=True)
+def _edge_hash(edges):
+    return hashlib.sha256(edges.astype("<f8", copy=False).tobytes()).hexdigest()
 
 
-def _spectrum_input(path, max_cells):
+def _spectrum_input(path, max_cells, higher):
     try:
-        spec, digest = _read(path)
+        spec, digest = _read(path, measured_errors=higher)
+        if higher and isinstance(spec, dict) and (spec.get("schema") == schema.SCHEMA or
+                (spec.get("schema") != "xpsloss-single-loss-spectrum-v0" and "measurement" in spec)):
+            primary, edges, axis, measurement = schema.parse_measured(spec, max_cells)
+            record = dict(file=str(path), sha256=digest, schema=schema.SCHEMA,
+                          binding_output_edges_sha256_float64_le=_edge_hash(edges))
+            return primary, edges, record, axis, measurement
         keys(spec, ("schema", "axis", "primary", "output_edges_eV"), label="spectrum")
         if spec["schema"] != "xpsloss-single-loss-spectrum-v0" or spec["axis"] != "kinetic_energy_eV":
             raise ValueError("unknown spectrum schema or axis")
@@ -110,13 +110,12 @@ def _spectrum_input(path, max_cells):
         if isinstance(edge_spec, list):
             for v in edge_spec:
                 finite_number(v, "output_edges_eV")
-        edges = _edges(edge_spec, max_cells)
-    except SingleLossInputError:
+        edges = schema.edges(edge_spec, max_cells)
+    except (SingleLossInputError, MultipleLossInputError):
         raise
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as exc:
         raise SingleLossInputError("invalid_schema", detail=str(exc)) from exc
-    return primary, edges, dict(file=str(path), sha256=digest, output_edges_sha256_float64_le=
-                                hashlib.sha256(edges.astype("<f8", copy=False).tobytes()).hexdigest())
+    return primary, edges, dict(file=str(path), sha256=digest, output_edges_sha256_float64_le=_edge_hash(edges)), None, None
 
 
 def json_value(value):
@@ -208,7 +207,7 @@ def run(args):
     spectrum_input, primary_record, edges = None, None, None
     if spectrum:
         try:
-            primary, edges, spectrum_input = _spectrum_input(args.spectrum, settings["max_cells"])
+            primary, edges, spectrum_input, axis, measurement = _spectrum_input(args.spectrum, settings["max_cells"], higher)
         except SingleLossInputError as exc:
             if higher and exc.reason == "invalid_schema":
                 raise MultipleLossInputError("invalid_schema", detail=getattr(exc,"detail",str(exc))) from exc
@@ -223,13 +222,25 @@ def run(args):
                 settings[k] = default if value is None else value
                 sources[k] = "default" if value is None else "cli"
             expansion = multiple.multiple_loss_spectrum(config.material, config.electron_energy_eV, primary,
-                edges, **kw, model=args.model, max_order=requested, **{k:settings[k] for k in ORDER_DEFAULTS})
+                edges, **kw, model=args.model, max_order=requested, **{k:settings[k] for k in ORDER_DEFAULTS},
+                **({"energy_axis": axis} if axis is not None else {}))
             result = expansion.single_loss
         else:
             result = api.single_loss_spectrum(config.material, config.electron_energy_eV, primary, edges, **kw)
         primary_record = {f.name: getattr(primary, f.name) for f in fields(primary)}
-        primary_record.update(kind=api._primary_values(primary)["kind"], primary_integral=result.primary_integral,
-                              primary_abs_integral=result.primary_abs_integral, support=result.diagnostics["primary_support"])
+        if axis is None:
+            primary_record.update(kind=api._primary_values(primary)["kind"], primary_integral=result.primary_integral,
+                                  primary_abs_integral=result.primary_abs_integral, support=result.diagnostics["primary_support"])
+        else:
+            mask = primary.intensities > 0
+            binned = isinstance(primary, multiple.BindingBinnedPrimary)
+            points = (primary.binding_edges_eV[np.r_[mask, False] | np.r_[False, mask]]
+                      if binned else primary.binding_energies_eV[mask])
+            primary_record.update(axis=schema.AXIS, kind="binned" if binned else "delta",
+                                  primary_integral=result.primary_integral, primary_abs_integral=result.primary_abs_integral,
+                                  support=dict(min_eV=points.min() if points.size else None,
+                                               max_eV=points.max() if points.size else None))
+            spectrum_input["kinetic_output_edges_sha256_float64_le"] = _edge_hash(result.output_edges_eV)
     else:
         result = api.loss_window_area(config.material, config.electron_energy_eV, **kw)
     files = ({"multiple_loss_spectrum.csv": _csv(_order_regions(expansion)),
@@ -269,6 +280,15 @@ def run(args):
                     diagnostics=result.diagnostics, comparison=result.diagnostics["comparison"])
     if higher:
         nested = asdict(expansion)
+        if axis is None:
+            del nested["energy_axis"]
+        else:
+            manifest["axis"] = manifest["spectrum_definition"]["axis"] = schema.AXIS
+            manifest["measurement"] = measurement
+            manifest["units"]["binding_energy"] = "eV"
+            axis_record = nested["energy_axis"]
+            axis_record["input_primary"]["kind"] = primary_record["kind"]
+            manifest["energy_axis"] = axis_record
         nested["single_loss"]["comparison"] = result.diagnostics["comparison"]
         manifest["dependent_model_ids"]["single_loss"] = result.model_id
         manifest["spectrum_definition"]["max_order"] = requested
@@ -315,15 +335,32 @@ def _order_definition(order, single):
 
 
 def _order_regions(result):
-    fields = [("zero_loss",result.single_loss,"zero_loss")]
+    axis = result.energy_axis
+    fields = [("zero_loss", result.single_loss if axis is None else result, "zero_loss")]
     fields.extend((f"order{o.order}_{c}",o,c) for o in result.orders for c in COMPONENTS)
     fields.append(("spectrum",result,"spectrum"))
-    yield ["region","edge_low_eV","edge_high_eV",*(label+s for label,_,_ in fields for s in ("","_error"))]
     edges = result.single_loss.output_edges_eV
-    for i in ["low",*range(len(edges)-1),"high"]:
-        if isinstance(i,int):
-            yield [i,edges[i],edges[i+1],*(getattr(obj,k+s)[i] for _,obj,k in fields for s in ("","_error"))]
+    if axis is None:
+        columns = ["edge_low_eV", "edge_high_eV"]
+        ends = {"low": (None, edges[0]), "high": (edges[-1], None)}
+        first, last = "low", "high"
+    else:
+        columns = ["binding_edge_low_eV", "binding_edge_high_eV", "kinetic_edge_low_eV", "kinetic_edge_high_eV"]
+        be = axis["input_binding_edges_eV"]
+        first, last = "low_binding", "high_binding"
+        ends = {first: (None, min(be[0], be[-1]), edges[-1], None),
+                last: (max(be[0], be[-1]), None, None, edges[0])}
+        if be[0] > be[-1]:
+            first, last = last, first
+    yield ["region", *columns, *(label+s for label,_,_ in fields for s in ("","_error"))]
+    for i in (first, *range(len(edges)-1), last):
+        if isinstance(i, int):
+            if axis is None:
+                limits = (edges[i], edges[i+1])
+            else:
+                j = len(edges)-2-i if be[0] < be[-1] else i
+                limits = (*sorted((be[i], be[i+1])), edges[j], edges[j+1])
+            yield [i,*limits,*(getattr(obj,k+s)[i] for _,obj,k in fields for s in ("","_error"))]
         else:
-            ends = (None,edges[0]) if i=="low" else (edges[-1],None)
-            yield [i,*ends,*(obj.outside[i][k+s] for _,obj,k in fields for s in ("","_error"))]
+            yield [i,*ends[i],*(obj.outside[i][k+s] for _,obj,k in fields for s in ("","_error"))]
 
