@@ -91,7 +91,7 @@ class BindingDisplay:
         self.info["support_comparison"] = dict(computed_relation_mismatch_count=computed,
                                                next_relation_mismatch_count=next_count,
                                                next_reachability_mismatch_bins=reachability,
-                                               first_mismatches=examples)
+                                               first_mismatches=[dict(sorted(e.items())) for e in examples])
 
     def _example(self, kind, order, name, point, i, rb, rk):
         b, e, index = point

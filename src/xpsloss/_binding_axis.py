@@ -130,7 +130,9 @@ def _record_value(name, value, schema, missing):
             record[key] = None
         else:
             record[key] = _value(value[key], field, kind, missing)
-    return record
+    # Validate in the schema order (the not_recorded list follows it), but keep the copy in the
+    # caller's key order: the result holds a deep copy of the record as given (prereg section 3).
+    return {key: record[key] for key in value}
 
 
 def validate_axis(axis):
